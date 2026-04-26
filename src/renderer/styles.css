@@ -446,7 +446,6 @@ button {
   color: #624a00;
 }
 
-.loading-line,
 .empty-state {
   min-height: 160px;
   display: flex;
