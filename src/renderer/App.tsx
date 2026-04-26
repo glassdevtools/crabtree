@@ -375,9 +375,6 @@ const CommitGraphSvg = ({
 
     return readCommitGraphY(rowIndex);
   };
-  const readRowBottomY = (rowIndex: number) => {
-    return Math.min((rowIndex + 1) * COMMIT_GRAPH_ROW_HEIGHT, graphHeight);
-  };
 
   return (
     <svg
@@ -392,20 +389,16 @@ const CommitGraphSvg = ({
         const toX = readCommitGraphX(segment.toLane);
         const fromY = readSegmentY(segment.fromRowIndex);
         const toY = readSegmentY(segment.toRowIndex);
-        const rowBottomY = readRowBottomY(segment.fromRowIndex);
-        const rowBottomConnectionY =
-          rowBottomY -
-          COMMIT_GRAPH_ROW_HEIGHT * COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO;
-        const rowTopConnectionY =
+        const rowTopConnectionY = Math.min(
           segment.toRowIndex * COMMIT_GRAPH_ROW_HEIGHT +
-          COMMIT_GRAPH_ROW_HEIGHT * COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO;
+            COMMIT_GRAPH_ROW_HEIGHT * COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO,
+          toY,
+        );
         const color = readCommitGraphColor(segment.colorIndex);
         const path =
           fromX === toX
             ? `M ${fromX} ${fromY} L ${toX} ${toY}`
-            : segment.isMergeSegment
-              ? `M ${fromX} ${fromY} L ${toX} ${rowTopConnectionY} L ${toX} ${toY}`
-              : `M ${fromX} ${fromY} L ${fromX} ${rowBottomConnectionY} L ${toX} ${rowTopConnectionY} L ${toX} ${toY}`;
+            : `M ${fromX} ${fromY} L ${toX} ${rowTopConnectionY} L ${toX} ${toY}`;
 
         return (
           <path
