@@ -2044,7 +2044,9 @@ const CommitHistory = ({
       !readIsGitChangeSummaryEmpty(changeSummary)
     ) {
       event.preventDefault();
-      showErrorMessage("You must commit this to merge it.");
+      showErrorMessage(
+        "Cancelled your drag. You must commit your changes on that item in order to drag and merge it.",
+      );
       logCommitMerge("drag start blocked: row has changes", {
         rowId: row.id,
         rowKind: row.kind,
