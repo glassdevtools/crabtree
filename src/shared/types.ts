@@ -36,6 +36,12 @@ export type GitChangeSummary = {
   unstaged: GitChangeLineCounts;
 };
 
+export type GitMergeRequest = {
+  repoRoot: string;
+  fromSha: string;
+  toSha: string;
+};
+
 export type GitCommit = {
   sha: string;
   shortSha: string;
@@ -72,4 +78,5 @@ export type MoltTreeApi = {
   openVSCodePath: (path: string) => Promise<void>;
   stageGitChanges: (path: string) => Promise<void>;
   unstageGitChanges: (path: string) => Promise<void>;
+  startGitMerge: (gitMergeRequest: GitMergeRequest) => Promise<void>;
 };

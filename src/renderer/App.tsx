@@ -19,7 +19,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { MouseEvent, PointerEvent } from "react";
+import type { DragEvent, MouseEvent, PointerEvent } from "react";
 import type {
   CodexThread,
   DashboardData,
@@ -111,6 +111,12 @@ type CommitHistoryColumnResize = {
   startColumnWidths: CommitHistoryColumnWidths;
   startWidth: number;
   currentWidth: number;
+};
+
+type CommitMergeDrag = {
+  rowId: string;
+  repoRoot: string;
+  sha: string;
 };
 
 type CommitGraphRowKind = "commit" | "worktree" | "chat";
@@ -920,10 +926,24 @@ const CommitHistoryRow = ({
   row,
   repoRoot,
   threadOfId,
+  isMergeDragSource,
+  isMergeDropTarget,
+  startCommitMergeDrag,
+  updateCommitMergeDropTarget,
+  clearCommitMergeDropTarget,
+  finishCommitMergeDrop,
+  finishCommitMergeDrag,
 }: {
   row: CommitGraphRow;
   repoRoot: string;
   threadOfId: { [id: string]: CodexThread };
+  isMergeDragSource: boolean;
+  isMergeDropTarget: boolean;
+  startCommitMergeDrag: (event: DragEvent<HTMLDivElement>) => void;
+  updateCommitMergeDropTarget: (event: DragEvent<HTMLDivElement>) => void;
+  clearCommitMergeDropTarget: () => void;
+  finishCommitMergeDrop: (event: DragEvent<HTMLDivElement>) => void;
+  finishCommitMergeDrag: () => void;
 }) => {
   const { commit } = row;
   const threadId = row.threadIds[0];
@@ -947,8 +967,24 @@ const CommitHistoryRow = ({
     rowClassName = "commit-history-row commit-history-row-chat";
   }
 
+  if (isMergeDragSource) {
+    rowClassName = `${rowClassName} commit-history-row-merge-drag-source`;
+  }
+
+  if (isMergeDropTarget) {
+    rowClassName = `${rowClassName} commit-history-row-merge-drop-target`;
+  }
+
   return (
-    <div className={rowClassName}>
+    <div
+      className={rowClassName}
+      draggable
+      onDragStart={startCommitMergeDrag}
+      onDragOver={updateCommitMergeDropTarget}
+      onDragLeave={clearCommitMergeDropTarget}
+      onDragEnd={finishCommitMergeDrag}
+      onDrop={finishCommitMergeDrop}
+    >
       <div className="commit-graph-cell" />
       <div className="commit-branch-tags-cell">
         <BranchTags refs={refs} worktrees={worktrees} repoRoot={repoRoot} />
@@ -1003,6 +1039,7 @@ const CommitHistory = ({
   repoRoot,
   gitChangesOfCwd,
   refreshDashboard,
+  showErrorMessage,
 }: {
   commits: GitCommit[];
   worktrees: GitWorktree[];
@@ -1010,6 +1047,7 @@ const CommitHistory = ({
   repoRoot: string;
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   refreshDashboard: () => Promise<void>;
+  showErrorMessage: (message: string) => void;
 }) => {
   const commitHistoryRef = useRef<HTMLDivElement | null>(null);
   const columnResizeRef = useRef<CommitHistoryColumnResize | null>(null);
@@ -1017,6 +1055,11 @@ const CommitHistory = ({
     COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS,
   );
   const [shouldShowChatOnly, setShouldShowChatOnly] = useState(false);
+  const [commitMergeDrag, setCommitMergeDrag] =
+    useState<CommitMergeDrag | null>(null);
+  const [mergeDropTargetRowId, setMergeDropTargetRowId] = useState<
+    string | null
+  >(null);
   const worktreesOfHead = useMemo(() => {
     const nextWorktreesOfHead: { [sha: string]: GitWorktree[] } = {};
 
@@ -1167,6 +1210,77 @@ const CommitHistory = ({
     );
     columnResizeRef.current = null;
   };
+  const startCommitMergeDrag = ({
+    event,
+    row,
+  }: {
+    event: DragEvent<HTMLDivElement>;
+    row: CommitGraphRow;
+  }) => {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", row.commit.shortSha);
+    setCommitMergeDrag({ rowId: row.id, repoRoot, sha: row.commit.sha });
+  };
+  const updateCommitMergeDropTarget = ({
+    event,
+    row,
+  }: {
+    event: DragEvent<HTMLDivElement>;
+    row: CommitGraphRow;
+  }) => {
+    if (
+      commitMergeDrag === null ||
+      commitMergeDrag.repoRoot !== repoRoot ||
+      commitMergeDrag.sha === row.commit.sha
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setMergeDropTargetRowId(row.id);
+  };
+  const clearCommitMergeDropTarget = () => {
+    setMergeDropTargetRowId(null);
+  };
+  const finishCommitMergeDrag = () => {
+    setCommitMergeDrag(null);
+    setMergeDropTargetRowId(null);
+  };
+  const finishCommitMergeDrop = async ({
+    event,
+    row,
+  }: {
+    event: DragEvent<HTMLDivElement>;
+    row: CommitGraphRow;
+  }) => {
+    event.preventDefault();
+
+    if (
+      commitMergeDrag === null ||
+      commitMergeDrag.repoRoot !== repoRoot ||
+      commitMergeDrag.sha === row.commit.sha
+    ) {
+      finishCommitMergeDrag();
+      return;
+    }
+
+    const gitMergeRequest = {
+      repoRoot,
+      fromSha: commitMergeDrag.sha,
+      toSha: row.commit.sha,
+    };
+    finishCommitMergeDrag();
+
+    try {
+      await window.molttree.startGitMerge(gitMergeRequest);
+      await refreshDashboard();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to start merge.";
+      showErrorMessage(message);
+    }
+  };
 
   return (
     <div className="commit-history" ref={commitHistoryRef}>
@@ -1248,6 +1362,19 @@ const CommitHistory = ({
             row={row}
             repoRoot={repoRoot}
             threadOfId={threadOfId}
+            isMergeDragSource={commitMergeDrag?.rowId === row.id}
+            isMergeDropTarget={mergeDropTargetRowId === row.id}
+            startCommitMergeDrag={(event) =>
+              startCommitMergeDrag({ event, row })
+            }
+            updateCommitMergeDropTarget={(event) =>
+              updateCommitMergeDropTarget({ event, row })
+            }
+            clearCommitMergeDropTarget={clearCommitMergeDropTarget}
+            finishCommitMergeDrop={(event) =>
+              finishCommitMergeDrop({ event, row })
+            }
+            finishCommitMergeDrag={finishCommitMergeDrag}
           />
         ))}
       </div>
@@ -1260,11 +1387,13 @@ const RepoSection = ({
   threadOfId,
   gitChangesOfCwd,
   refreshDashboard,
+  showErrorMessage,
 }: {
   repo: RepoGraph;
   threadOfId: { [id: string]: CodexThread };
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   refreshDashboard: () => Promise<void>;
+  showErrorMessage: (message: string) => void;
 }) => {
   const repoThreads = repo.threadIds
     .map((threadId) => threadOfId[threadId])
@@ -1298,6 +1427,7 @@ const RepoSection = ({
           repoRoot={repo.root}
           gitChangesOfCwd={gitChangesOfCwd}
           refreshDashboard={refreshDashboard}
+          showErrorMessage={showErrorMessage}
         />
       </div>
     </section>
@@ -1363,6 +1493,9 @@ export const App = () => {
       isDashboardRefreshRunningRef.current = false;
       setIsLoading(false);
     }
+  }, []);
+  const showErrorMessage = useCallback((message: string) => {
+    setErrorMessage(message);
   }, []);
 
   useEffect(() => {
@@ -1433,6 +1566,7 @@ export const App = () => {
               threadOfId={threadOfId}
               gitChangesOfCwd={dashboardData.gitChangesOfCwd}
               refreshDashboard={refreshDashboard}
+              showErrorMessage={showErrorMessage}
             />
           ))}
           {dashboardData !== null &&

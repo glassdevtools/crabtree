@@ -275,13 +275,18 @@ export const readGitChangesOfCwd = async ({
 const readCommits = async ({
   repoSeed,
   threads,
+  worktrees,
 }: {
   repoSeed: RepoSeed;
   threads: CodexThread[];
+  worktrees: GitWorktree[];
 }) => {
   const format = `%H${FIELD_SEPARATOR}%P${FIELD_SEPARATOR}%D${FIELD_SEPARATOR}%an${FIELD_SEPARATOR}%ad${FIELD_SEPARATOR}%s`;
   const threadIdsOfSha: { [sha: string]: string[] } = {};
   const commits: GitCommit[] = [];
+  const worktreeHeads = worktrees
+    .map((worktree) => worktree.head)
+    .filter((head): head is string => head !== null);
 
   for (const thread of threads) {
     const sha = thread.gitInfo?.sha;
@@ -303,6 +308,7 @@ const readCommits = async ({
       args: [
         "rev-list",
         "--all",
+        ...worktreeHeads,
         "--topo-order",
         `--max-count=${COMMIT_PAGE_SIZE}`,
         `--skip=${skip}`,
@@ -415,9 +421,12 @@ export const readRepoGraphs = async ({
     );
 
     try {
-      const [worktrees, commits, isShallowRepositoryText] = await Promise.all([
-        readWorktrees({ repoSeed, threads: threadsInRepo }),
-        readCommits({ repoSeed, threads: threadsInRepo }),
+      const worktrees = await readWorktrees({
+        repoSeed,
+        threads: threadsInRepo,
+      });
+      const [commits, isShallowRepositoryText] = await Promise.all([
+        readCommits({ repoSeed, threads: threadsInRepo, worktrees }),
         readNullableGitText({
           cwd: repoSeed.root,
           args: ["rev-parse", "--is-shallow-repository"],

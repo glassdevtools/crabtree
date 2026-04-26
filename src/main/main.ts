@@ -1,7 +1,9 @@
 import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { simpleGit } from "simple-git";
+import type { GitMergeRequest } from "../shared/types";
 import { readDashboardData } from "./dashboard";
 
 // The main process owns local system access. The renderer only receives narrow, typed IPC methods through preload.
@@ -10,6 +12,8 @@ const MAIN_WINDOW_WIDTH = 1320;
 const MAIN_WINDOW_HEIGHT = 860;
 const MAIN_WINDOW_MIN_WIDTH = 980;
 const MAIN_WINDOW_MIN_HEIGHT = 640;
+// TODO: AI-PICKED-VALUE: Four random bytes make short readable worktree/temp branch ids while keeping collisions unlikely for local use.
+const GIT_MERGE_HASH_BYTE_LENGTH = 4;
 
 const createMainWindow = () => {
   const mainWindow = new BrowserWindow({
@@ -43,6 +47,88 @@ const runGitCommandForPath = async ({
   args: string[];
 }) => {
   await simpleGit({ baseDir: path }).raw(args);
+};
+
+const readGitTextForPath = async ({
+  path,
+  args,
+}: {
+  path: string;
+  args: string[];
+}) => {
+  return (await simpleGit({ baseDir: path }).raw(args)).trim();
+};
+
+const isObject = (value: unknown): value is { [key: string]: unknown } => {
+  return typeof value === "object" && value !== null;
+};
+
+const readGitMergeRequest = (value: unknown) => {
+  if (!isObject(value)) {
+    throw new Error("gitMergeRequest must be an object.");
+  }
+
+  if (
+    typeof value.repoRoot !== "string" ||
+    value.repoRoot.length === 0 ||
+    typeof value.fromSha !== "string" ||
+    value.fromSha.length === 0 ||
+    typeof value.toSha !== "string" ||
+    value.toSha.length === 0
+  ) {
+    throw new Error("gitMergeRequest is missing a repo root or commit sha.");
+  }
+
+  const gitMergeRequest: GitMergeRequest = {
+    repoRoot: value.repoRoot,
+    fromSha: value.fromSha,
+    toSha: value.toSha,
+  };
+
+  return gitMergeRequest;
+};
+
+const startGitMerge = async ({ repoRoot, fromSha, toSha }: GitMergeRequest) => {
+  const hash = randomBytes(GIT_MERGE_HASH_BYTE_LENGTH).toString("hex");
+  const tempBranchName = `temp-${hash}`;
+  let isTempBranchCreated = false;
+  const currentHead = await readGitTextForPath({
+    path: repoRoot,
+    args: ["rev-parse", "HEAD"],
+  });
+
+  if (currentHead !== toSha) {
+    throw new Error("Drop target must be the current checkout.");
+  }
+
+  const statusText = await readGitTextForPath({
+    path: repoRoot,
+    args: ["status", "--porcelain"],
+  });
+
+  if (statusText.length > 0) {
+    throw new Error("Working tree must be clean before starting a merge.");
+  }
+
+  try {
+    await runGitCommandForPath({
+      path: repoRoot,
+      args: ["branch", tempBranchName, fromSha],
+    });
+    isTempBranchCreated = true;
+
+    await runGitCommandForPath({
+      path: repoRoot,
+      args: ["merge", "--no-edit", tempBranchName],
+    });
+  } finally {
+    if (isTempBranchCreated) {
+      await runGitCommandForPath({
+        path: repoRoot,
+        args: ["branch", "-D", tempBranchName],
+      });
+    }
+  }
 };
 
 ipcMain.handle("dashboard:read", async () => {
@@ -86,6 +172,10 @@ ipcMain.handle("git:unstageChanges", async (_event, path: unknown) => {
     path,
     args: ["restore", "--staged", "--", "."],
   });
+});
+
+ipcMain.handle("git:startMerge", async (_event, value: unknown) => {
+  await startGitMerge(readGitMergeRequest(value));
 });
 
 app.whenReady().then(() => {

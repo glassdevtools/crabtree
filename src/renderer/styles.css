@@ -327,8 +327,26 @@ button {
   color: #202124;
 }
 
+.commit-history-row[draggable="true"] {
+  cursor: grab;
+}
+
+.commit-history-row-merge-drag-source {
+  opacity: 0.58;
+}
+
+.commit-history-row-merge-drop-target {
+  outline: 2px solid #0a84ff;
+  outline-offset: -2px;
+  background: #eaf1ff;
+}
+
 .commit-history-row:nth-child(even) {
   background: rgba(248, 250, 252, 0.76);
+}
+
+.commit-history-row-merge-drop-target:nth-child(even) {
+  background: #eaf1ff;
 }
 
 .commit-history-row-worktree,

@@ -1,5 +1,9 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { DashboardData, MoltTreeApi } from "../shared/types";
+import type {
+  DashboardData,
+  GitMergeRequest,
+  MoltTreeApi,
+} from "../shared/types";
 
 const api: MoltTreeApi = {
   readDashboard: async () => {
@@ -22,6 +26,9 @@ const api: MoltTreeApi = {
   },
   unstageGitChanges: async (path: string) => {
     await ipcRenderer.invoke("git:unstageChanges", path);
+  },
+  startGitMerge: async (gitMergeRequest: GitMergeRequest) => {
+    await ipcRenderer.invoke("git:startMerge", gitMergeRequest);
   },
 };
 
