@@ -8,6 +8,7 @@ import type {
   GitDeleteBranchRequest,
   GitDeleteWorktreeRequest,
   GitMergeRequest,
+  GitMoveBranchRequest,
 } from "../shared/types";
 import { readDashboardData } from "./dashboard";
 
@@ -180,6 +181,36 @@ const readGitDeleteBranchRequest = (value: unknown) => {
   return gitDeleteBranchRequest;
 };
 
+const readGitMoveBranchRequest = (value: unknown) => {
+  if (!isObject(value)) {
+    throw new Error("gitMoveBranchRequest must be an object.");
+  }
+
+  if (
+    typeof value.repoRoot !== "string" ||
+    value.repoRoot.length === 0 ||
+    typeof value.branch !== "string" ||
+    value.branch.length === 0 ||
+    typeof value.oldSha !== "string" ||
+    value.oldSha.length === 0 ||
+    typeof value.newSha !== "string" ||
+    value.newSha.length === 0
+  ) {
+    throw new Error(
+      "gitMoveBranchRequest needs a repo root, branch, old sha, and new sha.",
+    );
+  }
+
+  const gitMoveBranchRequest: GitMoveBranchRequest = {
+    repoRoot: value.repoRoot,
+    branch: value.branch,
+    oldSha: value.oldSha,
+    newSha: value.newSha,
+  };
+
+  return gitMoveBranchRequest;
+};
+
 const logGitMerge = (message: string, value: unknown) => {
   console.info(`[Molt Tree merge] ${message}`, value);
 };
@@ -337,6 +368,122 @@ const deleteGitBranch = async ({
   });
 };
 
+const moveGitBranch = async ({
+  repoRoot,
+  branch,
+  oldSha,
+  newSha,
+}: GitMoveBranchRequest) => {
+  const readWorktreePathForBranch = async () => {
+    const text = await readGitTextForPath({
+      path: repoRoot,
+      args: ["worktree", "list", "--porcelain"],
+    });
+    const branchReferencePrefix = "refs/heads/";
+    let path: string | null = null;
+    let worktreeBranch: string | null = null;
+    let branchWorktreePath: string | null = null;
+
+    const pushWorktree = () => {
+      if (path === null || worktreeBranch !== branch) {
+        return;
+      }
+
+      branchWorktreePath = path;
+    };
+
+    for (const line of text.split("\n")) {
+      if (line.length === 0) {
+        pushWorktree();
+        path = null;
+        worktreeBranch = null;
+        continue;
+      }
+
+      const [key, ...rest] = line.split(" ");
+      const value = rest.join(" ");
+
+      if (key === "worktree") {
+        path = value;
+        continue;
+      }
+
+      if (key !== "branch") {
+        continue;
+      }
+
+      if (value.startsWith(branchReferencePrefix)) {
+        worktreeBranch = value.slice(branchReferencePrefix.length);
+        continue;
+      }
+
+      worktreeBranch = value;
+    }
+
+    pushWorktree();
+
+    return branchWorktreePath;
+  };
+
+  await runGitCommandForPath({
+    path: repoRoot,
+    args: ["check-ref-format", "--branch", branch],
+  });
+  const branchRef = `refs/heads/${branch}`;
+  const branchHead = await readGitTextForPath({
+    path: repoRoot,
+    args: ["rev-parse", "--verify", branchRef],
+  });
+
+  if (branchHead !== oldSha) {
+    throw new Error("Branch moved. Refresh and try again.");
+  }
+
+  const targetSha = await readGitTextForPath({
+    path: repoRoot,
+    args: ["rev-parse", "--verify", `${newSha}^{commit}`],
+  });
+  const worktreePath = await readWorktreePathForBranch();
+
+  if (worktreePath === null) {
+    await runGitCommandForPath({
+      path: repoRoot,
+      args: [
+        "update-ref",
+        "-m",
+        `Molt Tree: move ${branch}`,
+        branchRef,
+        targetSha,
+        oldSha,
+      ],
+    });
+    return;
+  }
+
+  const statusText = await readGitTextForPath({
+    path: worktreePath,
+    args: ["status", "--porcelain"],
+  });
+
+  if (statusText.length > 0) {
+    throw new Error("Working tree must be clean before moving this branch.");
+  }
+
+  const worktreeHead = await readGitTextForPath({
+    path: worktreePath,
+    args: ["rev-parse", "HEAD"],
+  });
+
+  if (worktreeHead !== oldSha) {
+    throw new Error("Branch moved. Refresh and try again.");
+  }
+
+  await runGitCommandForPath({
+    path: worktreePath,
+    args: ["reset", "--keep", targetSha],
+  });
+};
+
 ipcMain.handle("dashboard:read", async () => {
   return await readDashboardData();
 });
@@ -396,6 +543,12 @@ ipcMain.handle("git:deleteBranch", async (_event, value: unknown) => {
   const gitDeleteBranchRequest = readGitDeleteBranchRequest(value);
 
   await deleteGitBranch(gitDeleteBranchRequest);
+});
+
+ipcMain.handle("git:moveBranch", async (_event, value: unknown) => {
+  const gitMoveBranchRequest = readGitMoveBranchRequest(value);
+
+  await moveGitBranch(gitMoveBranchRequest);
 });
 
 ipcMain.handle("git:startMerge", async (_event, value: unknown) => {

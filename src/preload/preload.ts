@@ -5,6 +5,7 @@ import type {
   GitDeleteBranchRequest,
   GitDeleteWorktreeRequest,
   GitMergeRequest,
+  GitMoveBranchRequest,
   MoltTreeApi,
 } from "../shared/types";
 
@@ -42,6 +43,9 @@ const api: MoltTreeApi = {
   },
   deleteGitBranch: async (gitDeleteBranchRequest: GitDeleteBranchRequest) => {
     await ipcRenderer.invoke("git:deleteBranch", gitDeleteBranchRequest);
+  },
+  moveGitBranch: async (gitMoveBranchRequest: GitMoveBranchRequest) => {
+    await ipcRenderer.invoke("git:moveBranch", gitMoveBranchRequest);
   },
   startGitMerge: async (gitMergeRequest: GitMergeRequest) => {
     await ipcRenderer.invoke("git:startMerge", gitMergeRequest);

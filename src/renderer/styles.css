@@ -482,6 +482,22 @@ button {
   font-weight: 720;
 }
 
+.commit-ref-local {
+  background: #eaf1ff;
+  color: #162d54;
+}
+
+.commit-ref-origin {
+  background: #e9f8f1;
+  color: #102f22;
+}
+
+/* TODO: AI-PICKED-VALUE: This keeps Git tags distinct from branch and chat title pills. */
+.commit-ref-tag {
+  background: #f0e7ff;
+  color: #43236f;
+}
+
 .commit-head {
   max-width: 142px;
   min-height: 24px;
@@ -499,14 +515,12 @@ button {
   cursor: pointer;
 }
 
-.commit-ref:nth-child(2n) {
-  background: #eaf1ff;
-  color: #162d54;
+.commit-ref-draggable {
+  cursor: grab;
 }
 
-.commit-ref:nth-child(3n) {
-  background: #fff4df;
-  color: #4f3200;
+.commit-ref-draggable:active {
+  cursor: grabbing;
 }
 
 /* TODO: AI-PICKED-VALUE: This keeps the delete affordance small enough to fit inside compact branch tags. */
@@ -558,6 +572,7 @@ button {
   flex: 0 0 auto;
   font-size: 13px;
   font-weight: 720;
+  cursor: pointer;
 }
 
 .commit-ref svg,
