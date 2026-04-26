@@ -286,7 +286,7 @@ button {
 .commit-history-row {
   position: relative;
   z-index: 2;
-  height: 40px;
+  height: 32px;
   align-items: stretch;
   border-bottom: 1px solid #edf0f4;
   background: transparent;
@@ -295,6 +295,10 @@ button {
 
 .commit-history-row:nth-child(even) {
   background: rgba(248, 250, 252, 0.76);
+}
+
+.commit-history-row-worktree {
+  color: #4f5660;
 }
 
 .commit-history-row-clickable {
@@ -380,12 +384,30 @@ button {
   color: #4f3200;
 }
 
+.commit-worktree {
+  max-width: 142px;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border: 1px solid #b9c0c9;
+  border-radius: 5px;
+  background: #eef0f3;
+  color: #343a43;
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 720;
+}
+
 .commit-ref svg,
+.commit-worktree svg,
 .thread-pill svg {
   flex: 0 0 auto;
 }
 
 .commit-ref span,
+.commit-worktree span,
 .commit-subject,
 .commit-author-cell,
 .commit-date-cell {
