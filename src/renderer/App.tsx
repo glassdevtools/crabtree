@@ -1058,7 +1058,7 @@ const BranchTags = ({
           onDragEnd={finishBranchPointerDrag}
           onClick={(event) => openCodePath(event, repoRoot)}
         >
-          <ExternalLink size={13} />
+          <Bot size={13} />
           <span>HEAD</span>
         </button>
       ) : null}
@@ -1072,7 +1072,7 @@ const BranchTags = ({
           onDoubleClick={(event) => event.stopPropagation()}
           onClick={(event) => openCodePath(event, worktree.path)}
         >
-          <ExternalLink size={13} />
+          <Bot size={13} />
           <span>{readWorktreeTagText(worktree.path)}</span>
         </button>
       ))}
