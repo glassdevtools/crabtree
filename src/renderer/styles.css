@@ -489,8 +489,7 @@ button {
 }
 
 .commit-history-row-worktree,
-.commit-history-row-chat,
-.commit-history-row-head {
+.commit-history-row-chat {
   color: #4f5660;
 }
 

@@ -1484,8 +1484,6 @@ const CommitHistoryRow = ({
   }
 
   if (row.kind === "head") {
-    subject = "";
-    subjectTitle = "";
     rowClassName = "commit-history-row commit-history-row-head";
   }
 
