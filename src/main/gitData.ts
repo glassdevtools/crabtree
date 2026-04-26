@@ -8,8 +8,8 @@ import type { AppServerClient } from "./appServerClient";
 import { execAppServerCommand } from "./appServerClient";
 
 // Git is the source of truth for graph structure. Codex only tells us which thread belongs near a branch, commit, or worktree.
-// TODO: AI-PICKED-VALUE: Showing 80 recent commits keeps the first graph readable while we build the real navigation controls.
-const COMMIT_LIMIT = 80;
+// TODO: AI-PICKED-VALUE: Reading commits in pages of 1000 keeps app-server responses bounded while still walking to the root.
+const COMMIT_PAGE_SIZE = 1000;
 const FIELD_SEPARATOR = "\u001f";
 
 type RepoSeed = {
@@ -250,59 +250,102 @@ const readCommits = async ({
   threads: CodexThread[];
 }) => {
   const format = `%H${FIELD_SEPARATOR}%P${FIELD_SEPARATOR}%D${FIELD_SEPARATOR}%an${FIELD_SEPARATOR}%ad${FIELD_SEPARATOR}%s`;
-  const { stdout } = await runGit({
-    appServerClient,
-    cwd: repoSeed.root,
-    args: [
-      "log",
-      "--all",
-      "--topo-order",
-      `--max-count=${COMMIT_LIMIT}`,
-      "--date=iso-strict",
-      `--pretty=format:${format}`,
-    ],
-  });
+  const threadIdsOfSha: { [sha: string]: string[] } = {};
   const commits: GitCommit[] = [];
 
-  for (const line of stdout.split("\n")) {
-    if (line.length === 0) {
+  for (const thread of threads) {
+    const sha = thread.gitInfo?.sha;
+
+    if (sha === undefined || sha === null) {
       continue;
     }
 
-    const [sha, parentsText, refsText, author, date, subject] =
-      line.split(FIELD_SEPARATOR);
-
-    if (
-      sha === undefined ||
-      parentsText === undefined ||
-      refsText === undefined ||
-      author === undefined ||
-      date === undefined ||
-      subject === undefined
-    ) {
-      continue;
+    if (threadIdsOfSha[sha] === undefined) {
+      threadIdsOfSha[sha] = [];
     }
 
-    const threadIds = threads
-      .filter((thread) => {
-        if (thread.gitInfo === null) {
-          return false;
-        }
+    threadIdsOfSha[sha].push(thread.id);
+  }
 
-        return thread.gitInfo.sha === sha;
-      })
-      .map((thread) => thread.id);
-
-    commits.push({
-      sha,
-      shortSha: sha.slice(0, 7),
-      parents: parentsText.length === 0 ? [] : parentsText.split(" "),
-      refs: splitRefs(refsText),
-      author,
-      date,
-      subject,
-      threadIds,
+  for (let skip = 0; ; skip += COMMIT_PAGE_SIZE) {
+    const { stdout: shaStdout } = await runGit({
+      appServerClient,
+      cwd: repoSeed.root,
+      args: [
+        "rev-list",
+        "--all",
+        "--topo-order",
+        `--max-count=${COMMIT_PAGE_SIZE}`,
+        `--skip=${skip}`,
+      ],
     });
+    const shas = shaStdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+
+    if (shas.length === 0) {
+      break;
+    }
+
+    const { stdout } = await runGit({
+      appServerClient,
+      cwd: repoSeed.root,
+      args: [
+        "log",
+        "--no-walk=unsorted",
+        "--date=iso-strict",
+        `--pretty=format:${format}`,
+        ...shas,
+      ],
+    });
+
+    const commitOfSha: { [sha: string]: GitCommit } = {};
+
+    for (const line of stdout.split("\n")) {
+      if (line.length === 0) {
+        continue;
+      }
+
+      const [sha, parentsText, refsText, author, date, subject] =
+        line.split(FIELD_SEPARATOR);
+
+      if (
+        sha === undefined ||
+        parentsText === undefined ||
+        refsText === undefined ||
+        author === undefined ||
+        date === undefined ||
+        subject === undefined
+      ) {
+        continue;
+      }
+
+      commitOfSha[sha] = {
+        sha,
+        shortSha: sha.slice(0, 7),
+        parents: parentsText.length === 0 ? [] : parentsText.split(" "),
+        refs: splitRefs(refsText),
+        author,
+        date,
+        subject,
+        threadIds: threadIdsOfSha[sha] ?? [],
+      };
+    }
+
+    for (const sha of shas) {
+      const commit = commitOfSha[sha];
+
+      if (commit === undefined) {
+        continue;
+      }
+
+      commits.push(commit);
+    }
+
+    if (shas.length < COMMIT_PAGE_SIZE) {
+      break;
+    }
   }
 
   return commits;
@@ -319,16 +362,43 @@ export const readRepoGraphs = async ({
   const repos: RepoGraph[] = [];
   const warnings: string[] = [];
 
+  const readMissingParentCount = (commits: GitCommit[]) => {
+    const isCommitOfSha: { [sha: string]: boolean } = {};
+    let missingParentCount = 0;
+
+    for (const commit of commits) {
+      isCommitOfSha[commit.sha] = true;
+    }
+
+    for (const commit of commits) {
+      for (const parent of commit.parents) {
+        if (isCommitOfSha[parent] === true) {
+          continue;
+        }
+
+        missingParentCount += 1;
+      }
+    }
+
+    return missingParentCount;
+  };
+
   for (const repoSeed of repoSeeds) {
     const threadsInRepo = threads.filter((thread) =>
       repoSeed.threadIds.includes(thread.id),
     );
 
     try {
-      const [worktrees, commits] = await Promise.all([
+      const [worktrees, commits, isShallowRepositoryText] = await Promise.all([
         readWorktrees({ appServerClient, repoSeed, threads: threadsInRepo }),
         readCommits({ appServerClient, repoSeed, threads: threadsInRepo }),
+        readNullableGitText({
+          appServerClient,
+          cwd: repoSeed.root,
+          args: ["rev-parse", "--is-shallow-repository"],
+        }),
       ]);
+      const missingParentCount = readMissingParentCount(commits);
 
       repos.push({
         key: repoSeed.key,
@@ -339,6 +409,18 @@ export const readRepoGraphs = async ({
         commits,
         threadIds: repoSeed.threadIds,
       });
+
+      if (isShallowRepositoryText === "true") {
+        warnings.push(
+          `${repoSeed.root}: Git repository is shallow, so history can only show commits available locally.`,
+        );
+      }
+
+      if (missingParentCount > 0) {
+        warnings.push(
+          `${repoSeed.root}: ${missingParentCount} parent commits are missing from local Git history.`,
+        );
+      }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Unknown Git error.";
