@@ -517,7 +517,7 @@ const createCommitGraph = (
             ? commitLane.colorIndex
             : parentColorIndex,
         isMergeSegment: parentIndex > 0,
-        isGraySegment: graphItem.kind !== "commit",
+        isGraySegment: graphItem.kind === "chat",
       });
     }
 
