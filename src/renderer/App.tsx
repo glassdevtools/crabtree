@@ -39,7 +39,6 @@ const COMMIT_GRAPH_MIN_WIDTH = 300;
 const COMMIT_GRAPH_DOT_RADIUS = 6;
 const COMMIT_GRAPH_GRAY_COLOR = "#8b929c";
 const COMMIT_GRAPH_BOT_ICON_SIZE = 14;
-const COMMIT_GRAPH_CODE_ICON_SIZE = 14;
 const COMMIT_GRAPH_COMMIT_ICON_SIZE = 12;
 const COMMIT_GRAPH_TRASH_ICON_SIZE = 13;
 const COMMIT_GRAPH_ACTION_HIT_SIZE = 14;
@@ -464,17 +463,11 @@ const readCommitGraphRowActionWidth = ({
     storedChangeSummary !== undefined &&
     readIsGitChangeSummaryEmpty(changeSummary) &&
     isWorktreeMergedOfPath[worktree.path] === true;
-  const thread = readCommitGraphRowThread(row, threadOfId);
-  const canOpenPath = thread !== null && thread.cwd.length > 0;
   const canOpenCommitMessage = rowCwd !== null;
   const shouldShowCommitAction = canOpenCommitMessage && shouldShowChangeCount;
   let iconCount = 0;
 
   if (shouldShowTrash) {
-    iconCount += 1;
-  }
-
-  if (canOpenPath) {
     iconCount += 1;
   }
 
@@ -1209,19 +1202,6 @@ const CommitGraphSvg = ({
     return readCommitGraphY(rowIndex);
   };
 
-  const openRowVSCode = async (
-    event: MouseEvent<SVGGElement>,
-    row: CommitGraphRow,
-  ) => {
-    event.stopPropagation();
-    const thread = readCommitGraphRowThread(row, threadOfId);
-
-    if (thread === null || thread.cwd.length === 0) {
-      return;
-    }
-
-    await window.molttree.openVSCodePath(thread.cwd);
-  };
   const openRowCommitMessageModal = (
     event: MouseEvent<SVGGElement>,
     row: CommitGraphRow,
@@ -1366,13 +1346,11 @@ const CommitGraphSvg = ({
           readIsGitChangeSummaryEmpty(changeSummary) &&
           isWorktreeMergedOfPath[worktree.path] === true;
 
-        const thread = readCommitGraphRowThread(row, threadOfId);
-        const canOpenPath = thread !== null && thread.cwd.length > 0;
         const canOpenCommitMessage = rowCwd !== null;
         const shouldShowCommitAction =
           canOpenCommitMessage && shouldShowChangeCount;
 
-        if (!shouldShowTrash && !shouldShowChangeCount && !canOpenPath) {
+        if (!shouldShowTrash && !shouldShowChangeCount) {
           return null;
         }
 
@@ -1382,16 +1360,10 @@ const CommitGraphSvg = ({
           COMMIT_GRAPH_ACTION_RIGHT_PADDING -
           COMMIT_GRAPH_ACTION_HIT_SIZE / 2;
         let trashCenterX: number | null = null;
-        let vscodeCenterX: number | null = null;
         let commitCenterX: number | null = null;
 
         if (shouldShowTrash) {
           trashCenterX = nextIconCenterX;
-          nextIconCenterX -= COMMIT_GRAPH_ACTION_ICON_SPACING;
-        }
-
-        if (canOpenPath) {
-          vscodeCenterX = nextIconCenterX;
           nextIconCenterX -= COMMIT_GRAPH_ACTION_ICON_SPACING;
         }
 
@@ -1431,27 +1403,6 @@ const CommitGraphSvg = ({
                   size={COMMIT_GRAPH_COMMIT_ICON_SIZE}
                   color={COMMIT_GRAPH_GRAY_COLOR}
                   strokeWidth={2.5}
-                />
-              </g>
-            )}
-            {vscodeCenterX === null ? null : (
-              <g
-                className="commit-graph-action-link"
-                onClick={(event) => openRowVSCode(event, row)}
-              >
-                <rect
-                  className="commit-graph-action-hit-area"
-                  x={vscodeCenterX - COMMIT_GRAPH_ACTION_HIT_SIZE / 2}
-                  y={centerY - COMMIT_GRAPH_ACTION_HIT_SIZE / 2}
-                  width={COMMIT_GRAPH_ACTION_HIT_SIZE}
-                  height={COMMIT_GRAPH_ACTION_HIT_SIZE}
-                />
-                <ExternalLink
-                  x={vscodeCenterX - COMMIT_GRAPH_CODE_ICON_SIZE / 2}
-                  y={centerY - COMMIT_GRAPH_CODE_ICON_SIZE / 2}
-                  size={COMMIT_GRAPH_CODE_ICON_SIZE}
-                  color={COMMIT_GRAPH_GRAY_COLOR}
-                  strokeWidth={2}
                 />
               </g>
             )}
