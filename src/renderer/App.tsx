@@ -822,7 +822,7 @@ const CommitGraphSvg = ({
                   x={stageCenterX - COMMIT_GRAPH_CHANGE_ICON_SIZE / 2}
                   y={centerY - COMMIT_GRAPH_CHANGE_ICON_SIZE / 2}
                   size={COMMIT_GRAPH_CHANGE_ICON_SIZE}
-                  color={COMMIT_GRAPH_WORKTREE_COLOR}
+                  color={COMMIT_GRAPH_GRAY_COLOR}
                   strokeWidth={2.5}
                 />
               </g>
@@ -843,7 +843,7 @@ const CommitGraphSvg = ({
                   x={unstageCenterX - COMMIT_GRAPH_CHANGE_ICON_SIZE / 2}
                   y={centerY - COMMIT_GRAPH_CHANGE_ICON_SIZE / 2}
                   size={COMMIT_GRAPH_CHANGE_ICON_SIZE}
-                  color={COMMIT_GRAPH_WORKTREE_COLOR}
+                  color={COMMIT_GRAPH_GRAY_COLOR}
                   strokeWidth={2.5}
                 />
               </g>
@@ -859,7 +859,7 @@ const CommitGraphSvg = ({
               x={commitCenterX - COMMIT_GRAPH_COMMIT_ICON_SIZE / 2}
               y={centerY - COMMIT_GRAPH_COMMIT_ICON_SIZE / 2}
               size={COMMIT_GRAPH_COMMIT_ICON_SIZE}
-              color={COMMIT_GRAPH_WORKTREE_COLOR}
+              color={COMMIT_GRAPH_GRAY_COLOR}
               strokeWidth={2.5}
             />
             <Bot
