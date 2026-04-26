@@ -139,7 +139,7 @@ type CommitMergeTarget = {
   targetWorktreePath: string | null;
 };
 
-type CommitGraphRowKind = "commit" | "worktree" | "chat";
+type CommitGraphRowKind = "commit" | "worktree" | "chat" | "head";
 
 type CommitGraphRow = {
   id: string;
@@ -199,9 +199,14 @@ const readCommitGraphRowThread = (
 const readCommitGraphRowCwd = (
   row: CommitGraphRow,
   threadOfId: { [id: string]: CodexThread },
+  repoRoot: string,
 ) => {
   if (row.kind === "worktree" && row.worktree !== null) {
     return row.worktree.path;
+  }
+
+  if (row.kind === "head") {
+    return repoRoot;
   }
 
   const thread = readCommitGraphRowThread(row, threadOfId);
@@ -348,6 +353,10 @@ const cleanRefName = (ref: string) => {
   return ref;
 };
 
+const readIsHeadRef = (ref: string) => {
+  return ref === "HEAD" || ref.startsWith("HEAD -> ");
+};
+
 const logCommitMerge = (message: string, value: unknown) => {
   console.info(`[Molt Tree merge] ${message}`, value);
 };
@@ -405,6 +414,7 @@ const createCommitGraph = (
   for (const commit of commits) {
     const worktrees = worktreesOfHead[commit.sha] ?? [];
     const isOwnedByWorktreeOfThreadId: { [threadId: string]: boolean } = {};
+    const isHeadCommit = commit.refs.some((ref) => readIsHeadRef(ref));
 
     for (const worktree of worktrees) {
       for (const threadId of worktree.threadIds) {
@@ -422,6 +432,23 @@ const createCommitGraph = (
         parents: [commit.sha],
         threadIds: worktree.threadIds,
       });
+    }
+
+    if (isHeadCommit) {
+      const threadIds = commit.threadIds.filter(
+        (threadId) => isOwnedByWorktreeOfThreadId[threadId] !== true,
+      );
+
+      graphItems.push({
+        id: `head:${commit.sha}`,
+        kind: "head",
+        commit,
+        worktree: null,
+        sha: commit.sha,
+        parents: commit.parents,
+        threadIds,
+      });
+      continue;
     }
 
     for (const threadId of commit.threadIds) {
@@ -537,7 +564,10 @@ const createCommitGraph = (
       let parentColorIndex = colorIndexOfSha[parent];
 
       if (parentColorIndex === undefined) {
-        if (graphItem.kind === "commit" && parentIndex === 0) {
+        if (
+          (graphItem.kind === "commit" || graphItem.kind === "head") &&
+          parentIndex === 0
+        ) {
           parentColorIndex = commitLane.colorIndex;
         } else {
           parentColorIndex = readNewLaneColorIndex({
@@ -656,12 +686,8 @@ const BranchTags = ({
     return null;
   }
 
-  const isHead = refs.some(
-    (ref) => ref === "HEAD" || ref.startsWith("HEAD -> "),
-  );
-  const normalRefs = refs.filter(
-    (ref) => ref !== "HEAD" && !ref.startsWith("HEAD -> "),
-  );
+  const isHead = refs.some((ref) => readIsHeadRef(ref));
+  const normalRefs = refs.filter((ref) => !readIsHeadRef(ref));
 
   const readWorktreeTagText = (path: string) => {
     if (path === repoRoot) {
@@ -907,7 +933,7 @@ const CommitGraphSvg = ({
       {graph.rows.map((row) => {
         const shouldShowChat = row.threadIds.length > 0;
         const worktree = row.worktree;
-        const rowCwd = readCommitGraphRowCwd(row, threadOfId);
+        const rowCwd = readCommitGraphRowCwd(row, threadOfId, repoRoot);
         const storedChangeSummary =
           rowCwd === null ? undefined : gitChangesOfCwd[rowCwd];
         const changeSummary = storedChangeSummary ?? EMPTY_GIT_CHANGE_SUMMARY;
@@ -1110,6 +1136,12 @@ const CommitHistoryRow = ({
     subject = "(Worktree)";
     subjectTitle = row.worktree.path;
     rowClassName = "commit-history-row commit-history-row-worktree";
+  }
+
+  if (row.kind === "head") {
+    subject = "(Head)";
+    subjectTitle = commit.subject;
+    rowClassName = "commit-history-row commit-history-row-head";
   }
 
   if (row.kind === "chat") {
@@ -1771,7 +1803,7 @@ const CommitHistory = ({
       return;
     }
 
-    const path = readCommitGraphRowCwd(commitMessageRow, threadOfId);
+    const path = readCommitGraphRowCwd(commitMessageRow, threadOfId, repoRoot);
 
     if (path === null) {
       showErrorMessage("No working directory found for this row.");
