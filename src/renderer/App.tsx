@@ -1475,7 +1475,7 @@ const CommitHistoryRow = ({
   const threads = row.threadIds
     .map((rowThreadId) => threadOfId[rowThreadId])
     .filter((rowThread): rowThread is CodexThread => rowThread !== undefined);
-  const refs = commit.refs;
+  const refs = row.kind === "worktree" ? [] : commit.refs;
   let worktrees: GitWorktree[] = [];
   let subject = commit.subject;
   let subjectTitle = commit.subject;
