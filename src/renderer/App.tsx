@@ -860,6 +860,7 @@ const BranchTags = ({
   localBranches,
   worktrees,
   threads,
+  shouldShowHeadTag,
   repoRoot,
   commitSha,
   commitShortSha,
@@ -872,6 +873,7 @@ const BranchTags = ({
   localBranches: string[];
   worktrees: GitWorktree[];
   threads: CodexThread[];
+  shouldShowHeadTag: boolean;
   repoRoot: string;
   commitSha: string;
   commitShortSha: string;
@@ -898,7 +900,7 @@ const BranchTags = ({
     return null;
   }
 
-  const isHead = refs.some((ref) => readIsHeadRef(ref));
+  const isHead = shouldShowHeadTag && refs.some((ref) => readIsHeadRef(ref));
   const headRef = refs.find((ref) => ref.startsWith("HEAD -> "));
   const headBranch = headRef === undefined ? null : cleanRefName(headRef);
   const normalRefs = refs.filter((ref) => !readIsHeadRef(ref));
@@ -935,17 +937,10 @@ const BranchTags = ({
     }
 
     const pathParts = path.split("/");
-    const worktreesIndex = pathParts.length - 3;
+    const worktreesIndex = pathParts.lastIndexOf("worktrees");
     const hash = pathParts[worktreesIndex + 1];
-    const projectName = pathParts[worktreesIndex + 2];
 
-    if (
-      pathParts[worktreesIndex] === "worktrees" &&
-      hash !== undefined &&
-      hash.length > 0 &&
-      projectName !== undefined &&
-      projectName.length > 0
-    ) {
+    if (worktreesIndex >= 0 && hash !== undefined && hash.length > 0) {
       return `worktrees/${hash}`;
     }
 
@@ -1525,6 +1520,7 @@ const CommitHistoryRow = ({
           localBranches={commit.localBranches}
           worktrees={worktrees}
           threads={threads}
+          shouldShowHeadTag={row.kind === "head"}
           repoRoot={repoRoot}
           commitSha={commit.sha}
           commitShortSha={commit.shortSha}
