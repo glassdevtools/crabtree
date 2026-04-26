@@ -186,6 +186,10 @@ const readWorktrees = async ({
       return;
     }
 
+    if (path === repoSeed.root) {
+      return;
+    }
+
     const threadIds = threads
       .filter(
         (thread) => thread.cwd === path || thread.cwd.startsWith(`${path}/`),

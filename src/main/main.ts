@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, shell } from "electron";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { readDashboardData } from "./dashboard";
 
 // The main process owns local system access. The renderer only receives narrow, typed IPC methods through preload.
@@ -47,6 +48,14 @@ ipcMain.handle("codex:openThread", async (_event, threadId: unknown) => {
 
 ipcMain.handle("codex:openNewThread", async () => {
   await shell.openExternal("codex://new");
+});
+
+ipcMain.handle("vscode:openPath", async (_event, path: unknown) => {
+  if (typeof path !== "string" || path.length === 0) {
+    throw new Error("path must be a non-empty string.");
+  }
+
+  await shell.openExternal(`vscode://file${pathToFileURL(path).pathname}`);
 });
 
 app.whenReady().then(() => {

@@ -14,6 +14,9 @@ const api: MoltTreeApi = {
   openNewCodexThread: async () => {
     await ipcRenderer.invoke("codex:openNewThread");
   },
+  openVSCodePath: async (path: string) => {
+    await ipcRenderer.invoke("vscode:openPath", path);
+  },
 };
 
 contextBridge.exposeInMainWorld("molttree", api);

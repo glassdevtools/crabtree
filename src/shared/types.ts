@@ -58,4 +58,5 @@ export type MoltTreeApi = {
   readDashboard: () => Promise<DashboardData>;
   openCodexThread: (threadId: string) => Promise<void>;
   openNewCodexThread: () => Promise<void>;
+  openVSCodePath: (path: string) => Promise<void>;
 };

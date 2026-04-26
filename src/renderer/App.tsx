@@ -1,5 +1,6 @@
 import {
-  ExternalLink,
+  Bot,
+  Code,
   FolderGit2,
   GitBranch,
   GitCommitHorizontal,
@@ -7,8 +8,8 @@ import {
   MessageSquarePlus,
   RefreshCw,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import type { MouseEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { MouseEvent, PointerEvent } from "react";
 import type {
   CodexThread,
   DashboardData,
@@ -25,7 +26,10 @@ const COMMIT_GRAPH_PADDING_LEFT = 18;
 const COMMIT_GRAPH_MIN_WIDTH = 178;
 const COMMIT_GRAPH_DOT_RADIUS = 6;
 const COMMIT_GRAPH_WORKTREE_COLOR = "#8b929c";
+const COMMIT_GRAPH_BOT_ICON_SIZE = 14;
 const COMMIT_GRAPH_CHAT_ICON_SIZE = 14;
+const COMMIT_GRAPH_CODE_ICON_SIZE = 14;
+const COMMIT_GRAPH_ACTION_HIT_SIZE = 14;
 const COMMIT_GRAPH_MARKER_SLOT_WIDTH = 18;
 const COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO = 0;
 const COMMIT_GRAPH_COLORS = [
@@ -38,6 +42,49 @@ const COMMIT_GRAPH_COLORS = [
   "#ff6b45",
   "#8e6c00",
 ];
+
+// TODO: AI-PICKED-VALUE: These column widths match the current table layout closely enough while making drag resizing concrete.
+const COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS = {
+  graph: 178,
+  branchTags: 320,
+  description: 420,
+  commit: 84,
+  author: 150,
+  date: 170,
+};
+const COMMIT_HISTORY_MIN_COLUMN_WIDTHS = {
+  graph: 140,
+  branchTags: 140,
+  description: 180,
+  commit: 64,
+  author: 90,
+  date: 120,
+};
+
+type CommitHistoryColumnKey =
+  | "graph"
+  | "branchTags"
+  | "description"
+  | "commit"
+  | "author"
+  | "date";
+
+type CommitHistoryColumnWidths = {
+  graph: number;
+  branchTags: number;
+  description: number;
+  commit: number;
+  author: number;
+  date: number;
+};
+
+type CommitHistoryColumnResize = {
+  columnKey: CommitHistoryColumnKey;
+  startClientX: number;
+  startColumnWidths: CommitHistoryColumnWidths;
+  startWidth: number;
+  currentWidth: number;
+};
 
 type CommitGraphRow = {
   id: string;
@@ -128,8 +175,62 @@ const readCommitGraphWidth = (laneCount: number) => {
   );
 };
 
-const readCommitGridTemplateColumns = (graphWidth: number) => {
-  return `${graphWidth}px minmax(220px, 320px) minmax(280px, 1fr) 84px 150px 170px`;
+const readCommitGridTemplateColumns = (
+  columnWidths: CommitHistoryColumnWidths,
+) => {
+  return `${columnWidths.graph}px ${columnWidths.branchTags}px ${columnWidths.description}px ${columnWidths.commit}px ${columnWidths.author}px ${columnWidths.date}px`;
+};
+
+const readCommitHistoryTableWidth = (
+  columnWidths: CommitHistoryColumnWidths,
+) => {
+  return (
+    columnWidths.graph +
+    columnWidths.branchTags +
+    columnWidths.description +
+    columnWidths.commit +
+    columnWidths.author +
+    columnWidths.date
+  );
+};
+
+const replaceCommitHistoryColumnWidth = ({
+  columnWidths,
+  columnKey,
+  width,
+}: {
+  columnWidths: CommitHistoryColumnWidths;
+  columnKey: CommitHistoryColumnKey;
+  width: number;
+}) => {
+  switch (columnKey) {
+    case "graph":
+      return { ...columnWidths, graph: width };
+    case "branchTags":
+      return { ...columnWidths, branchTags: width };
+    case "description":
+      return { ...columnWidths, description: width };
+    case "commit":
+      return { ...columnWidths, commit: width };
+    case "author":
+      return { ...columnWidths, author: width };
+    case "date":
+      return { ...columnWidths, date: width };
+  }
+};
+
+const updateCommitHistoryColumnStyles = (
+  commitHistory: HTMLDivElement,
+  columnWidths: CommitHistoryColumnWidths,
+) => {
+  commitHistory.style.setProperty(
+    "--commit-history-grid-template-columns",
+    readCommitGridTemplateColumns(columnWidths),
+  );
+  commitHistory.style.setProperty(
+    "--commit-history-table-width",
+    `${readCommitHistoryTableWidth(columnWidths)}px`,
+  );
 };
 
 const cleanRefName = (ref: string) => {
@@ -373,30 +474,41 @@ const createThreadOfId = (threads: CodexThread[]) => {
   return threadOfId;
 };
 
-const ThreadPill = ({ thread }: { thread: CodexThread }) => {
-  const openThread = async (event: MouseEvent<HTMLButtonElement>) => {
-    event.stopPropagation();
-    await window.molttree.openCodexThread(thread.id);
-  };
-
-  return (
-    <button className="thread-pill" title={thread.id} onClick={openThread}>
-      <span>{threadTitle(thread)}</span>
-      <ExternalLink size={13} />
-    </button>
-  );
-};
-
 const BranchTags = ({
   refs,
   worktrees,
+  repoRoot,
 }: {
   refs: string[];
   worktrees: GitWorktree[];
+  repoRoot: string;
 }) => {
   if (refs.length === 0 && worktrees.length === 0) {
     return null;
   }
+
+  const readWorktreeTagText = (path: string) => {
+    if (path === repoRoot) {
+      return "HEAD";
+    }
+
+    const pathParts = path.split("/");
+    const worktreesIndex = pathParts.length - 3;
+    const hash = pathParts[worktreesIndex + 1];
+    const projectName = pathParts[worktreesIndex + 2];
+
+    if (
+      pathParts[worktreesIndex] === "worktrees" &&
+      hash !== undefined &&
+      hash.length > 0 &&
+      projectName !== undefined &&
+      projectName.length > 0
+    ) {
+      return `worktrees/${hash}`;
+    }
+
+    return `Worktree at ${path}`;
+  };
 
   return (
     <div className="commit-label-list">
@@ -406,21 +518,16 @@ const BranchTags = ({
           <span>{cleanRefName(ref)}</span>
         </span>
       ))}
-      {worktrees.map((worktree) => {
-        const pathParts = worktree.path.split("/");
-        const pathName = pathParts[pathParts.length - 1] ?? worktree.path;
-
-        return (
-          <span
-            className="commit-worktree"
-            title={worktree.path}
-            key={worktree.path}
-          >
-            <FolderGit2 size={13} />
-            <span>{worktree.branch ?? pathName}</span>
-          </span>
-        );
-      })}
+      {worktrees.map((worktree) => (
+        <span
+          className="commit-worktree"
+          title={worktree.path}
+          key={worktree.path}
+        >
+          <FolderGit2 size={13} />
+          <span>{readWorktreeTagText(worktree.path)}</span>
+        </span>
+      ))}
     </div>
   );
 };
@@ -428,9 +535,11 @@ const BranchTags = ({
 const CommitGraphSvg = ({
   graph,
   graphWidth,
+  threadOfId,
 }: {
   graph: CommitGraph;
   graphWidth: number;
+  threadOfId: { [id: string]: CodexThread };
 }) => {
   const graphHeight = Math.max(
     COMMIT_GRAPH_ROW_HEIGHT,
@@ -456,6 +565,25 @@ const CommitGraphSvg = ({
     }
 
     await window.molttree.openCodexThread(threadId);
+  };
+  const openRowVSCode = async (
+    event: MouseEvent<SVGGElement>,
+    row: CommitGraphRow,
+  ) => {
+    event.stopPropagation();
+    const threadId = row.threadIds[0];
+
+    if (threadId === undefined) {
+      return;
+    }
+
+    const thread = threadOfId[threadId];
+
+    if (thread === undefined || thread.cwd.length === 0) {
+      return;
+    }
+
+    await window.molttree.openVSCodePath(thread.cwd);
   };
 
   return (
@@ -518,25 +646,72 @@ const CommitGraphSvg = ({
           return null;
         }
 
+        const threadId = row.threadIds[0];
+        const thread =
+          threadId === undefined ? undefined : threadOfId[threadId];
         const centerY = readCommitGraphY(row.rowIndex);
+        const botCenterX =
+          graphWidth -
+          COMMIT_GRAPH_PADDING_LEFT -
+          COMMIT_GRAPH_MARKER_SLOT_WIDTH * 3;
         const chatCenterX =
+          graphWidth -
+          COMMIT_GRAPH_PADDING_LEFT -
+          COMMIT_GRAPH_MARKER_SLOT_WIDTH * 2;
+        const vscodeCenterX =
           graphWidth -
           COMMIT_GRAPH_PADDING_LEFT -
           COMMIT_GRAPH_MARKER_SLOT_WIDTH;
 
         return (
-          <g
-            className="commit-graph-chat-link"
-            key={`chat-${row.id}`}
-            onClick={(event) => openRowThread(event, row)}
-          >
-            <MessageSquare
-              x={chatCenterX - COMMIT_GRAPH_CHAT_ICON_SIZE / 2}
-              y={centerY - COMMIT_GRAPH_CHAT_ICON_SIZE / 2}
-              size={COMMIT_GRAPH_CHAT_ICON_SIZE}
+          <g key={`actions-${row.id}`}>
+            <Bot
+              x={botCenterX - COMMIT_GRAPH_BOT_ICON_SIZE / 2}
+              y={centerY - COMMIT_GRAPH_BOT_ICON_SIZE / 2}
+              size={COMMIT_GRAPH_BOT_ICON_SIZE}
               color={COMMIT_GRAPH_WORKTREE_COLOR}
               strokeWidth={2}
             />
+            <g
+              className="commit-graph-action-link"
+              onClick={(event) => openRowThread(event, row)}
+            >
+              <rect
+                className="commit-graph-action-hit-area"
+                x={chatCenterX - COMMIT_GRAPH_ACTION_HIT_SIZE / 2}
+                y={centerY - COMMIT_GRAPH_ACTION_HIT_SIZE / 2}
+                width={COMMIT_GRAPH_ACTION_HIT_SIZE}
+                height={COMMIT_GRAPH_ACTION_HIT_SIZE}
+              />
+              <MessageSquare
+                x={chatCenterX - COMMIT_GRAPH_CHAT_ICON_SIZE / 2}
+                y={centerY - COMMIT_GRAPH_CHAT_ICON_SIZE / 2}
+                size={COMMIT_GRAPH_CHAT_ICON_SIZE}
+                color={COMMIT_GRAPH_WORKTREE_COLOR}
+                strokeWidth={2}
+              />
+            </g>
+            {thread === undefined || thread.cwd.length === 0 ? null : (
+              <g
+                className="commit-graph-action-link"
+                onClick={(event) => openRowVSCode(event, row)}
+              >
+                <rect
+                  className="commit-graph-action-hit-area"
+                  x={vscodeCenterX - COMMIT_GRAPH_ACTION_HIT_SIZE / 2}
+                  y={centerY - COMMIT_GRAPH_ACTION_HIT_SIZE / 2}
+                  width={COMMIT_GRAPH_ACTION_HIT_SIZE}
+                  height={COMMIT_GRAPH_ACTION_HIT_SIZE}
+                />
+                <Code
+                  x={vscodeCenterX - COMMIT_GRAPH_CODE_ICON_SIZE / 2}
+                  y={centerY - COMMIT_GRAPH_CODE_ICON_SIZE / 2}
+                  size={COMMIT_GRAPH_CODE_ICON_SIZE}
+                  color={COMMIT_GRAPH_WORKTREE_COLOR}
+                  strokeWidth={2}
+                />
+              </g>
+            )}
           </g>
         );
       })}
@@ -546,28 +721,30 @@ const CommitGraphSvg = ({
 
 const CommitHistoryRow = ({
   row,
-  gridTemplateColumns,
+  repoRoot,
 }: {
   row: CommitGraphRow;
-  gridTemplateColumns: string;
+  repoRoot: string;
 }) => {
   const { commit } = row;
   const refs = row.worktree === null ? commit.refs : [];
   const worktrees = row.worktree === null ? [] : [row.worktree];
-  const subject = row.worktree === null ? commit.subject : row.worktree.path;
+  const subject = row.worktree === null ? commit.subject : "(Worktree)";
+  const subjectTitle =
+    row.worktree === null ? commit.subject : row.worktree.path;
   const rowClassName =
     row.worktree === null
       ? "commit-history-row"
       : "commit-history-row commit-history-row-worktree";
 
   return (
-    <div className={rowClassName} style={{ gridTemplateColumns }}>
+    <div className={rowClassName}>
       <div className="commit-graph-cell" />
       <div className="commit-branch-tags-cell">
-        <BranchTags refs={refs} worktrees={worktrees} />
+        <BranchTags refs={refs} worktrees={worktrees} repoRoot={repoRoot} />
       </div>
       <div className="commit-description-cell">
-        <span className="commit-subject" title={subject}>
+        <span className="commit-subject" title={subjectTitle}>
           {subject}
         </span>
       </div>
@@ -580,13 +757,52 @@ const CommitHistoryRow = ({
   );
 };
 
+const CommitHistoryColumnResizeHandle = ({
+  columnKey,
+  startColumnResize,
+  updateColumnResize,
+  finishColumnResize,
+}: {
+  columnKey: CommitHistoryColumnKey;
+  startColumnResize: ({
+    event,
+    columnKey,
+  }: {
+    event: PointerEvent<HTMLButtonElement>;
+    columnKey: CommitHistoryColumnKey;
+  }) => void;
+  updateColumnResize: (event: PointerEvent<HTMLButtonElement>) => void;
+  finishColumnResize: (event: PointerEvent<HTMLButtonElement>) => void;
+}) => {
+  return (
+    <button
+      className="commit-history-column-resize"
+      type="button"
+      onPointerDown={(event) => startColumnResize({ event, columnKey })}
+      onPointerMove={updateColumnResize}
+      onPointerUp={finishColumnResize}
+      onPointerCancel={finishColumnResize}
+    />
+  );
+};
+
 const CommitHistory = ({
   commits,
   worktrees,
+  threadOfId,
+  repoRoot,
 }: {
   commits: GitCommit[];
   worktrees: GitWorktree[];
+  threadOfId: { [id: string]: CodexThread };
+  repoRoot: string;
 }) => {
+  const commitHistoryRef = useRef<HTMLDivElement | null>(null);
+  const columnResizeRef = useRef<CommitHistoryColumnResize | null>(null);
+  const [columnWidths, setColumnWidths] = useState<CommitHistoryColumnWidths>(
+    COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS,
+  );
+  const [shouldShowChatOnly, setShouldShowChatOnly] = useState(false);
   const worktreesOfHead = useMemo(() => {
     const nextWorktreesOfHead: { [sha: string]: GitWorktree[] } = {};
 
@@ -608,7 +824,6 @@ const CommitHistory = ({
     () => createCommitGraph(commits, worktreesOfHead),
     [commits, worktreesOfHead],
   );
-  const [shouldShowChatOnly, setShouldShowChatOnly] = useState(false);
   const visibleGraph = useMemo(() => {
     if (!shouldShowChatOnly) {
       return graph;
@@ -646,70 +861,174 @@ const CommitHistory = ({
       laneCount: graph.laneCount,
     };
   }, [graph, shouldShowChatOnly]);
-  const graphWidth = readCommitGraphWidth(visibleGraph.laneCount);
-  const gridTemplateColumns = readCommitGridTemplateColumns(graphWidth);
+  const graphMinimumWidth = readCommitGraphWidth(visibleGraph.laneCount);
+  const visibleColumnWidths: CommitHistoryColumnWidths = {
+    ...columnWidths,
+    graph: Math.max(columnWidths.graph, graphMinimumWidth),
+  };
+  const graphWidth = visibleColumnWidths.graph;
+  const gridTemplateColumns =
+    readCommitGridTemplateColumns(visibleColumnWidths);
+  const tableWidth = readCommitHistoryTableWidth(visibleColumnWidths);
+
+  useLayoutEffect(() => {
+    if (commitHistoryRef.current === null) {
+      return;
+    }
+
+    commitHistoryRef.current.style.setProperty(
+      "--commit-history-grid-template-columns",
+      gridTemplateColumns,
+    );
+    commitHistoryRef.current.style.setProperty(
+      "--commit-history-table-width",
+      `${tableWidth}px`,
+    );
+  }, [gridTemplateColumns, tableWidth]);
+
+  const readColumnMinWidth = (columnKey: CommitHistoryColumnKey) => {
+    if (columnKey === "graph") {
+      return graphMinimumWidth;
+    }
+
+    return COMMIT_HISTORY_MIN_COLUMN_WIDTHS[columnKey];
+  };
+  const startColumnResize = ({
+    event,
+    columnKey,
+  }: {
+    event: PointerEvent<HTMLButtonElement>;
+    columnKey: CommitHistoryColumnKey;
+  }) => {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    columnResizeRef.current = {
+      columnKey,
+      startClientX: event.clientX,
+      startColumnWidths: visibleColumnWidths,
+      startWidth: visibleColumnWidths[columnKey],
+      currentWidth: visibleColumnWidths[columnKey],
+    };
+  };
+  const updateColumnResize = (event: PointerEvent<HTMLButtonElement>) => {
+    const columnResize = columnResizeRef.current;
+
+    if (columnResize === null || commitHistoryRef.current === null) {
+      return;
+    }
+
+    const minWidth = readColumnMinWidth(columnResize.columnKey);
+    const nextWidth = Math.max(
+      minWidth,
+      columnResize.startWidth + event.clientX - columnResize.startClientX,
+    );
+    const nextColumnWidths = replaceCommitHistoryColumnWidth({
+      columnWidths: columnResize.startColumnWidths,
+      columnKey: columnResize.columnKey,
+      width: nextWidth,
+    });
+    columnResizeRef.current = {
+      ...columnResize,
+      currentWidth: nextWidth,
+    };
+    updateCommitHistoryColumnStyles(commitHistoryRef.current, nextColumnWidths);
+  };
+  const finishColumnResize = (event: PointerEvent<HTMLButtonElement>) => {
+    const columnResize = columnResizeRef.current;
+
+    if (columnResize === null) {
+      return;
+    }
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    setColumnWidths(
+      replaceCommitHistoryColumnWidth({
+        columnWidths: columnResize.startColumnWidths,
+        columnKey: columnResize.columnKey,
+        width: columnResize.currentWidth,
+      }),
+    );
+    columnResizeRef.current = null;
+  };
 
   return (
-    <div className="commit-history">
-      <div className="commit-history-header" style={{ gridTemplateColumns }}>
-        <label className="commit-history-graph-title">
-          Graph
-          <input
-            type="checkbox"
-            checked={shouldShowChatOnly}
-            onChange={(event) => setShouldShowChatOnly(event.target.checked)}
+    <div className="commit-history" ref={commitHistoryRef}>
+      <div className="commit-history-header">
+        <div className="commit-history-header-cell commit-history-graph-title">
+          <label className="commit-history-graph-filter">
+            Graph
+            <input
+              type="checkbox"
+              checked={shouldShowChatOnly}
+              onChange={(event) => setShouldShowChatOnly(event.target.checked)}
+            />
+            Chat only
+          </label>
+          <CommitHistoryColumnResizeHandle
+            columnKey="graph"
+            startColumnResize={startColumnResize}
+            updateColumnResize={updateColumnResize}
+            finishColumnResize={finishColumnResize}
           />
-          Chat only
-        </label>
-        <span>Branch Tags</span>
-        <span>Description</span>
-        <span>Commit</span>
-        <span>Author</span>
-        <span>Date</span>
-      </div>
-      <div className="commit-history-body">
-        <CommitGraphSvg graph={visibleGraph} graphWidth={graphWidth} />
-        {visibleGraph.rows.map((row) => (
-          <CommitHistoryRow
-            key={row.id}
-            row={row}
-            gridTemplateColumns={gridTemplateColumns}
+        </div>
+        <div className="commit-history-header-cell">
+          <span>Branch Tags</span>
+          <CommitHistoryColumnResizeHandle
+            columnKey="branchTags"
+            startColumnResize={startColumnResize}
+            updateColumnResize={updateColumnResize}
+            finishColumnResize={finishColumnResize}
           />
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const WorktreeRow = ({
-  worktree,
-  threadOfId,
-}: {
-  worktree: GitWorktree;
-  threadOfId: { [id: string]: CodexThread };
-}) => {
-  return (
-    <div className="worktree-row">
-      <div className="worktree-main">
-        <FolderGit2 size={16} />
-        <div>
-          <div className="worktree-path">{worktree.path}</div>
-          <div className="meta-line">
-            {worktree.branch ?? "detached"}{" "}
-            {worktree.head === null ? "" : `at ${worktree.head.slice(0, 7)}`}
-          </div>
+        </div>
+        <div className="commit-history-header-cell">
+          <span>Description</span>
+          <CommitHistoryColumnResizeHandle
+            columnKey="description"
+            startColumnResize={startColumnResize}
+            updateColumnResize={updateColumnResize}
+            finishColumnResize={finishColumnResize}
+          />
+        </div>
+        <div className="commit-history-header-cell">
+          <span>Commit</span>
+          <CommitHistoryColumnResizeHandle
+            columnKey="commit"
+            startColumnResize={startColumnResize}
+            updateColumnResize={updateColumnResize}
+            finishColumnResize={finishColumnResize}
+          />
+        </div>
+        <div className="commit-history-header-cell">
+          <span>Author</span>
+          <CommitHistoryColumnResizeHandle
+            columnKey="author"
+            startColumnResize={startColumnResize}
+            updateColumnResize={updateColumnResize}
+            finishColumnResize={finishColumnResize}
+          />
+        </div>
+        <div className="commit-history-header-cell">
+          <span>Date</span>
+          <CommitHistoryColumnResizeHandle
+            columnKey="date"
+            startColumnResize={startColumnResize}
+            updateColumnResize={updateColumnResize}
+            finishColumnResize={finishColumnResize}
+          />
         </div>
       </div>
-      <div className="thread-strip">
-        {worktree.threadIds.map((threadId) => {
-          const thread = threadOfId[threadId];
-
-          if (thread === undefined) {
-            return null;
-          }
-
-          return <ThreadPill key={thread.id} thread={thread} />;
-        })}
+      <div className="commit-history-body">
+        <CommitGraphSvg
+          graph={visibleGraph}
+          graphWidth={graphWidth}
+          threadOfId={threadOfId}
+        />
+        {visibleGraph.rows.map((row) => (
+          <CommitHistoryRow key={row.id} row={row} repoRoot={repoRoot} />
+        ))}
       </div>
     </div>
   );
@@ -745,24 +1064,14 @@ const RepoSection = ({
         </div>
       </div>
 
-      <div className="repo-worktrees">
-        <div className="repo-panel">
-          <h2>Worktrees</h2>
-          <div className="row-list">
-            {repo.worktrees.map((worktree) => (
-              <WorktreeRow
-                key={worktree.path}
-                worktree={worktree}
-                threadOfId={threadOfId}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-
       <div className="repo-panel">
         <h2>History</h2>
-        <CommitHistory commits={repo.commits} worktrees={repo.worktrees} />
+        <CommitHistory
+          commits={repo.commits}
+          worktrees={repo.worktrees}
+          threadOfId={threadOfId}
+          repoRoot={repo.root}
+        />
       </div>
     </section>
   );
