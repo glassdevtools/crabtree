@@ -536,6 +536,8 @@ const moveGitBranch = async ({
 const pushGitBranchTagChanges = async (
   gitBranchTagChanges: GitBranchTagChange[],
 ) => {
+  const pushedRepoRoots: string[] = [];
+
   for (const { repoRoot, branch, newSha } of gitBranchTagChanges) {
     await runGitCommandForPath({
       path: repoRoot,
@@ -563,6 +565,11 @@ const pushGitBranchTagChanges = async (
         path: repoRoot,
         args: ["push", "origin", "--delete", branch],
       });
+
+      if (!pushedRepoRoots.includes(repoRoot)) {
+        pushedRepoRoots.push(repoRoot);
+      }
+
       continue;
     }
 
@@ -584,6 +591,17 @@ const pushGitBranchTagChanges = async (
         "origin",
         `${branchRef}:${branchRef}`,
       ],
+    });
+
+    if (!pushedRepoRoots.includes(repoRoot)) {
+      pushedRepoRoots.push(repoRoot);
+    }
+  }
+
+  for (const repoRoot of pushedRepoRoots) {
+    await runGitCommandForPath({
+      path: repoRoot,
+      args: ["fetch", "origin", "--prune"],
     });
   }
 };

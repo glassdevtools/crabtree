@@ -94,14 +94,39 @@ const readIsGitChangeSummaryEmpty = (changeSummary: GitChangeSummary) => {
 
 const readBranchTagChangesForRepo = ({
   branchTagChanges,
+  repoBranchTagChanges,
   repoRoot,
 }: {
   branchTagChanges: GitBranchTagChange[];
+  repoBranchTagChanges: GitBranchTagChange[];
   repoRoot: string;
 }) => {
-  return branchTagChanges.filter(
-    (branchTagChange) => branchTagChange.repoRoot === repoRoot,
-  );
+  const branchTagChangeOfBranch: { [branch: string]: GitBranchTagChange } = {};
+
+  for (const repoBranchTagChange of repoBranchTagChanges) {
+    branchTagChangeOfBranch[repoBranchTagChange.branch] = repoBranchTagChange;
+  }
+
+  for (const branchTagChange of branchTagChanges) {
+    if (branchTagChange.repoRoot !== repoRoot) {
+      continue;
+    }
+
+    const repoBranchTagChange = branchTagChangeOfBranch[branchTagChange.branch];
+    const oldSha = repoBranchTagChange?.oldSha ?? branchTagChange.oldSha;
+
+    if (oldSha === branchTagChange.newSha) {
+      delete branchTagChangeOfBranch[branchTagChange.branch];
+      continue;
+    }
+
+    branchTagChangeOfBranch[branchTagChange.branch] = {
+      ...branchTagChange,
+      oldSha,
+    };
+  }
+
+  return Object.values(branchTagChangeOfBranch);
 };
 
 // TODO: AI-PICKED-VALUE: These column widths match the current table layout closely enough while making drag resizing concrete.
@@ -2934,14 +2959,27 @@ export const App = () => {
     };
   }, [successMessage]);
 
+  const readVisibleBranchTagChangesForRepo = (repoRoot: string) => {
+    const repo =
+      dashboardData === null
+        ? undefined
+        : dashboardData.repos.find(
+            (dashboardRepo) => dashboardRepo.root === repoRoot,
+          );
+    const repoBranchTagChanges =
+      repo === undefined ? [] : repo.branchTagChanges;
+
+    return readBranchTagChangesForRepo({
+      branchTagChanges,
+      repoBranchTagChanges,
+      repoRoot,
+    });
+  };
   const openBranchTagChangeModal = (
     action: BranchTagChangeAction,
     repoRoot: string,
   ) => {
-    const repoBranchTagChanges = readBranchTagChangesForRepo({
-      branchTagChanges,
-      repoRoot,
-    });
+    const repoBranchTagChanges = readVisibleBranchTagChangesForRepo(repoRoot);
 
     if (repoBranchTagChanges.length === 0) {
       return;
@@ -2958,7 +2996,7 @@ export const App = () => {
     }
 
     const { action, repoRoot } = branchTagChangeConfirmation;
-    const changes = readBranchTagChangesForRepo({ branchTagChanges, repoRoot });
+    const changes = readVisibleBranchTagChangesForRepo(repoRoot);
 
     if (changes.length === 0) {
       closeBranchTagChangeModal();
@@ -2997,10 +3035,9 @@ export const App = () => {
   const branchTagChangesInConfirmation =
     branchTagChangeConfirmation === null
       ? []
-      : readBranchTagChangesForRepo({
-          branchTagChanges,
-          repoRoot: branchTagChangeConfirmation.repoRoot,
-        });
+      : readVisibleBranchTagChangesForRepo(
+          branchTagChangeConfirmation.repoRoot,
+        );
 
   return (
     <main className="app-shell">
@@ -3092,10 +3129,9 @@ export const App = () => {
               repo={repo}
               threadOfId={threadOfId}
               gitChangesOfCwd={dashboardData.gitChangesOfCwd}
-              repoBranchTagChanges={readBranchTagChangesForRepo({
-                branchTagChanges,
-                repoRoot: repo.root,
-              })}
+              repoBranchTagChanges={readVisibleBranchTagChangesForRepo(
+                repo.root,
+              )}
               refreshDashboard={refreshDashboard}
               showErrorMessage={showErrorMessage}
               rememberBranchTagChange={rememberBranchTagChange}

@@ -90,6 +90,7 @@ export type RepoGraph = {
   root: string;
   originUrl: string | null;
   currentBranch: string | null;
+  branchTagChanges: GitBranchTagChange[];
   worktrees: GitWorktree[];
   commits: GitCommit[];
   threadIds: string[];

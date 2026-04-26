@@ -1,5 +1,6 @@
 import { simpleGit } from "simple-git";
 import type {
+  GitBranchTagChange,
   CodexThread,
   GitChangeSummary,
   GitCommit,
@@ -250,6 +251,86 @@ const readGitChangeSummary = async ({ cwd }: { cwd: string }) => {
   };
 
   return changeSummary;
+};
+
+const readGitBranchTagChanges = async ({
+  repoSeed,
+}: {
+  repoSeed: RepoSeed;
+}) => {
+  if (repoSeed.originUrl === null) {
+    return [];
+  }
+
+  const localBranchText = await readGitText({
+    cwd: repoSeed.root,
+    args: [
+      "for-each-ref",
+      `--format=%(refname:short)${FIELD_SEPARATOR}%(objectname)`,
+      "refs/heads",
+    ],
+  });
+  const originBranchText = await readNullableGitText({
+    cwd: repoSeed.root,
+    args: [
+      "for-each-ref",
+      `--format=%(refname:short)${FIELD_SEPARATOR}%(objectname)`,
+      "refs/remotes/origin",
+    ],
+  });
+  const remoteShaOfBranch: { [branch: string]: string } = {};
+  const branchTagChanges: GitBranchTagChange[] = [];
+  const originPrefix = "origin/";
+
+  if (originBranchText === null) {
+    return branchTagChanges;
+  }
+
+  for (const line of originBranchText.split("\n")) {
+    if (line.length === 0) {
+      continue;
+    }
+
+    const [remoteBranch, remoteSha] = line.split(FIELD_SEPARATOR);
+
+    if (
+      remoteBranch === undefined ||
+      remoteSha === undefined ||
+      remoteBranch === "origin/HEAD" ||
+      !remoteBranch.startsWith(originPrefix)
+    ) {
+      continue;
+    }
+
+    remoteShaOfBranch[remoteBranch.slice(originPrefix.length)] = remoteSha;
+  }
+
+  for (const line of localBranchText.split("\n")) {
+    if (line.length === 0) {
+      continue;
+    }
+
+    const [branch, localSha] = line.split(FIELD_SEPARATOR);
+
+    if (branch === undefined || localSha === undefined) {
+      continue;
+    }
+
+    const remoteSha = remoteShaOfBranch[branch];
+
+    if (remoteSha === undefined || remoteSha === localSha) {
+      continue;
+    }
+
+    branchTagChanges.push({
+      repoRoot: repoSeed.root,
+      branch,
+      oldSha: remoteSha,
+      newSha: localSha,
+    });
+  }
+
+  return branchTagChanges;
 };
 
 export const readGitChangesOfCwd = async ({
@@ -505,13 +586,15 @@ export const readRepoGraphs = async ({
         repoSeed,
         threads: threadsInRepo,
       });
-      const [commits, isShallowRepositoryText] = await Promise.all([
-        readCommits({ repoSeed, threads: threadsInRepo, worktrees }),
-        readNullableGitText({
-          cwd: repoSeed.root,
-          args: ["rev-parse", "--is-shallow-repository"],
-        }),
-      ]);
+      const [commits, branchTagChanges, isShallowRepositoryText] =
+        await Promise.all([
+          readCommits({ repoSeed, threads: threadsInRepo, worktrees }),
+          readGitBranchTagChanges({ repoSeed }),
+          readNullableGitText({
+            cwd: repoSeed.root,
+            args: ["rev-parse", "--is-shallow-repository"],
+          }),
+        ]);
       const missingParentCount = readMissingParentCount(commits);
 
       repos.push({
@@ -519,6 +602,7 @@ export const readRepoGraphs = async ({
         root: repoSeed.root,
         originUrl: repoSeed.originUrl,
         currentBranch: repoSeed.currentBranch,
+        branchTagChanges,
         worktrees,
         commits,
         threadIds: repoSeed.threadIds,
