@@ -82,7 +82,11 @@ button {
 
 .icon-button:disabled {
   color: #9aa3af;
-  cursor: wait;
+  cursor: default;
+}
+
+.icon-button:disabled:hover {
+  background: #ffffff;
 }
 
 /* TODO: AI-PICKED-VALUE: The overlay mark size and offset fit the existing 34px toolbar buttons. */
@@ -107,6 +111,10 @@ button {
 
 .icon-button:hover .branch-action-icon-mark {
   background: #eef2f7;
+}
+
+.icon-button:disabled:hover .branch-action-icon-mark {
+  background: #ffffff;
 }
 
 .content-shell {
@@ -200,6 +208,12 @@ button {
   color: #202124;
   font-size: 17px;
   font-weight: 760;
+}
+
+.repo-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
 }
 
 .commit-history {
@@ -682,6 +696,21 @@ button {
   background: #fbe8e3;
   box-shadow: 0 12px 28px rgba(26, 33, 44, 0.18);
   color: #7c2d1e;
+  font-size: 13px;
+}
+
+.success-banner {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 30;
+  max-width: 440px;
+  padding: 10px 12px;
+  border: 1px solid #a9d7b7;
+  border-radius: 7px;
+  background: #e5f6ea;
+  box-shadow: 0 12px 28px rgba(26, 33, 44, 0.18);
+  color: #245b36;
   font-size: 13px;
 }
 
