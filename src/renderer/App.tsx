@@ -2075,6 +2075,24 @@ const CommitHistory = ({
     event: DragEvent<HTMLDivElement>;
     row: CommitGraphRow;
   }) => {
+    const rowCwd = readCommitGraphRowCwd(row, threadOfId, repoRoot);
+    const changeSummary = rowCwd === null ? undefined : gitChangesOfCwd[rowCwd];
+
+    if (
+      changeSummary !== undefined &&
+      !readIsGitChangeSummaryEmpty(changeSummary)
+    ) {
+      event.preventDefault();
+      showErrorMessage("You must commit this to merge it.");
+      logCommitMerge("drag start blocked: row has changes", {
+        rowId: row.id,
+        rowKind: row.kind,
+        rowSha: row.commit.sha,
+        rowCwd,
+      });
+      return;
+    }
+
     const nextCommitMergeDrag = {
       rowId: row.id,
       repoRoot,
