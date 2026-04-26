@@ -43,8 +43,8 @@ const COMMIT_GRAPH_CODE_ICON_SIZE = 14;
 const COMMIT_GRAPH_COMMIT_ICON_SIZE = 12;
 const COMMIT_GRAPH_TRASH_ICON_SIZE = 13;
 const COMMIT_GRAPH_ACTION_HIT_SIZE = 14;
-// TODO: AI-PICKED-VALUE: The action group sits close to the graph edge while keeping icons easy to click.
-const COMMIT_GRAPH_ACTION_RIGHT_PADDING = 5;
+// TODO: AI-PICKED-VALUE: The action group uses the same right padding as the table cells.
+const COMMIT_GRAPH_ACTION_RIGHT_PADDING = 10;
 const COMMIT_GRAPH_ACTION_ICON_SPACING = 20;
 const COMMIT_GRAPH_LANE_ACTION_GAP = 18;
 const COMMIT_GRAPH_CHANGE_TEXT_MIN_WIDTH = 46;
