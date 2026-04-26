@@ -948,6 +948,7 @@ const BranchTags = ({
           key="HEAD"
           draggable={headBranch !== null}
           onMouseDown={(event) => event.stopPropagation()}
+          onDoubleClick={(event) => event.stopPropagation()}
           onDragStart={(event) => {
             if (headBranch === null) {
               return;
@@ -974,6 +975,7 @@ const BranchTags = ({
           type="button"
           key={worktree.path}
           onMouseDown={(event) => event.stopPropagation()}
+          onDoubleClick={(event) => event.stopPropagation()}
           onClick={(event) => openCodePath(event, worktree.path)}
         >
           <ExternalLink size={13} />
@@ -1007,6 +1009,7 @@ const BranchTags = ({
             title={ref}
             key={ref}
             draggable={isLocalBranch}
+            onDoubleClick={(event) => event.stopPropagation()}
             onDragStart={(event) => {
               if (!isLocalBranch) {
                 return;
@@ -1028,6 +1031,7 @@ const BranchTags = ({
                 type="button"
                 draggable={false}
                 onMouseDown={(event) => event.stopPropagation()}
+                onDoubleClick={(event) => event.stopPropagation()}
                 onClick={(event) =>
                   openBranchDeleteModal(event, refName, commitSha)
                 }
@@ -1068,6 +1072,7 @@ const ChatTags = ({ threads }: { threads: CodexThread[] }) => {
             type="button"
             key={thread.id}
             onMouseDown={(event) => event.stopPropagation()}
+            onDoubleClick={(event) => event.stopPropagation()}
             onClick={(event) => openThread(event, thread.id)}
           >
             <MessageSquare size={13} />
@@ -1396,6 +1401,7 @@ const CommitHistoryRow = ({
   clearCommitMergeDropTarget,
   finishCommitMergeDrop,
   finishCommitMergeDrag,
+  openRowAfterDoubleClick,
   openBranchDeleteModal,
   startBranchPointerDrag,
   finishBranchPointerDrag,
@@ -1411,6 +1417,7 @@ const CommitHistoryRow = ({
   clearCommitMergeDropTarget: () => void;
   finishCommitMergeDrop: (event: DragEvent<HTMLDivElement>) => void;
   finishCommitMergeDrag: () => void;
+  openRowAfterDoubleClick: () => void;
   openBranchDeleteModal: (
     event: MouseEvent<HTMLButtonElement>,
     branch: string,
@@ -1475,6 +1482,7 @@ const CommitHistoryRow = ({
       onDragLeave={clearCommitMergeDropTarget}
       onDragEnd={finishCommitMergeDrag}
       onDrop={finishCommitMergeDrop}
+      onDoubleClick={openRowAfterDoubleClick}
     >
       <div className="commit-graph-cell" />
       <div className="commit-branch-tags-cell">
@@ -2539,6 +2547,33 @@ const CommitHistory = ({
       await refreshDashboard();
     }
   };
+  const openRowAfterDoubleClick = async (row: CommitGraphRow) => {
+    if (row.kind === "worktree" && row.worktree !== null) {
+      try {
+        await window.molttree.openVSCodePath(row.worktree.path);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Failed to open worktree.";
+        showErrorMessage(message);
+      }
+
+      return;
+    }
+
+    try {
+      await window.molttree.checkoutGitCommit({
+        repoRoot,
+        sha: row.commit.sha,
+      });
+      await window.molttree.openVSCodePath(repoRoot);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to open commit.";
+      showErrorMessage(message);
+    } finally {
+      await refreshDashboard();
+    }
+  };
 
   return (
     <>
@@ -2650,6 +2685,7 @@ const CommitHistory = ({
                 finishCommitMergeDrop({ event, row })
               }
               finishCommitMergeDrag={finishCommitMergeDrag}
+              openRowAfterDoubleClick={() => openRowAfterDoubleClick(row)}
               openBranchDeleteModal={openBranchDeleteModal}
               startBranchPointerDrag={startBranchPointerDrag}
               finishBranchPointerDrag={finishBranchPointerDrag}

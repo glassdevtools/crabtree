@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import type {
   DashboardData,
   GitBranchTagChange,
+  GitCheckoutCommitRequest,
   GitCommitChangesRequest,
   GitDeleteBranchRequest,
   GitDeleteWorktreeRequest,
@@ -47,6 +48,11 @@ const api: MoltTreeApi = {
   },
   moveGitBranch: async (gitMoveBranchRequest: GitMoveBranchRequest) => {
     await ipcRenderer.invoke("git:moveBranch", gitMoveBranchRequest);
+  },
+  checkoutGitCommit: async (
+    gitCheckoutCommitRequest: GitCheckoutCommitRequest,
+  ) => {
+    await ipcRenderer.invoke("git:checkoutCommit", gitCheckoutCommitRequest);
   },
   pushGitBranchTagChanges: async (
     gitBranchTagChanges: GitBranchTagChange[],

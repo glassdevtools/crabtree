@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 import { simpleGit } from "simple-git";
 import type {
   GitBranchTagChange,
+  GitCheckoutCommitRequest,
   GitCommitChangesRequest,
   GitDeleteBranchRequest,
   GitDeleteWorktreeRequest,
@@ -210,6 +211,28 @@ const readGitMoveBranchRequest = (value: unknown) => {
   };
 
   return gitMoveBranchRequest;
+};
+
+const readGitCheckoutCommitRequest = (value: unknown) => {
+  if (!isObject(value)) {
+    throw new Error("gitCheckoutCommitRequest must be an object.");
+  }
+
+  if (
+    typeof value.repoRoot !== "string" ||
+    value.repoRoot.length === 0 ||
+    typeof value.sha !== "string" ||
+    value.sha.length === 0
+  ) {
+    throw new Error("gitCheckoutCommitRequest needs a repo root and sha.");
+  }
+
+  const gitCheckoutCommitRequest: GitCheckoutCommitRequest = {
+    repoRoot: value.repoRoot,
+    sha: value.sha,
+  };
+
+  return gitCheckoutCommitRequest;
 };
 
 const readGitBranchTagChanges = (value: unknown) => {
@@ -533,6 +556,38 @@ const moveGitBranch = async ({
   });
 };
 
+const checkoutGitCommit = async ({
+  repoRoot,
+  sha,
+}: GitCheckoutCommitRequest) => {
+  const targetSha = await readGitTextForPath({
+    path: repoRoot,
+    args: ["rev-parse", "--verify", `${sha}^{commit}`],
+  });
+  const currentSha = await readGitTextForPath({
+    path: repoRoot,
+    args: ["rev-parse", "HEAD"],
+  });
+
+  if (currentSha === targetSha) {
+    return;
+  }
+
+  const statusText = await readGitTextForPath({
+    path: repoRoot,
+    args: ["status", "--porcelain"],
+  });
+
+  if (statusText.length > 0) {
+    throw new Error("Working tree must be clean before checking out a row.");
+  }
+
+  await runGitCommandForPath({
+    path: repoRoot,
+    args: ["switch", "--detach", targetSha],
+  });
+};
+
 const pushGitBranchTagChanges = async (
   gitBranchTagChanges: GitBranchTagChange[],
 ) => {
@@ -755,6 +810,12 @@ ipcMain.handle("git:moveBranch", async (_event, value: unknown) => {
   const gitMoveBranchRequest = readGitMoveBranchRequest(value);
 
   await moveGitBranch(gitMoveBranchRequest);
+});
+
+ipcMain.handle("git:checkoutCommit", async (_event, value: unknown) => {
+  const gitCheckoutCommitRequest = readGitCheckoutCommitRequest(value);
+
+  await checkoutGitCommit(gitCheckoutCommitRequest);
 });
 
 ipcMain.handle("git:pushBranchTagChanges", async (_event, value: unknown) => {
