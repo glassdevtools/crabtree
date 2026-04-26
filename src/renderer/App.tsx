@@ -1,7 +1,7 @@
 import {
   Bot,
   Code,
-  FolderGit2,
+  ExternalLink,
   GitBranch,
   GitCommitHorizontal,
   MessageSquare,
@@ -745,7 +745,7 @@ const BranchTags = ({
           onMouseDown={(event) => event.stopPropagation()}
           onClick={(event) => openCodePath(event, repoRoot)}
         >
-          <GitBranch size={13} />
+          <ExternalLink size={13} />
           <span>HEAD</span>
         </button>
       ) : null}
@@ -779,7 +779,7 @@ const BranchTags = ({
           onMouseDown={(event) => event.stopPropagation()}
           onClick={(event) => openCodePath(event, worktree.path)}
         >
-          <FolderGit2 size={13} />
+          <ExternalLink size={13} />
           <span>{readWorktreeTagText(worktree.path)}</span>
         </button>
       ))}
