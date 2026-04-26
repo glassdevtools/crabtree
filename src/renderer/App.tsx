@@ -7,8 +7,8 @@ import {
   MessageSquarePlus,
   Plus,
   RefreshCw,
-  RotateCcw,
   Trash2,
+  Undo2,
   Upload,
 } from "lucide-react";
 import {
@@ -2944,11 +2944,22 @@ export const App = () => {
         <div className="toolbar">
           <button
             className="icon-button"
-            title="Refresh"
+            title="Refresh Git and Codex data"
             onClick={refreshDashboard}
             disabled={isLoading}
           >
             <RefreshCw size={18} />
+          </button>
+          <button
+            className="icon-button"
+            title="Undo branch tag changes"
+            onClick={() => openBranchTagChangeModal("reset")}
+            disabled={branchTagChanges.length === 0}
+          >
+            <span className="branch-action-icon">
+              <GitBranch size={18} />
+              <Undo2 className="branch-action-icon-mark" size={10} />
+            </span>
           </button>
           <button
             className="icon-button"
@@ -2963,18 +2974,7 @@ export const App = () => {
           </button>
           <button
             className="icon-button"
-            title="Reset branch tag changes"
-            onClick={() => openBranchTagChangeModal("reset")}
-            disabled={branchTagChanges.length === 0}
-          >
-            <span className="branch-action-icon">
-              <GitBranch size={18} />
-              <RotateCcw className="branch-action-icon-mark" size={10} />
-            </span>
-          </button>
-          <button
-            className="icon-button"
-            title="New Codex thread"
+            title="Create a new Codex thread"
             onClick={openNewThread}
           >
             <MessageSquarePlus size={18} />

@@ -686,7 +686,6 @@ button {
   font-size: 13px;
 }
 
-.error-banner,
 .warning-band {
   display: flex;
   flex-wrap: wrap;
@@ -696,9 +695,20 @@ button {
   font-size: 13px;
 }
 
+/* TODO: AI-PICKED-VALUE: This toast size keeps errors visible while leaving the graph usable underneath. */
 .error-banner {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 30;
+  max-width: 440px;
+  padding: 10px 12px;
+  border: 1px solid #f0b6aa;
+  border-radius: 7px;
   background: #fbe8e3;
+  box-shadow: 0 12px 28px rgba(26, 33, 44, 0.18);
   color: #7c2d1e;
+  font-size: 13px;
 }
 
 .warning-band {
