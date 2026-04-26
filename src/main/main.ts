@@ -74,57 +74,110 @@ const readGitMergeRequest = (value: unknown) => {
     typeof value.fromSha !== "string" ||
     value.fromSha.length === 0 ||
     typeof value.toSha !== "string" ||
-    value.toSha.length === 0
+    value.toSha.length === 0 ||
+    (value.targetBranch !== null &&
+      (typeof value.targetBranch !== "string" ||
+        value.targetBranch.length === 0)) ||
+    (value.targetWorktreePath !== null &&
+      (typeof value.targetWorktreePath !== "string" ||
+        value.targetWorktreePath.length === 0))
   ) {
-    throw new Error("gitMergeRequest is missing a repo root or commit sha.");
+    throw new Error(
+      "gitMergeRequest is missing a repo root, commit sha, or target.",
+    );
+  }
+
+  const hasTargetBranch = value.targetBranch !== null;
+  const hasTargetWorktreePath = value.targetWorktreePath !== null;
+
+  if (hasTargetBranch === hasTargetWorktreePath) {
+    throw new Error("gitMergeRequest needs exactly one merge target.");
   }
 
   const gitMergeRequest: GitMergeRequest = {
     repoRoot: value.repoRoot,
     fromSha: value.fromSha,
     toSha: value.toSha,
+    targetBranch: value.targetBranch,
+    targetWorktreePath: value.targetWorktreePath,
   };
 
   return gitMergeRequest;
 };
 
-const startGitMerge = async ({ repoRoot, fromSha, toSha }: GitMergeRequest) => {
+const startGitMerge = async ({
+  repoRoot,
+  fromSha,
+  toSha,
+  targetBranch,
+  targetWorktreePath,
+}: GitMergeRequest) => {
   const hash = randomBytes(GIT_MERGE_HASH_BYTE_LENGTH).toString("hex");
   const tempBranchName = `temp-${hash}`;
   let isTempBranchCreated = false;
-  const currentHead = await readGitTextForPath({
-    path: repoRoot,
-    args: ["rev-parse", "HEAD"],
-  });
+  let targetPath = repoRoot;
 
-  if (currentHead !== toSha) {
-    throw new Error("Drop target must be the current checkout.");
+  if (targetBranch !== null) {
+    const statusText = await readGitTextForPath({
+      path: repoRoot,
+      args: ["status", "--porcelain"],
+    });
+
+    if (statusText.length > 0) {
+      throw new Error("Working tree must be clean before switching branches.");
+    }
+
+    const branchHead = await readGitTextForPath({
+      path: repoRoot,
+      args: ["rev-parse", targetBranch],
+    });
+
+    if (branchHead !== toSha) {
+      throw new Error("Target branch moved. Refresh and try again.");
+    }
+
+    await runGitCommandForPath({
+      path: repoRoot,
+      args: ["switch", targetBranch],
+    });
   }
 
-  const statusText = await readGitTextForPath({
-    path: repoRoot,
+  if (targetWorktreePath !== null) {
+    targetPath = targetWorktreePath;
+    const worktreeHead = await readGitTextForPath({
+      path: targetPath,
+      args: ["rev-parse", "HEAD"],
+    });
+
+    if (worktreeHead !== toSha) {
+      throw new Error("Target worktree moved. Refresh and try again.");
+    }
+  }
+
+  const targetStatusText = await readGitTextForPath({
+    path: targetPath,
     args: ["status", "--porcelain"],
   });
 
-  if (statusText.length > 0) {
-    throw new Error("Working tree must be clean before starting a merge.");
+  if (targetStatusText.length > 0) {
+    throw new Error("Merge target must be clean before starting a merge.");
   }
 
   try {
     await runGitCommandForPath({
-      path: repoRoot,
+      path: targetPath,
       args: ["branch", tempBranchName, fromSha],
     });
     isTempBranchCreated = true;
 
     await runGitCommandForPath({
-      path: repoRoot,
+      path: targetPath,
       args: ["merge", "--no-edit", tempBranchName],
     });
   } finally {
     if (isTempBranchCreated) {
       await runGitCommandForPath({
-        path: repoRoot,
+        path: targetPath,
         args: ["branch", "-D", tempBranchName],
       });
     }

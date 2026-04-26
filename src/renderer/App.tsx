@@ -25,6 +25,7 @@ import type {
   DashboardData,
   GitChangeSummary,
   GitCommit,
+  GitMergeRequest,
   GitWorktree,
   RepoGraph,
 } from "../shared/types";
@@ -117,6 +118,11 @@ type CommitMergeDrag = {
   rowId: string;
   repoRoot: string;
   sha: string;
+};
+
+type CommitMergeTarget = {
+  targetBranch: string | null;
+  targetWorktreePath: string | null;
 };
 
 type CommitGraphRowKind = "commit" | "worktree" | "chat";
@@ -1267,6 +1273,61 @@ const CommitHistory = ({
     setCommitMergeDrag(null);
     setMergeDropTargetRowId(null);
   };
+  const readCommitMergeTargetForBranch = (localBranch: string) => {
+    for (const worktree of worktrees) {
+      if (worktree.branch !== localBranch) {
+        continue;
+      }
+
+      const target: CommitMergeTarget = {
+        targetBranch: null,
+        targetWorktreePath: worktree.path,
+      };
+
+      return target;
+    }
+
+    const target: CommitMergeTarget = {
+      targetBranch: localBranch,
+      targetWorktreePath: null,
+    };
+
+    return target;
+  };
+  const readCommitMergeTarget = (row: CommitGraphRow) => {
+    if (row.kind === "worktree" && row.worktree !== null) {
+      if (row.worktree.branch === null) {
+        throw new Error("Drop target worktree is not on a branch.");
+      }
+
+      const target: CommitMergeTarget = {
+        targetBranch: null,
+        targetWorktreePath: row.worktree.path,
+      };
+
+      return target;
+    }
+
+    for (const ref of row.commit.refs) {
+      const cleanedRef = cleanRefName(ref);
+
+      for (const localBranch of row.commit.localBranches) {
+        if (cleanedRef !== localBranch) {
+          continue;
+        }
+
+        return readCommitMergeTargetForBranch(localBranch);
+      }
+    }
+
+    const localBranch = row.commit.localBranches[0];
+
+    if (localBranch === undefined) {
+      throw new Error("Drop target needs a local branch or worktree.");
+    }
+
+    return readCommitMergeTargetForBranch(localBranch);
+  };
   const finishCommitMergeDrop = async ({
     event,
     row,
@@ -1285,11 +1346,25 @@ const CommitHistory = ({
       return;
     }
 
-    const gitMergeRequest = {
-      repoRoot,
-      fromSha: commitMergeDrag.sha,
-      toSha: row.commit.sha,
-    };
+    let gitMergeRequest: GitMergeRequest;
+
+    try {
+      const target = readCommitMergeTarget(row);
+      gitMergeRequest = {
+        repoRoot,
+        fromSha: commitMergeDrag.sha,
+        toSha: row.commit.sha,
+        targetBranch: target.targetBranch,
+        targetWorktreePath: target.targetWorktreePath,
+      };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to read merge target.";
+      showErrorMessage(message);
+      finishCommitMergeDrag();
+      return;
+    }
+
     finishCommitMergeDrag();
 
     try {

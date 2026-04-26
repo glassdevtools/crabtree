@@ -290,6 +290,7 @@ const readCommits = async ({
 }) => {
   const format = `%H${FIELD_SEPARATOR}%P${FIELD_SEPARATOR}%D${FIELD_SEPARATOR}%an${FIELD_SEPARATOR}%ad${FIELD_SEPARATOR}%s`;
   const threadIdsOfSha: { [sha: string]: string[] } = {};
+  const localBranchesOfSha: { [sha: string]: string[] } = {};
   const commits: GitCommit[] = [];
   const refText = await readGitText({
     cwd: repoSeed.root,
@@ -299,6 +300,14 @@ const readCommits = async ({
       "refs/heads",
       "refs/remotes",
       "refs/tags",
+    ],
+  });
+  const localBranchText = await readGitText({
+    cwd: repoSeed.root,
+    args: [
+      "for-each-ref",
+      `--format=%(objectname)${FIELD_SEPARATOR}%(refname:short)`,
+      "refs/heads",
     ],
   });
   const rootHead = await readNullableGitText({
@@ -344,6 +353,24 @@ const readCommits = async ({
     }
 
     threadIdsOfSha[sha].push(thread.id);
+  }
+
+  for (const line of localBranchText.split("\n")) {
+    if (line.length === 0) {
+      continue;
+    }
+
+    const [sha, branch] = line.split(FIELD_SEPARATOR);
+
+    if (sha === undefined || branch === undefined) {
+      continue;
+    }
+
+    if (localBranchesOfSha[sha] === undefined) {
+      localBranchesOfSha[sha] = [];
+    }
+
+    localBranchesOfSha[sha].push(branch);
   }
 
   for (let skip = 0; ; skip += COMMIT_PAGE_SIZE) {
@@ -403,6 +430,7 @@ const readCommits = async ({
         shortSha: sha.slice(0, 7),
         parents: parentsText.length === 0 ? [] : parentsText.split(" "),
         refs: splitRefs(refsText),
+        localBranches: localBranchesOfSha[sha] ?? [],
         author,
         date,
         subject,

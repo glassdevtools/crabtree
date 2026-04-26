@@ -40,6 +40,8 @@ export type GitMergeRequest = {
   repoRoot: string;
   fromSha: string;
   toSha: string;
+  targetBranch: string | null;
+  targetWorktreePath: string | null;
 };
 
 export type GitCommit = {
@@ -47,6 +49,7 @@ export type GitCommit = {
   shortSha: string;
   parents: string[];
   refs: string[];
+  localBranches: string[];
   author: string;
   date: string;
   subject: string;
