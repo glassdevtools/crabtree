@@ -32,7 +32,7 @@ const COMMIT_GRAPH_LANE_WIDTH = 22;
 const COMMIT_GRAPH_PADDING_LEFT = 18;
 const COMMIT_GRAPH_MIN_WIDTH = 178;
 const COMMIT_GRAPH_DOT_RADIUS = 6;
-const COMMIT_GRAPH_WORKTREE_COLOR = "#8b929c";
+const COMMIT_GRAPH_GRAY_COLOR = "#8b929c";
 const COMMIT_GRAPH_BOT_ICON_SIZE = 14;
 const COMMIT_GRAPH_CHAT_ICON_SIZE = 14;
 const COMMIT_GRAPH_CODE_ICON_SIZE = 14;
@@ -96,8 +96,11 @@ type CommitHistoryColumnResize = {
   currentWidth: number;
 };
 
+type CommitGraphRowKind = "commit" | "worktree" | "chat";
+
 type CommitGraphRow = {
   id: string;
+  kind: CommitGraphRowKind;
   commit: GitCommit;
   worktree: GitWorktree | null;
   threadIds: string[];
@@ -108,6 +111,7 @@ type CommitGraphRow = {
 
 type CommitGraphItem = {
   id: string;
+  kind: CommitGraphRowKind;
   commit: GitCommit;
   worktree: GitWorktree | null;
   sha: string;
@@ -127,7 +131,7 @@ type CommitGraphSegment = {
   toRowIndex: number;
   colorIndex: number;
   isMergeSegment: boolean;
-  isWorktreeSegment: boolean;
+  isGraySegment: boolean;
 };
 
 type CommitGraph = {
@@ -273,13 +277,18 @@ const createCommitGraph = (
 
   for (const commit of commits) {
     const worktrees = worktreesOfHead[commit.sha] ?? [];
-    const shouldWorktreeOwnChat = worktrees.some(
-      (worktree) => worktree.threadIds.length > 0,
-    );
+    const isOwnedByWorktreeOfThreadId: { [threadId: string]: boolean } = {};
+
+    for (const worktree of worktrees) {
+      for (const threadId of worktree.threadIds) {
+        isOwnedByWorktreeOfThreadId[threadId] = true;
+      }
+    }
 
     for (const worktree of worktrees) {
       graphItems.push({
         id: `worktree:${worktree.path}:${commit.sha}`,
+        kind: "worktree",
         commit,
         worktree,
         sha: `worktree:${worktree.path}:${commit.sha}`,
@@ -288,13 +297,30 @@ const createCommitGraph = (
       });
     }
 
+    for (const threadId of commit.threadIds) {
+      if (isOwnedByWorktreeOfThreadId[threadId] === true) {
+        continue;
+      }
+
+      graphItems.push({
+        id: `chat:${threadId}:${commit.sha}`,
+        kind: "chat",
+        commit,
+        worktree: null,
+        sha: `chat:${threadId}:${commit.sha}`,
+        parents: [commit.sha],
+        threadIds: [threadId],
+      });
+    }
+
     graphItems.push({
       id: `commit:${commit.sha}`,
+      kind: "commit",
       commit,
       worktree: null,
       sha: commit.sha,
       parents: commit.parents,
-      threadIds: shouldWorktreeOwnChat ? [] : commit.threadIds,
+      threadIds: [],
     });
   }
 
@@ -305,9 +331,9 @@ const createCommitGraph = (
     toRowIndex,
     colorIndex,
     isMergeSegment,
-    isWorktreeSegment,
+    isGraySegment,
   }: CommitGraphSegment) => {
-    const key = `${fromLane}:${toLane}:${fromRowIndex}:${toRowIndex}:${colorIndex}:${isMergeSegment}:${isWorktreeSegment}`;
+    const key = `${fromLane}:${toLane}:${fromRowIndex}:${toRowIndex}:${colorIndex}:${isMergeSegment}:${isGraySegment}`;
 
     if (isSegmentAddedOfKey[key] === true) {
       return;
@@ -321,11 +347,11 @@ const createCommitGraph = (
       toRowIndex,
       colorIndex,
       isMergeSegment,
-      isWorktreeSegment,
+      isGraySegment,
     });
   };
 
-  // Worktrees are added to the same row list before lane assignment, so they render like normal branch heads.
+  // Worktrees and chats are added to the same row list before lane assignment, so they render like normal branch heads.
   for (const graphItem of graphItems) {
     let lane = lanes.findIndex((laneItem) => laneItem.sha === graphItem.sha);
 
@@ -346,6 +372,7 @@ const createCommitGraph = (
     const rowIndex = rows.length;
     rows.push({
       id: graphItem.id,
+      kind: graphItem.kind,
       commit: graphItem.commit,
       worktree: graphItem.worktree,
       threadIds: graphItem.threadIds,
@@ -380,7 +407,7 @@ const createCommitGraph = (
       let parentColorIndex = colorIndexOfSha[parent];
 
       if (parentColorIndex === undefined) {
-        if (graphItem.worktree !== null) {
+        if (graphItem.kind !== "commit") {
           parentColorIndex = nextColorIndex;
           nextColorIndex += 1;
         } else if (parentIndex === 0) {
@@ -429,7 +456,7 @@ const createCommitGraph = (
         toRowIndex: rowIndex + 1,
         colorIndex: laneItem.colorIndex,
         isMergeSegment: false,
-        isWorktreeSegment: false,
+        isGraySegment: false,
       });
     }
 
@@ -457,7 +484,7 @@ const createCommitGraph = (
             ? commitLane.colorIndex
             : parentColorIndex,
         isMergeSegment: parentIndex > 0,
-        isWorktreeSegment: graphItem.worktree !== null,
+        isGraySegment: graphItem.kind !== "commit",
       });
     }
 
@@ -614,8 +641,8 @@ const CommitGraphSvg = ({
             COMMIT_GRAPH_ROW_HEIGHT * COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO,
           toY,
         );
-        const color = segment.isWorktreeSegment
-          ? COMMIT_GRAPH_WORKTREE_COLOR
+        const color = segment.isGraySegment
+          ? COMMIT_GRAPH_GRAY_COLOR
           : readCommitGraphColor(segment.colorIndex);
         const path =
           fromX === toX
@@ -624,7 +651,7 @@ const CommitGraphSvg = ({
 
         return (
           <path
-            key={`${segment.fromRowIndex}-${segment.toRowIndex}-${segment.fromLane}-${segment.toLane}-${segment.colorIndex}-${segment.isMergeSegment}-${segment.isWorktreeSegment}`}
+            key={`${segment.fromRowIndex}-${segment.toRowIndex}-${segment.fromLane}-${segment.toLane}-${segment.colorIndex}-${segment.isMergeSegment}-${segment.isGraySegment}`}
             d={path}
             fill="none"
             stroke={color}
@@ -642,9 +669,9 @@ const CommitGraphSvg = ({
           cy={readCommitGraphY(row.rowIndex)}
           r={COMMIT_GRAPH_DOT_RADIUS}
           fill={
-            row.worktree === null
+            row.kind === "commit"
               ? readCommitGraphColor(row.colorIndex)
-              : COMMIT_GRAPH_WORKTREE_COLOR
+              : COMMIT_GRAPH_GRAY_COLOR
           }
         />
       ))}
@@ -679,7 +706,7 @@ const CommitGraphSvg = ({
               x={botCenterX - COMMIT_GRAPH_BOT_ICON_SIZE / 2}
               y={centerY - COMMIT_GRAPH_BOT_ICON_SIZE / 2}
               size={COMMIT_GRAPH_BOT_ICON_SIZE}
-              color={COMMIT_GRAPH_WORKTREE_COLOR}
+              color={COMMIT_GRAPH_GRAY_COLOR}
               strokeWidth={2}
             />
             <g
@@ -697,7 +724,7 @@ const CommitGraphSvg = ({
                 x={chatCenterX - COMMIT_GRAPH_CHAT_ICON_SIZE / 2}
                 y={centerY - COMMIT_GRAPH_CHAT_ICON_SIZE / 2}
                 size={COMMIT_GRAPH_CHAT_ICON_SIZE}
-                color={COMMIT_GRAPH_WORKTREE_COLOR}
+                color={COMMIT_GRAPH_GRAY_COLOR}
                 strokeWidth={2}
               />
             </g>
@@ -717,7 +744,7 @@ const CommitGraphSvg = ({
                   x={vscodeCenterX - COMMIT_GRAPH_CODE_ICON_SIZE / 2}
                   y={centerY - COMMIT_GRAPH_CODE_ICON_SIZE / 2}
                   size={COMMIT_GRAPH_CODE_ICON_SIZE}
-                  color={COMMIT_GRAPH_WORKTREE_COLOR}
+                  color={COMMIT_GRAPH_GRAY_COLOR}
                   strokeWidth={2}
                 />
               </g>
@@ -732,20 +759,33 @@ const CommitGraphSvg = ({
 const CommitHistoryRow = ({
   row,
   repoRoot,
+  threadOfId,
 }: {
   row: CommitGraphRow;
   repoRoot: string;
+  threadOfId: { [id: string]: CodexThread };
 }) => {
   const { commit } = row;
-  const refs = row.worktree === null ? commit.refs : [];
-  const worktrees = row.worktree === null ? [] : [row.worktree];
-  const subject = row.worktree === null ? commit.subject : "(Worktree)";
-  const subjectTitle =
-    row.worktree === null ? commit.subject : row.worktree.path;
-  const rowClassName =
-    row.worktree === null
-      ? "commit-history-row"
-      : "commit-history-row commit-history-row-worktree";
+  const threadId = row.threadIds[0];
+  const thread = threadId === undefined ? undefined : threadOfId[threadId];
+  const refs = row.kind === "commit" ? commit.refs : [];
+  let worktrees: GitWorktree[] = [];
+  let subject = commit.subject;
+  let subjectTitle = commit.subject;
+  let rowClassName = "commit-history-row";
+
+  if (row.kind === "worktree" && row.worktree !== null) {
+    worktrees = [row.worktree];
+    subject = "(Worktree)";
+    subjectTitle = row.worktree.path;
+    rowClassName = "commit-history-row commit-history-row-worktree";
+  }
+
+  if (row.kind === "chat") {
+    subject = thread === undefined ? "(Chat)" : threadTitle(thread);
+    subjectTitle = thread === undefined ? commit.subject : thread.cwd;
+    rowClassName = "commit-history-row commit-history-row-chat";
+  }
 
   return (
     <div className={rowClassName}>
@@ -1037,7 +1077,12 @@ const CommitHistory = ({
           threadOfId={threadOfId}
         />
         {visibleGraph.rows.map((row) => (
-          <CommitHistoryRow key={row.id} row={row} repoRoot={repoRoot} />
+          <CommitHistoryRow
+            key={row.id}
+            row={row}
+            repoRoot={repoRoot}
+            threadOfId={threadOfId}
+          />
         ))}
       </div>
     </div>
