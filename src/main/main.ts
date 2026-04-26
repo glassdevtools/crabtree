@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, shell } from "electron";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { simpleGit } from "simple-git";
 import { readDashboardData } from "./dashboard";
 
 // The main process owns local system access. The renderer only receives narrow, typed IPC methods through preload.
@@ -34,6 +35,16 @@ const createMainWindow = () => {
   mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
 };
 
+const runGitCommandForPath = async ({
+  path,
+  args,
+}: {
+  path: string;
+  args: string[];
+}) => {
+  await simpleGit({ baseDir: path }).raw(args);
+};
+
 ipcMain.handle("dashboard:read", async () => {
   return await readDashboardData();
 });
@@ -56,6 +67,25 @@ ipcMain.handle("vscode:openPath", async (_event, path: unknown) => {
   }
 
   await shell.openExternal(`vscode://file${pathToFileURL(path).pathname}`);
+});
+
+ipcMain.handle("git:stageChanges", async (_event, path: unknown) => {
+  if (typeof path !== "string" || path.length === 0) {
+    throw new Error("path must be a non-empty string.");
+  }
+
+  await runGitCommandForPath({ path, args: ["add", "--all", "--", "."] });
+});
+
+ipcMain.handle("git:unstageChanges", async (_event, path: unknown) => {
+  if (typeof path !== "string" || path.length === 0) {
+    throw new Error("path must be a non-empty string.");
+  }
+
+  await runGitCommandForPath({
+    path,
+    args: ["restore", "--staged", "--", "."],
+  });
 });
 
 app.whenReady().then(() => {

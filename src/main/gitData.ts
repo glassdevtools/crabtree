@@ -1,14 +1,14 @@
+import { simpleGit } from "simple-git";
 import type {
   CodexThread,
+  GitChangeSummary,
   GitCommit,
   GitWorktree,
   RepoGraph,
 } from "../shared/types";
-import type { AppServerClient } from "./appServerClient";
-import { execAppServerCommand } from "./appServerClient";
 
 // Git is the source of truth for graph structure. Codex only tells us which thread belongs near a branch, commit, or worktree.
-// TODO: AI-PICKED-VALUE: Reading commits in pages of 1000 keeps app-server responses bounded while still walking to the root.
+// TODO: AI-PICKED-VALUE: Reading commits in pages of 1000 keeps Git responses bounded while still walking to the root.
 const COMMIT_PAGE_SIZE = 1000;
 const FIELD_SEPARATOR = "\u001f";
 
@@ -20,48 +20,27 @@ type RepoSeed = {
   threadIds: string[];
 };
 
-const runGit = async ({
-  appServerClient,
-  cwd,
-  args,
-}: {
-  appServerClient: AppServerClient;
-  cwd: string;
-  args: string[];
-}) => {
-  return await execAppServerCommand({
-    appServerClient,
-    cwd,
-    command: ["git", ...args],
-    timeoutMs: 10000,
-  });
+const runGit = async ({ cwd, args }: { cwd: string; args: string[] }) => {
+  const stdout = await simpleGit({ baseDir: cwd }).raw(args);
+
+  return { stdout };
 };
 
-const readGitText = async ({
-  appServerClient,
-  cwd,
-  args,
-}: {
-  appServerClient: AppServerClient;
-  cwd: string;
-  args: string[];
-}) => {
-  const { stdout } = await runGit({ appServerClient, cwd, args });
+const readGitText = async ({ cwd, args }: { cwd: string; args: string[] }) => {
+  const { stdout } = await runGit({ cwd, args });
 
   return stdout.trim();
 };
 
 const readNullableGitText = async ({
-  appServerClient,
   cwd,
   args,
 }: {
-  appServerClient: AppServerClient;
   cwd: string;
   args: string[];
 }) => {
   try {
-    const value = await readGitText({ appServerClient, cwd, args });
+    const value = await readGitText({ cwd, args });
 
     if (value.length === 0) {
       return null;
@@ -73,19 +52,12 @@ const readNullableGitText = async ({
   }
 };
 
-const readRepoSeedForThread = async ({
-  appServerClient,
-  thread,
-}: {
-  appServerClient: AppServerClient;
-  thread: CodexThread;
-}) => {
+const readRepoSeedForThread = async ({ thread }: { thread: CodexThread }) => {
   if (thread.cwd.length === 0) {
     return null;
   }
 
   const root = await readNullableGitText({
-    appServerClient,
     cwd: thread.cwd,
     args: ["rev-parse", "--show-toplevel"],
   });
@@ -95,12 +67,10 @@ const readRepoSeedForThread = async ({
   }
 
   const originUrl = await readNullableGitText({
-    appServerClient,
     cwd: root,
     args: ["config", "--get", "remote.origin.url"],
   });
   const currentBranch = await readNullableGitText({
-    appServerClient,
     cwd: root,
     args: ["branch", "--show-current"],
   });
@@ -116,13 +86,7 @@ const readRepoSeedForThread = async ({
   return repoSeed;
 };
 
-const readRepoSeeds = async ({
-  appServerClient,
-  threads,
-}: {
-  appServerClient: AppServerClient;
-  threads: CodexThread[];
-}) => {
+const readRepoSeeds = async ({ threads }: { threads: CodexThread[] }) => {
   const repoSeedOfKey: { [key: string]: RepoSeed } = {};
   const repoSeedOfCwd: { [cwd: string]: RepoSeed | null } = {};
 
@@ -130,7 +94,7 @@ const readRepoSeeds = async ({
     let repoSeed = repoSeedOfCwd[thread.cwd];
 
     if (repoSeed === undefined) {
-      repoSeed = await readRepoSeedForThread({ appServerClient, thread });
+      repoSeed = await readRepoSeedForThread({ thread });
       repoSeedOfCwd[thread.cwd] = repoSeed;
     }
 
@@ -162,16 +126,13 @@ const parseBranchReference = (value: string) => {
 };
 
 const readWorktrees = async ({
-  appServerClient,
   repoSeed,
   threads,
 }: {
-  appServerClient: AppServerClient;
   repoSeed: RepoSeed;
   threads: CodexThread[];
 }) => {
   const { stdout } = await runGit({
-    appServerClient,
     cwd: repoSeed.root,
     args: ["worktree", "list", "--porcelain"],
   });
@@ -244,12 +205,77 @@ const splitRefs = (value: string) => {
   return value.split(",").map((ref) => ref.trim());
 };
 
+const parseGitChangeLineCounts = (stdout: string) => {
+  const lineCounts = {
+    added: 0,
+    removed: 0,
+  };
+
+  for (const line of stdout.split("\n")) {
+    if (line.length === 0) {
+      continue;
+    }
+
+    const [addedText, removedText] = line.split("\t");
+    const added = Number(addedText);
+    const removed = Number(removedText);
+
+    if (Number.isFinite(added)) {
+      lineCounts.added += added;
+    }
+
+    if (Number.isFinite(removed)) {
+      lineCounts.removed += removed;
+    }
+  }
+
+  return lineCounts;
+};
+
+const readGitChangeSummary = async ({ cwd }: { cwd: string }) => {
+  const [unstaged, staged] = await Promise.all([
+    runGit({ cwd, args: ["diff", "--numstat", "--", "."] }),
+    runGit({ cwd, args: ["diff", "--cached", "--numstat", "--", "."] }),
+  ]);
+  const changeSummary: GitChangeSummary = {
+    staged: parseGitChangeLineCounts(staged.stdout.trim()),
+    unstaged: parseGitChangeLineCounts(unstaged.stdout.trim()),
+  };
+
+  return changeSummary;
+};
+
+export const readGitChangesOfCwd = async ({
+  threads,
+}: {
+  threads: CodexThread[];
+}) => {
+  const gitChangesOfCwd: { [cwd: string]: GitChangeSummary } = {};
+  const isCwdRead: { [cwd: string]: boolean } = {};
+
+  for (const thread of threads) {
+    if (thread.cwd.length === 0 || isCwdRead[thread.cwd] === true) {
+      continue;
+    }
+
+    isCwdRead[thread.cwd] = true;
+
+    try {
+      gitChangesOfCwd[thread.cwd] = await readGitChangeSummary({
+        cwd: thread.cwd,
+      });
+    } catch {
+      continue;
+    }
+  }
+
+  return gitChangesOfCwd;
+};
+
 const readCommits = async ({
-  appServerClient,
   repoSeed,
   threads,
 }: {
-  appServerClient: AppServerClient;
   repoSeed: RepoSeed;
   threads: CodexThread[];
 }) => {
@@ -273,7 +299,6 @@ const readCommits = async ({
 
   for (let skip = 0; ; skip += COMMIT_PAGE_SIZE) {
     const { stdout: shaStdout } = await runGit({
-      appServerClient,
       cwd: repoSeed.root,
       args: [
         "rev-list",
@@ -293,7 +318,6 @@ const readCommits = async ({
     }
 
     const { stdout } = await runGit({
-      appServerClient,
       cwd: repoSeed.root,
       args: [
         "log",
@@ -356,13 +380,11 @@ const readCommits = async ({
 };
 
 export const readRepoGraphs = async ({
-  appServerClient,
   threads,
 }: {
-  appServerClient: AppServerClient;
   threads: CodexThread[];
 }) => {
-  const repoSeeds = await readRepoSeeds({ appServerClient, threads });
+  const repoSeeds = await readRepoSeeds({ threads });
   const repos: RepoGraph[] = [];
   const warnings: string[] = [];
 
@@ -394,10 +416,9 @@ export const readRepoGraphs = async ({
 
     try {
       const [worktrees, commits, isShallowRepositoryText] = await Promise.all([
-        readWorktrees({ appServerClient, repoSeed, threads: threadsInRepo }),
-        readCommits({ appServerClient, repoSeed, threads: threadsInRepo }),
+        readWorktrees({ repoSeed, threads: threadsInRepo }),
+        readCommits({ repoSeed, threads: threadsInRepo }),
         readNullableGitText({
-          appServerClient,
           cwd: repoSeed.root,
           args: ["rev-parse", "--is-shallow-repository"],
         }),

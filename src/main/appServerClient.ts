@@ -17,12 +17,6 @@ export type AppServerClient = {
   close: () => void;
 };
 
-type AppServerCommandResult = {
-  exitCode: number;
-  stdout: string;
-  stderr: string;
-};
-
 // The app-server client is the only place that speaks JSONL to Codex.
 // Everything else calls this small request wrapper instead of touching Codex files.
 // TODO: AI-PICKED-VALUE: This points at the bundled Codex binary from the macOS desktop app so Finder-launched Electron builds do not depend on shell PATH.
@@ -34,57 +28,6 @@ const isObject = (value: unknown): value is { [key: string]: unknown } => {
 
 const makeError = (message: string) => {
   return new Error(message);
-};
-
-const readCommandResult = (value: unknown): AppServerCommandResult => {
-  if (!isObject(value)) {
-    throw makeError("Codex app-server returned an invalid command result.");
-  }
-
-  if (
-    typeof value.exitCode !== "number" ||
-    typeof value.stdout !== "string" ||
-    typeof value.stderr !== "string"
-  ) {
-    throw makeError("Codex app-server returned an incomplete command result.");
-  }
-
-  return {
-    exitCode: value.exitCode,
-    stdout: value.stdout,
-    stderr: value.stderr,
-  };
-};
-
-export const execAppServerCommand = async ({
-  appServerClient,
-  cwd,
-  command,
-  timeoutMs,
-}: {
-  appServerClient: AppServerClient;
-  cwd: string;
-  command: string[];
-  timeoutMs: number;
-}) => {
-  const result = readCommandResult(
-    await appServerClient.request({
-      method: "command/exec",
-      params: {
-        command,
-        cwd,
-        sandboxPolicy: { type: "readOnly" },
-        timeoutMs,
-      },
-    }),
-  );
-
-  if (result.exitCode !== 0) {
-    const output = result.stderr.length > 0 ? result.stderr : result.stdout;
-    throw makeError(output.trim());
-  }
-
-  return result;
 };
 
 export const createAppServerClient = async () => {

@@ -1,4 +1,6 @@
 import {
+  ArrowLeft,
+  ArrowRight,
   Bot,
   Code,
   FolderGit2,
@@ -6,6 +8,7 @@ import {
   GitCommitHorizontal,
   MessageSquare,
   MessageSquarePlus,
+  Plus,
   RefreshCw,
 } from "lucide-react";
 import {
@@ -20,6 +23,7 @@ import type { MouseEvent, PointerEvent } from "react";
 import type {
   CodexThread,
   DashboardData,
+  GitChangeSummary,
   GitCommit,
   GitWorktree,
   RepoGraph,
@@ -30,14 +34,17 @@ import type {
 const COMMIT_GRAPH_ROW_HEIGHT = 32;
 const COMMIT_GRAPH_LANE_WIDTH = 22;
 const COMMIT_GRAPH_PADDING_LEFT = 18;
-const COMMIT_GRAPH_MIN_WIDTH = 178;
+const COMMIT_GRAPH_MIN_WIDTH = 300;
 const COMMIT_GRAPH_DOT_RADIUS = 6;
 const COMMIT_GRAPH_WORKTREE_COLOR = "#8b929c";
 const COMMIT_GRAPH_BOT_ICON_SIZE = 14;
 const COMMIT_GRAPH_CHAT_ICON_SIZE = 14;
 const COMMIT_GRAPH_CODE_ICON_SIZE = 14;
+const COMMIT_GRAPH_CHANGE_ICON_SIZE = 12;
+const COMMIT_GRAPH_COMMIT_ICON_SIZE = 12;
 const COMMIT_GRAPH_ACTION_HIT_SIZE = 14;
 const COMMIT_GRAPH_MARKER_SLOT_WIDTH = 18;
+const COMMIT_GRAPH_CHANGE_TEXT_WIDTH = 46;
 const COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO = 0;
 // Dashboard reads touch Codex and Git, so automatic refreshes are spaced out and share the manual refresh path.
 // TODO: AI-PICKED-VALUE: Refreshing every 15 seconds keeps graph data current without constantly running Git commands.
@@ -52,10 +59,20 @@ const COMMIT_GRAPH_COLORS = [
   "#ff6b45",
   "#8e6c00",
 ];
+const EMPTY_GIT_CHANGE_SUMMARY: GitChangeSummary = {
+  staged: {
+    added: 0,
+    removed: 0,
+  },
+  unstaged: {
+    added: 0,
+    removed: 0,
+  },
+};
 
 // TODO: AI-PICKED-VALUE: These column widths match the current table layout closely enough while making drag resizing concrete.
 const COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS = {
-  graph: 178,
+  graph: 300,
   branchTags: 320,
   description: 420,
   commit: 84,
@@ -63,7 +80,7 @@ const COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS = {
   date: 170,
 };
 const COMMIT_HISTORY_MIN_COLUMN_WIDTHS = {
-  graph: 140,
+  graph: 300,
   branchTags: 140,
   description: 180,
   commit: 64,
@@ -546,10 +563,14 @@ const CommitGraphSvg = ({
   graph,
   graphWidth,
   threadOfId,
+  gitChangesOfCwd,
+  refreshDashboard,
 }: {
   graph: CommitGraph;
   graphWidth: number;
   threadOfId: { [id: string]: CodexThread };
+  gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
+  refreshDashboard: () => Promise<void>;
 }) => {
   const graphHeight = Math.max(
     COMMIT_GRAPH_ROW_HEIGHT,
@@ -563,37 +584,102 @@ const CommitGraphSvg = ({
     return readCommitGraphY(rowIndex);
   };
 
+  const readRowThread = (row: CommitGraphRow) => {
+    const threadId = row.threadIds[0];
+
+    if (threadId === undefined) {
+      return null;
+    }
+
+    return threadOfId[threadId] ?? null;
+  };
+
   const openRowThread = async (
     event: MouseEvent<SVGGElement>,
     row: CommitGraphRow,
   ) => {
     event.stopPropagation();
-    const threadId = row.threadIds[0];
+    const thread = readRowThread(row);
 
-    if (threadId === undefined) {
+    if (thread === null) {
       return;
     }
 
-    await window.molttree.openCodexThread(threadId);
+    await window.molttree.openCodexThread(thread.id);
   };
   const openRowVSCode = async (
     event: MouseEvent<SVGGElement>,
     row: CommitGraphRow,
   ) => {
     event.stopPropagation();
-    const threadId = row.threadIds[0];
+    const thread = readRowThread(row);
 
-    if (threadId === undefined) {
-      return;
-    }
-
-    const thread = threadOfId[threadId];
-
-    if (thread === undefined || thread.cwd.length === 0) {
+    if (thread === null || thread.cwd.length === 0) {
       return;
     }
 
     await window.molttree.openVSCodePath(thread.cwd);
+  };
+  const stageRowChanges = async (
+    event: MouseEvent<SVGGElement>,
+    row: CommitGraphRow,
+  ) => {
+    event.stopPropagation();
+    const thread = readRowThread(row);
+
+    if (thread === null || thread.cwd.length === 0) {
+      return;
+    }
+
+    await window.molttree.stageGitChanges(thread.cwd);
+    await refreshDashboard();
+  };
+  const unstageRowChanges = async (
+    event: MouseEvent<SVGGElement>,
+    row: CommitGraphRow,
+  ) => {
+    event.stopPropagation();
+    const thread = readRowThread(row);
+
+    if (thread === null || thread.cwd.length === 0) {
+      return;
+    }
+
+    await window.molttree.unstageGitChanges(thread.cwd);
+    await refreshDashboard();
+  };
+  const renderChangeCount = ({
+    changeSummary,
+    rightX,
+    centerY,
+    title,
+  }: {
+    changeSummary: GitChangeSummary["staged"];
+    rightX: number;
+    centerY: number;
+    title: string;
+  }) => {
+    return (
+      <g className="commit-graph-change-count">
+        <text
+          className="commit-graph-change-added"
+          x={rightX - 22}
+          y={centerY + 3}
+          textAnchor="end"
+        >
+          +{changeSummary.added}
+        </text>
+        <text
+          className="commit-graph-change-removed"
+          x={rightX}
+          y={centerY + 3}
+          textAnchor="end"
+        >
+          -{changeSummary.removed}
+        </text>
+        <title>{title}</title>
+      </g>
+    );
   };
 
   return (
@@ -656,14 +742,26 @@ const CommitGraphSvg = ({
           return null;
         }
 
-        const threadId = row.threadIds[0];
-        const thread =
-          threadId === undefined ? undefined : threadOfId[threadId];
+        const thread = readRowThread(row);
+        const canOpenPath = thread !== null && thread.cwd.length > 0;
+        const changeSummary = canOpenPath
+          ? (gitChangesOfCwd[thread.cwd] ?? EMPTY_GIT_CHANGE_SUMMARY)
+          : EMPTY_GIT_CHANGE_SUMMARY;
         const centerY = readCommitGraphY(row.rowIndex);
         const botCenterX =
           graphWidth -
           COMMIT_GRAPH_PADDING_LEFT -
           COMMIT_GRAPH_MARKER_SLOT_WIDTH * 3;
+        const commitCenterX =
+          graphWidth -
+          COMMIT_GRAPH_PADDING_LEFT -
+          COMMIT_GRAPH_MARKER_SLOT_WIDTH * 4;
+        const unstagedTextRightX =
+          commitCenterX - COMMIT_GRAPH_MARKER_SLOT_WIDTH;
+        const unstageCenterX =
+          unstagedTextRightX - COMMIT_GRAPH_CHANGE_TEXT_WIDTH;
+        const stageCenterX = unstageCenterX - COMMIT_GRAPH_MARKER_SLOT_WIDTH;
+        const stagedTextRightX = stageCenterX - COMMIT_GRAPH_MARKER_SLOT_WIDTH;
         const chatCenterX =
           graphWidth -
           COMMIT_GRAPH_PADDING_LEFT -
@@ -675,6 +773,68 @@ const CommitGraphSvg = ({
 
         return (
           <g key={`actions-${row.id}`}>
+            {renderChangeCount({
+              changeSummary: changeSummary.staged,
+              rightX: stagedTextRightX,
+              centerY,
+              title: "Staged changes",
+            })}
+            {canOpenPath ? (
+              <g
+                className="commit-graph-action-link"
+                onClick={(event) => stageRowChanges(event, row)}
+              >
+                <rect
+                  className="commit-graph-action-hit-area"
+                  x={stageCenterX - COMMIT_GRAPH_ACTION_HIT_SIZE / 2}
+                  y={centerY - COMMIT_GRAPH_ACTION_HIT_SIZE / 2}
+                  width={COMMIT_GRAPH_ACTION_HIT_SIZE}
+                  height={COMMIT_GRAPH_ACTION_HIT_SIZE}
+                />
+                <ArrowLeft
+                  x={stageCenterX - COMMIT_GRAPH_CHANGE_ICON_SIZE / 2}
+                  y={centerY - COMMIT_GRAPH_CHANGE_ICON_SIZE / 2}
+                  size={COMMIT_GRAPH_CHANGE_ICON_SIZE}
+                  color={COMMIT_GRAPH_WORKTREE_COLOR}
+                  strokeWidth={2.5}
+                />
+              </g>
+            ) : null}
+            {canOpenPath ? (
+              <g
+                className="commit-graph-action-link"
+                onClick={(event) => unstageRowChanges(event, row)}
+              >
+                <rect
+                  className="commit-graph-action-hit-area"
+                  x={unstageCenterX - COMMIT_GRAPH_ACTION_HIT_SIZE / 2}
+                  y={centerY - COMMIT_GRAPH_ACTION_HIT_SIZE / 2}
+                  width={COMMIT_GRAPH_ACTION_HIT_SIZE}
+                  height={COMMIT_GRAPH_ACTION_HIT_SIZE}
+                />
+                <ArrowRight
+                  x={unstageCenterX - COMMIT_GRAPH_CHANGE_ICON_SIZE / 2}
+                  y={centerY - COMMIT_GRAPH_CHANGE_ICON_SIZE / 2}
+                  size={COMMIT_GRAPH_CHANGE_ICON_SIZE}
+                  color={COMMIT_GRAPH_WORKTREE_COLOR}
+                  strokeWidth={2.5}
+                />
+              </g>
+            ) : null}
+            {renderChangeCount({
+              changeSummary: changeSummary.unstaged,
+              rightX: unstagedTextRightX,
+              centerY,
+              title: "Unstaged changes",
+            })}
+            <Plus
+              className="commit-graph-action-muted"
+              x={commitCenterX - COMMIT_GRAPH_COMMIT_ICON_SIZE / 2}
+              y={centerY - COMMIT_GRAPH_COMMIT_ICON_SIZE / 2}
+              size={COMMIT_GRAPH_COMMIT_ICON_SIZE}
+              color={COMMIT_GRAPH_WORKTREE_COLOR}
+              strokeWidth={2.5}
+            />
             <Bot
               x={botCenterX - COMMIT_GRAPH_BOT_ICON_SIZE / 2}
               y={centerY - COMMIT_GRAPH_BOT_ICON_SIZE / 2}
@@ -701,7 +861,7 @@ const CommitGraphSvg = ({
                 strokeWidth={2}
               />
             </g>
-            {thread === undefined || thread.cwd.length === 0 ? null : (
+            {canOpenPath ? (
               <g
                 className="commit-graph-action-link"
                 onClick={(event) => openRowVSCode(event, row)}
@@ -721,7 +881,7 @@ const CommitGraphSvg = ({
                   strokeWidth={2}
                 />
               </g>
-            )}
+            ) : null}
           </g>
         );
       })}
@@ -801,11 +961,15 @@ const CommitHistory = ({
   worktrees,
   threadOfId,
   repoRoot,
+  gitChangesOfCwd,
+  refreshDashboard,
 }: {
   commits: GitCommit[];
   worktrees: GitWorktree[];
   threadOfId: { [id: string]: CodexThread };
   repoRoot: string;
+  gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
+  refreshDashboard: () => Promise<void>;
 }) => {
   const commitHistoryRef = useRef<HTMLDivElement | null>(null);
   const columnResizeRef = useRef<CommitHistoryColumnResize | null>(null);
@@ -1035,6 +1199,8 @@ const CommitHistory = ({
           graph={visibleGraph}
           graphWidth={graphWidth}
           threadOfId={threadOfId}
+          gitChangesOfCwd={gitChangesOfCwd}
+          refreshDashboard={refreshDashboard}
         />
         {visibleGraph.rows.map((row) => (
           <CommitHistoryRow key={row.id} row={row} repoRoot={repoRoot} />
@@ -1047,9 +1213,13 @@ const CommitHistory = ({
 const RepoSection = ({
   repo,
   threadOfId,
+  gitChangesOfCwd,
+  refreshDashboard,
 }: {
   repo: RepoGraph;
   threadOfId: { [id: string]: CodexThread };
+  gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
+  refreshDashboard: () => Promise<void>;
 }) => {
   const repoThreads = repo.threadIds
     .map((threadId) => threadOfId[threadId])
@@ -1081,6 +1251,8 @@ const RepoSection = ({
           worktrees={repo.worktrees}
           threadOfId={threadOfId}
           repoRoot={repo.root}
+          gitChangesOfCwd={gitChangesOfCwd}
+          refreshDashboard={refreshDashboard}
         />
       </div>
     </section>
@@ -1210,7 +1382,13 @@ export const App = () => {
         <ThreadList threads={dashboardData?.threads ?? []} />
         <div className="repo-list">
           {dashboardData?.repos.map((repo) => (
-            <RepoSection key={repo.key} repo={repo} threadOfId={threadOfId} />
+            <RepoSection
+              key={repo.key}
+              repo={repo}
+              threadOfId={threadOfId}
+              gitChangesOfCwd={dashboardData.gitChangesOfCwd}
+              refreshDashboard={refreshDashboard}
+            />
           ))}
           {dashboardData !== null &&
             dashboardData.repos.length === 0 &&

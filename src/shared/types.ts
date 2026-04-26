@@ -26,6 +26,16 @@ export type GitWorktree = {
   threadIds: string[];
 };
 
+export type GitChangeLineCounts = {
+  added: number;
+  removed: number;
+};
+
+export type GitChangeSummary = {
+  staged: GitChangeLineCounts;
+  unstaged: GitChangeLineCounts;
+};
+
 export type GitCommit = {
   sha: string;
   shortSha: string;
@@ -51,6 +61,7 @@ export type DashboardData = {
   generatedAt: string;
   repos: RepoGraph[];
   threads: CodexThread[];
+  gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   warnings: string[];
 };
 
@@ -59,4 +70,6 @@ export type MoltTreeApi = {
   openCodexThread: (threadId: string) => Promise<void>;
   openNewCodexThread: () => Promise<void>;
   openVSCodePath: (path: string) => Promise<void>;
+  stageGitChanges: (path: string) => Promise<void>;
+  unstageGitChanges: (path: string) => Promise<void>;
 };

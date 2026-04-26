@@ -199,8 +199,8 @@ button {
 }
 
 .commit-history {
-  --commit-history-grid-template-columns: 178px 320px 420px 84px 150px 170px;
-  --commit-history-table-width: 1322px;
+  --commit-history-grid-template-columns: 300px 320px 420px 84px 150px 170px;
+  --commit-history-table-width: 1444px;
   overflow: auto;
   border: 1px solid #cfd6df;
   border-radius: 7px;
@@ -298,6 +298,23 @@ button {
 
 .commit-graph-action-hit-area {
   fill: transparent;
+}
+
+.commit-graph-action-muted {
+  opacity: 0.48;
+}
+
+.commit-graph-change-count {
+  font-size: 10px;
+  font-weight: 760;
+}
+
+.commit-graph-change-added {
+  fill: #1f7a4d;
+}
+
+.commit-graph-change-removed {
+  fill: #c53a13;
 }
 
 .commit-history-row {

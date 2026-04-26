@@ -17,6 +17,12 @@ const api: MoltTreeApi = {
   openVSCodePath: async (path: string) => {
     await ipcRenderer.invoke("vscode:openPath", path);
   },
+  stageGitChanges: async (path: string) => {
+    await ipcRenderer.invoke("git:stageChanges", path);
+  },
+  unstageGitChanges: async (path: string) => {
+    await ipcRenderer.invoke("git:unstageChanges", path);
+  },
 };
 
 contextBridge.exposeInMainWorld("molttree", api);
