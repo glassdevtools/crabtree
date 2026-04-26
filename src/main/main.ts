@@ -28,7 +28,7 @@ const createMainWindow = () => {
     height: MAIN_WINDOW_HEIGHT,
     minWidth: MAIN_WINDOW_MIN_WIDTH,
     minHeight: MAIN_WINDOW_MIN_HEIGHT,
-    title: "Molt Tree",
+    title: "MoltTree",
     backgroundColor: "#f6f4ef",
     webPreferences: {
       preload: join(__dirname, "../preload/preload.js"),
@@ -252,7 +252,7 @@ const readGitBranchTagChanges = (value: unknown) => {
 };
 
 const logGitMerge = (message: string, value: unknown) => {
-  console.info(`[Molt Tree merge] ${message}`, value);
+  console.info(`[MoltTree merge] ${message}`, value);
 };
 
 const startGitMerge = async ({
@@ -500,7 +500,7 @@ const moveGitBranch = async ({
       args: [
         "update-ref",
         "-m",
-        `Molt Tree: move ${branch}`,
+        `MoltTree: move ${branch}`,
         branchRef,
         targetSha,
         oldSha,

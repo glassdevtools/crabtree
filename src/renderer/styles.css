@@ -217,8 +217,9 @@ button {
 }
 
 .commit-history {
-  --commit-history-grid-template-columns: 300px 320px 420px 84px 150px 170px;
-  --commit-history-table-width: 1444px;
+  --commit-history-grid-template-columns: 300px 320px 220px 420px 84px 150px
+    170px;
+  --commit-history-table-width: 1664px;
   overflow: auto;
   border: 1px solid #cfd6df;
   border-radius: 7px;
@@ -498,6 +499,7 @@ button {
 }
 
 .commit-branch-tags-cell,
+.commit-chats-cell,
 .commit-description-cell,
 .commit-hash-cell,
 .commit-author-cell,
@@ -510,6 +512,7 @@ button {
 }
 
 .commit-branch-tags-cell,
+.commit-chats-cell,
 .commit-description-cell {
   overflow: hidden;
 }

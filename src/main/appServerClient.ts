@@ -113,7 +113,7 @@ export const createAppServerClient = async () => {
     params: {
       clientInfo: {
         name: "molttree",
-        title: "Molt Tree",
+        title: "MoltTree",
         version: "0.1.0",
       },
     },

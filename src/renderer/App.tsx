@@ -39,7 +39,6 @@ const COMMIT_GRAPH_MIN_WIDTH = 300;
 const COMMIT_GRAPH_DOT_RADIUS = 6;
 const COMMIT_GRAPH_GRAY_COLOR = "#8b929c";
 const COMMIT_GRAPH_BOT_ICON_SIZE = 14;
-const COMMIT_GRAPH_CHAT_ICON_SIZE = 14;
 const COMMIT_GRAPH_CODE_ICON_SIZE = 14;
 const COMMIT_GRAPH_COMMIT_ICON_SIZE = 12;
 const COMMIT_GRAPH_TRASH_ICON_SIZE = 13;
@@ -133,6 +132,7 @@ const readBranchTagChangesForRepo = ({
 const COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS = {
   graph: 300,
   branchTags: 320,
+  chats: 220,
   description: 420,
   commit: 84,
   author: 150,
@@ -141,6 +141,7 @@ const COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS = {
 const COMMIT_HISTORY_MIN_COLUMN_WIDTHS = {
   graph: 300,
   branchTags: 140,
+  chats: 120,
   description: 180,
   commit: 64,
   author: 90,
@@ -150,6 +151,7 @@ const COMMIT_HISTORY_MIN_COLUMN_WIDTHS = {
 type CommitHistoryColumnKey =
   | "graph"
   | "branchTags"
+  | "chats"
   | "description"
   | "commit"
   | "author"
@@ -158,6 +160,7 @@ type CommitHistoryColumnKey =
 type CommitHistoryColumnWidths = {
   graph: number;
   branchTags: number;
+  chats: number;
   description: number;
   commit: number;
   author: number;
@@ -430,10 +433,6 @@ const readCommitGraphRowActionWidth = ({
     iconCount += 1;
   }
 
-  if (row.threadIds.length > 0) {
-    iconCount += 1;
-  }
-
   if (shouldShowCommitAction) {
     iconCount += 1;
   }
@@ -467,7 +466,7 @@ const readCommitGraphRowActionWidth = ({
 const readCommitGridTemplateColumns = (
   columnWidths: CommitHistoryColumnWidths,
 ) => {
-  return `${columnWidths.graph}px ${columnWidths.branchTags}px ${columnWidths.description}px ${columnWidths.commit}px ${columnWidths.author}px ${columnWidths.date}px`;
+  return `${columnWidths.graph}px ${columnWidths.branchTags}px ${columnWidths.chats}px ${columnWidths.description}px ${columnWidths.commit}px ${columnWidths.author}px ${columnWidths.date}px`;
 };
 
 const readCommitHistoryTableWidth = (
@@ -476,6 +475,7 @@ const readCommitHistoryTableWidth = (
   return (
     columnWidths.graph +
     columnWidths.branchTags +
+    columnWidths.chats +
     columnWidths.description +
     columnWidths.commit +
     columnWidths.author +
@@ -497,6 +497,8 @@ const replaceCommitHistoryColumnWidth = ({
       return { ...columnWidths, graph: width };
     case "branchTags":
       return { ...columnWidths, branchTags: width };
+    case "chats":
+      return { ...columnWidths, chats: width };
     case "description":
       return { ...columnWidths, description: width };
     case "commit":
@@ -542,7 +544,7 @@ const readIsHeadRef = (ref: string) => {
 };
 
 const logCommitMerge = (message: string, value: unknown) => {
-  console.info(`[Molt Tree merge] ${message}`, value);
+  console.info(`[MoltTree merge] ${message}`, value);
 };
 
 const createCommitGraph = (
@@ -859,7 +861,6 @@ const BranchTags = ({
   refs,
   localBranches,
   worktrees,
-  threads,
   shouldShowHeadTag,
   repoRoot,
   commitSha,
@@ -872,7 +873,6 @@ const BranchTags = ({
   refs: string[];
   localBranches: string[];
   worktrees: GitWorktree[];
-  threads: CodexThread[];
   shouldShowHeadTag: boolean;
   repoRoot: string;
   commitSha: string;
@@ -896,7 +896,7 @@ const BranchTags = ({
   }) => void;
   finishBranchPointerDrag: () => void;
 }) => {
-  if (refs.length === 0 && worktrees.length === 0 && threads.length === 0) {
+  if (refs.length === 0 && worktrees.length === 0) {
     return null;
   }
 
@@ -922,15 +922,6 @@ const BranchTags = ({
     event.stopPropagation();
     await window.molttree.openVSCodePath(path);
   };
-  const openThread = async (
-    event: MouseEvent<HTMLButtonElement>,
-    threadId: string,
-  ) => {
-    event.preventDefault();
-    event.stopPropagation();
-    await window.molttree.openCodexThread(threadId);
-  };
-
   const readWorktreeTagText = (path: string) => {
     if (path === repoRoot) {
       return "HEAD";
@@ -989,23 +980,6 @@ const BranchTags = ({
           <span>{readWorktreeTagText(worktree.path)}</span>
         </button>
       ))}
-      {threads.map((thread) => {
-        const title = threadTitle(thread);
-
-        return (
-          <button
-            className="commit-thread"
-            title={title}
-            type="button"
-            key={thread.id}
-            onMouseDown={(event) => event.stopPropagation()}
-            onClick={(event) => openThread(event, thread.id)}
-          >
-            <MessageSquare size={13} />
-            <span>{title}</span>
-          </button>
-        );
-      })}
       {orderedRefs.map((ref) => {
         const refName = cleanRefName(ref);
         const isLocalBranch = isLocalBranchOfName[refName] === true;
@@ -1068,6 +1042,43 @@ const BranchTags = ({
   );
 };
 
+const ChatTags = ({ threads }: { threads: CodexThread[] }) => {
+  if (threads.length === 0) {
+    return null;
+  }
+
+  const openThread = async (
+    event: MouseEvent<HTMLButtonElement>,
+    threadId: string,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    await window.molttree.openCodexThread(threadId);
+  };
+
+  return (
+    <div className="commit-label-list">
+      {threads.map((thread) => {
+        const title = threadTitle(thread);
+
+        return (
+          <button
+            className="commit-thread"
+            title={title}
+            type="button"
+            key={thread.id}
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={(event) => openThread(event, thread.id)}
+          >
+            <MessageSquare size={13} />
+            <span>{title}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+};
+
 const CommitGraphSvg = ({
   graph,
   graphWidth,
@@ -1099,19 +1110,6 @@ const CommitGraphSvg = ({
     return readCommitGraphY(rowIndex);
   };
 
-  const openRowThread = async (
-    event: MouseEvent<SVGGElement>,
-    row: CommitGraphRow,
-  ) => {
-    event.stopPropagation();
-    const thread = readCommitGraphRowThread(row, threadOfId);
-
-    if (thread === null) {
-      return;
-    }
-
-    await window.molttree.openCodexThread(thread.id);
-  };
   const openRowVSCode = async (
     event: MouseEvent<SVGGElement>,
     row: CommitGraphRow,
@@ -1253,7 +1251,6 @@ const CommitGraphSvg = ({
       })}
 
       {graph.rows.map((row) => {
-        const shouldShowChat = row.threadIds.length > 0;
         const worktree = row.worktree;
         const rowCwd = readCommitGraphRowCwd(row, threadOfId, repoRoot);
         const storedChangeSummary =
@@ -1276,12 +1273,7 @@ const CommitGraphSvg = ({
         const shouldShowCommitAction =
           canOpenCommitMessage && shouldShowChangeCount;
 
-        if (
-          !shouldShowChat &&
-          !shouldShowTrash &&
-          !shouldShowChangeCount &&
-          !canOpenPath
-        ) {
+        if (!shouldShowTrash && !shouldShowChangeCount && !canOpenPath) {
           return null;
         }
 
@@ -1292,7 +1284,6 @@ const CommitGraphSvg = ({
           COMMIT_GRAPH_ACTION_HIT_SIZE / 2;
         let trashCenterX: number | null = null;
         let vscodeCenterX: number | null = null;
-        let chatCenterX: number | null = null;
         let commitCenterX: number | null = null;
 
         if (shouldShowTrash) {
@@ -1302,11 +1293,6 @@ const CommitGraphSvg = ({
 
         if (canOpenPath) {
           vscodeCenterX = nextIconCenterX;
-          nextIconCenterX -= COMMIT_GRAPH_ACTION_ICON_SPACING;
-        }
-
-        if (shouldShowChat) {
-          chatCenterX = nextIconCenterX;
           nextIconCenterX -= COMMIT_GRAPH_ACTION_ICON_SPACING;
         }
 
@@ -1346,27 +1332,6 @@ const CommitGraphSvg = ({
                   size={COMMIT_GRAPH_COMMIT_ICON_SIZE}
                   color={COMMIT_GRAPH_GRAY_COLOR}
                   strokeWidth={2.5}
-                />
-              </g>
-            )}
-            {chatCenterX === null ? null : (
-              <g
-                className="commit-graph-action-link"
-                onClick={(event) => openRowThread(event, row)}
-              >
-                <rect
-                  className="commit-graph-action-hit-area"
-                  x={chatCenterX - COMMIT_GRAPH_ACTION_HIT_SIZE / 2}
-                  y={centerY - COMMIT_GRAPH_ACTION_HIT_SIZE / 2}
-                  width={COMMIT_GRAPH_ACTION_HIT_SIZE}
-                  height={COMMIT_GRAPH_ACTION_HIT_SIZE}
-                />
-                <MessageSquare
-                  x={chatCenterX - COMMIT_GRAPH_CHAT_ICON_SIZE / 2}
-                  y={centerY - COMMIT_GRAPH_CHAT_ICON_SIZE / 2}
-                  size={COMMIT_GRAPH_CHAT_ICON_SIZE}
-                  color={COMMIT_GRAPH_GRAY_COLOR}
-                  strokeWidth={2}
                 />
               </g>
             )}
@@ -1517,7 +1482,6 @@ const CommitHistoryRow = ({
           refs={refs}
           localBranches={commit.localBranches}
           worktrees={worktrees}
-          threads={threads}
           shouldShowHeadTag={row.kind === "head"}
           repoRoot={repoRoot}
           commitSha={commit.sha}
@@ -1527,6 +1491,9 @@ const CommitHistoryRow = ({
           startBranchPointerDrag={startBranchPointerDrag}
           finishBranchPointerDrag={finishBranchPointerDrag}
         />
+      </div>
+      <div className="commit-chats-cell">
+        <ChatTags threads={threads} />
       </div>
       <div className="commit-description-cell">
         <span className="commit-subject" title={subjectTitle}>
@@ -2602,6 +2569,15 @@ const CommitHistory = ({
             />
           </div>
           <div className="commit-history-header-cell">
+            <span>Chats</span>
+            <CommitHistoryColumnResizeHandle
+              columnKey="chats"
+              startColumnResize={startColumnResize}
+              updateColumnResize={updateColumnResize}
+              finishColumnResize={finishColumnResize}
+            />
+          </div>
+          <div className="commit-history-header-cell">
             <span>Description</span>
             <CommitHistoryColumnResizeHandle
               columnKey="description"
@@ -3059,7 +3035,7 @@ export const App = () => {
     <main className="app-shell">
       <header className="top-bar">
         <div>
-          <h1>Molt Tree</h1>
+          <h1>MoltTree</h1>
           <p>
             {dashboardData === null
               ? "Loading"
