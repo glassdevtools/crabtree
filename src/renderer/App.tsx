@@ -1435,25 +1435,18 @@ const CommitHistoryRow = ({
   let worktrees: GitWorktree[] = [];
   let subject = commit.subject;
   let subjectTitle = commit.subject;
-  let subjectClassName = "commit-subject";
   let rowClassName = "commit-history-row";
 
   if (row.kind === "worktree" && row.worktree !== null) {
     worktrees = [row.worktree];
-    subject = "(Worktree)";
-    subjectTitle = row.worktree.path;
-    subjectClassName = "commit-subject commit-subject-muted";
+    subject = "";
+    subjectTitle = "";
     rowClassName = "commit-history-row commit-history-row-worktree";
   }
 
   if (row.kind === "head") {
-    const headBranchRef = refs.find((ref) => ref.startsWith("HEAD -> "));
-
-    if (headBranchRef === undefined) {
-      subject = "(Head)";
-      subjectClassName = "commit-subject commit-subject-muted";
-    }
-
+    subject = "";
+    subjectTitle = "";
     rowClassName = "commit-history-row commit-history-row-head";
   }
 
@@ -1498,7 +1491,7 @@ const CommitHistoryRow = ({
         />
       </div>
       <div className="commit-description-cell">
-        <span className={subjectClassName} title={subjectTitle}>
+        <span className="commit-subject" title={subjectTitle}>
           {subject}
         </span>
       </div>

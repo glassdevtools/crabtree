@@ -649,12 +649,6 @@ button {
   font-size: 14px;
 }
 
-/* TODO: AI-PICKED-VALUE: This fades placeholder descriptions more than normal row metadata without making them unreadable. */
-.commit-subject-muted {
-  color: #8b929c;
-  opacity: 0.72;
-}
-
 .commit-hash-cell {
   color: #2f3339;
   font-size: 13px;
