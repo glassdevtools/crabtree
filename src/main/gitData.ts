@@ -254,23 +254,32 @@ const readGitChangeSummary = async ({ cwd }: { cwd: string }) => {
 
 export const readGitChangesOfCwd = async ({
   threads,
+  repos,
 }: {
   threads: CodexThread[];
+  repos: RepoGraph[];
 }) => {
   const gitChangesOfCwd: { [cwd: string]: GitChangeSummary } = {};
   const isCwdRead: { [cwd: string]: boolean } = {};
+  const cwds = threads
+    .map((thread) => thread.cwd)
+    .filter((cwd) => cwd.length > 0);
 
-  for (const thread of threads) {
-    if (thread.cwd.length === 0 || isCwdRead[thread.cwd] === true) {
+  for (const repo of repos) {
+    for (const worktree of repo.worktrees) {
+      cwds.push(worktree.path);
+    }
+  }
+
+  for (const cwd of cwds) {
+    if (isCwdRead[cwd] === true) {
       continue;
     }
 
-    isCwdRead[thread.cwd] = true;
+    isCwdRead[cwd] = true;
 
     try {
-      gitChangesOfCwd[thread.cwd] = await readGitChangeSummary({
-        cwd: thread.cwd,
-      });
+      gitChangesOfCwd[cwd] = await readGitChangeSummary({ cwd });
     } catch {
       continue;
     }

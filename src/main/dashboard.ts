@@ -23,7 +23,10 @@ export const readDashboardData = async () => {
   }
 
   const repoGraphResult = await readRepoGraphs({ threads });
-  const gitChangesOfCwd = await readGitChangesOfCwd({ threads });
+  const gitChangesOfCwd = await readGitChangesOfCwd({
+    threads,
+    repos: repoGraphResult.repos,
+  });
 
   const dashboardData: DashboardData = {
     generatedAt: new Date().toISOString(),

@@ -317,6 +317,72 @@ button {
   fill: #c53a13;
 }
 
+/* TODO: AI-PICKED-VALUE: The modal sizing and shadow match the compact graph UI without adding a new design system. */
+.commit-message-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(32, 33, 36, 0.18);
+}
+
+.commit-message-modal {
+  width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #c7d0dc;
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow: 0 12px 32px rgba(26, 33, 44, 0.18);
+}
+
+.commit-message-modal h3 {
+  margin: 0;
+  color: #262a30;
+  font-size: 14px;
+}
+
+.commit-message-modal input {
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 1px solid #c7d0dc;
+  border-radius: 5px;
+  font: inherit;
+}
+
+.commit-message-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.commit-message-modal-actions button {
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 1px solid #c7d0dc;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #262a30;
+  cursor: pointer;
+}
+
+.commit-message-modal-actions button:hover {
+  background: #eef2f7;
+}
+
+.commit-message-modal-actions button:disabled {
+  color: #9aa3af;
+  cursor: default;
+}
+
+.commit-message-modal-actions button:disabled:hover {
+  background: #ffffff;
+}
+
 .commit-history-row {
   position: relative;
   z-index: 2;
