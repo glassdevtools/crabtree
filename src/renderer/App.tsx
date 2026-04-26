@@ -802,14 +802,21 @@ const CommitGraphSvg = ({
         }
 
         return (
-          <Bot
-            key={row.id}
-            x={centerX - COMMIT_GRAPH_BOT_ICON_SIZE / 2}
-            y={centerY - COMMIT_GRAPH_BOT_ICON_SIZE / 2}
-            size={COMMIT_GRAPH_BOT_ICON_SIZE}
-            color={COMMIT_GRAPH_GRAY_COLOR}
-            strokeWidth={2}
-          />
+          <g key={row.id}>
+            <circle
+              cx={centerX}
+              cy={centerY}
+              r={COMMIT_GRAPH_DOT_RADIUS + 2}
+              fill="#ffffff"
+            />
+            <Bot
+              x={centerX - COMMIT_GRAPH_BOT_ICON_SIZE / 2}
+              y={centerY - COMMIT_GRAPH_BOT_ICON_SIZE / 2}
+              size={COMMIT_GRAPH_BOT_ICON_SIZE}
+              color={COMMIT_GRAPH_GRAY_COLOR}
+              strokeWidth={2}
+            />
+          </g>
         );
       })}
 
