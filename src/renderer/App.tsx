@@ -206,7 +206,7 @@ const readCommitGraphColor = (colorIndex: number) => {
 const readCommitGraphColorIndex = (graphKey: string) => {
   let colorIndex = 0;
 
-  // The color comes from the graph key so existing rows keep their color when new rows are added above them.
+  // New lanes start from the graph key so refreshes keep colors stable while the graph still carries colors through parent lanes.
   for (let charIndex = 0; charIndex < graphKey.length; charIndex += 1) {
     colorIndex =
       (colorIndex * 31 + graphKey.charCodeAt(charIndex)) %
@@ -313,11 +313,50 @@ const createCommitGraph = (
   worktreesOfHead: { [sha: string]: GitWorktree[] },
 ) => {
   const graphItems: CommitGraphItem[] = [];
+  const colorIndexOfSha: { [sha: string]: number } = {};
   const lanes: CommitGraphLane[] = [];
   const rows: CommitGraphRow[] = [];
   const segments: CommitGraphSegment[] = [];
   const isSegmentAddedOfKey: { [key: string]: boolean } = {};
   let laneCount = 1;
+
+  const readNewLaneColorIndex = ({
+    graphKey,
+    lanesToCheck,
+    parentLanes,
+  }: {
+    graphKey: string;
+    lanesToCheck: CommitGraphLane[];
+    parentLanes: CommitGraphLane[];
+  }) => {
+    const preferredColorIndex = readCommitGraphColorIndex(graphKey);
+    const isColorIndexUsed: { [colorIndex: number]: boolean } = {};
+
+    for (const laneItem of lanesToCheck) {
+      isColorIndexUsed[laneItem.colorIndex % COMMIT_GRAPH_COLORS.length] = true;
+    }
+
+    for (const laneItem of parentLanes) {
+      isColorIndexUsed[laneItem.colorIndex % COMMIT_GRAPH_COLORS.length] = true;
+    }
+
+    for (
+      let colorOffset = 0;
+      colorOffset < COMMIT_GRAPH_COLORS.length;
+      colorOffset += 1
+    ) {
+      const colorIndex =
+        (preferredColorIndex + colorOffset) % COMMIT_GRAPH_COLORS.length;
+
+      if (isColorIndexUsed[colorIndex] === true) {
+        continue;
+      }
+
+      return colorIndex;
+    }
+
+    return preferredColorIndex;
+  };
 
   for (const commit of commits) {
     const worktrees = worktreesOfHead[commit.sha] ?? [];
@@ -400,7 +439,17 @@ const createCommitGraph = (
     let lane = lanes.findIndex((laneItem) => laneItem.sha === graphItem.sha);
 
     if (lane === -1) {
-      const colorIndex = readCommitGraphColorIndex(graphItem.sha);
+      let colorIndex = colorIndexOfSha[graphItem.sha];
+
+      if (colorIndex === undefined) {
+        colorIndex = readNewLaneColorIndex({
+          graphKey: graphItem.sha,
+          lanesToCheck: lanes,
+          parentLanes: [],
+        });
+        colorIndexOfSha[graphItem.sha] = colorIndex;
+      }
+
       lane = lanes.length;
       lanes[lane] = { sha: graphItem.sha, colorIndex };
     }
@@ -417,6 +466,7 @@ const createCommitGraph = (
       colorIndex: commitLane.colorIndex,
       rowIndex,
     });
+    colorIndexOfSha[graphItem.sha] = commitLane.colorIndex;
     laneCount = Math.max(laneCount, lanes.length, lane + 1);
 
     const nextLanes = [...lanes];
@@ -440,7 +490,22 @@ const createCommitGraph = (
         continue;
       }
 
-      const parentColorIndex = readCommitGraphColorIndex(parent);
+      let parentColorIndex = colorIndexOfSha[parent];
+
+      if (parentColorIndex === undefined) {
+        if (graphItem.kind === "commit" && parentIndex === 0) {
+          parentColorIndex = commitLane.colorIndex;
+        } else {
+          parentColorIndex = readNewLaneColorIndex({
+            graphKey: parent,
+            lanesToCheck: nextLanes,
+            parentLanes,
+          });
+        }
+
+        colorIndexOfSha[parent] = parentColorIndex;
+      }
+
       parentLanes.push({ sha: parent, colorIndex: parentColorIndex });
     }
 
@@ -493,7 +558,7 @@ const createCommitGraph = (
         continue;
       }
 
-      const parentLane = nextLanes[nextLaneIndex];
+      const parentColorIndex = colorIndexOfSha[parent];
 
       addSegment({
         fromLane: lane,
@@ -501,9 +566,9 @@ const createCommitGraph = (
         fromRowIndex: rowIndex,
         toRowIndex: rowIndex + 1,
         colorIndex:
-          parentIndex === 0 && graphItem.kind === "commit"
+          parentColorIndex === undefined
             ? commitLane.colorIndex
-            : parentLane.colorIndex,
+            : parentColorIndex,
         isMergeSegment: parentIndex > 0,
         isGraySegment: graphItem.kind === "chat",
       });
