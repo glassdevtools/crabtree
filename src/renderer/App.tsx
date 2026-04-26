@@ -1106,6 +1106,7 @@ const CommitHistory = ({
   const [shouldShowChatOnly, setShouldShowChatOnly] = useState(false);
   const [commitMergeDrag, setCommitMergeDrag] =
     useState<CommitMergeDrag | null>(null);
+  const commitMergeDragRef = useRef<CommitMergeDrag | null>(null);
   const [mergeDropTargetRowId, setMergeDropTargetRowId] = useState<
     string | null
   >(null);
@@ -1266,9 +1267,16 @@ const CommitHistory = ({
     event: DragEvent<HTMLDivElement>;
     row: CommitGraphRow;
   }) => {
+    const nextCommitMergeDrag = {
+      rowId: row.id,
+      repoRoot,
+      sha: row.commit.sha,
+    };
+
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", row.commit.shortSha);
-    setCommitMergeDrag({ rowId: row.id, repoRoot, sha: row.commit.sha });
+    commitMergeDragRef.current = nextCommitMergeDrag;
+    setCommitMergeDrag(nextCommitMergeDrag);
   };
   const updateCommitMergeDropTarget = ({
     event,
@@ -1277,10 +1285,12 @@ const CommitHistory = ({
     event: DragEvent<HTMLDivElement>;
     row: CommitGraphRow;
   }) => {
+    const activeCommitMergeDrag = commitMergeDragRef.current;
+
     if (
-      commitMergeDrag === null ||
-      commitMergeDrag.repoRoot !== repoRoot ||
-      commitMergeDrag.sha === row.commit.sha
+      activeCommitMergeDrag === null ||
+      activeCommitMergeDrag.repoRoot !== repoRoot ||
+      activeCommitMergeDrag.sha === row.commit.sha
     ) {
       return;
     }
@@ -1293,6 +1303,7 @@ const CommitHistory = ({
     setMergeDropTargetRowId(null);
   };
   const finishCommitMergeDrag = () => {
+    commitMergeDragRef.current = null;
     setCommitMergeDrag(null);
     setMergeDropTargetRowId(null);
   };
@@ -1323,13 +1334,25 @@ const CommitHistory = ({
       : [];
 
     if (row.kind === "worktree" && row.worktree !== null) {
-      if (row.worktree.branch === null) {
-        throw new Error("Drop target worktree is not on a branch.");
+      const target: CommitMergeTarget = {
+        targetBranch: null,
+        targetWorktreePath: row.worktree.path,
+      };
+
+      return target;
+    }
+
+    if (row.kind === "chat") {
+      const threadId = row.threadIds[0];
+      const thread = threadId === undefined ? undefined : threadOfId[threadId];
+
+      if (thread === undefined || thread.cwd.length === 0) {
+        throw new Error("Drop target chat has no working directory.");
       }
 
       const target: CommitMergeTarget = {
         targetBranch: null,
-        targetWorktreePath: row.worktree.path,
+        targetWorktreePath: thread.cwd,
       };
 
       return target;
@@ -1363,11 +1386,12 @@ const CommitHistory = ({
     row: CommitGraphRow;
   }) => {
     event.preventDefault();
+    const activeCommitMergeDrag = commitMergeDragRef.current;
 
     if (
-      commitMergeDrag === null ||
-      commitMergeDrag.repoRoot !== repoRoot ||
-      commitMergeDrag.sha === row.commit.sha
+      activeCommitMergeDrag === null ||
+      activeCommitMergeDrag.repoRoot !== repoRoot ||
+      activeCommitMergeDrag.sha === row.commit.sha
     ) {
       finishCommitMergeDrag();
       return;
@@ -1379,7 +1403,7 @@ const CommitHistory = ({
       const target = readCommitMergeTarget(row);
       gitMergeRequest = {
         repoRoot,
-        fromSha: commitMergeDrag.sha,
+        fromSha: activeCommitMergeDrag.sha,
         toSha: row.commit.sha,
         targetBranch: target.targetBranch,
         targetWorktreePath: target.targetWorktreePath,
