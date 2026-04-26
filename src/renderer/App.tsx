@@ -54,8 +54,8 @@ const COMMIT_GRAPH_CHANGE_TEXT_CHARACTER_WIDTH = 7;
 const COMMIT_GRAPH_CHANGE_TEXT_GAP = 6;
 const COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO = 0;
 // Dashboard reads touch Codex and Git, so automatic refreshes are spaced out and share the manual refresh path.
-// TODO: AI-PICKED-VALUE: Refreshing every 15 seconds keeps graph data current without constantly running Git commands.
-const DASHBOARD_REFRESH_INTERVAL_MS = 15000;
+// TODO: AI-PICKED-VALUE: Refreshing every 5 seconds keeps branch/worktree state current without making Git reads constant.
+const DASHBOARD_REFRESH_INTERVAL_MS = 5000;
 // TODO: AI-PICKED-VALUE: Four seconds is long enough to read a short success toast without requiring manual dismissal.
 const SUCCESS_MESSAGE_TIMEOUT_MS = 4000;
 const COMMIT_GRAPH_COLORS = [
