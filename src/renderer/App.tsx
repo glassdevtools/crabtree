@@ -2527,20 +2527,24 @@ const CommitHistory = ({
     const { gitMergeRequest } = commitMergeConfirmation;
     closeCommitMergeConfirmationModal();
     logCommitMerge("calling startGitMerge", gitMergeRequest);
+    let mergeErrorMessage: string | null = null;
 
     try {
       await window.molttree.startGitMerge(gitMergeRequest);
       logCommitMerge("startGitMerge finished", gitMergeRequest);
     } catch (error) {
-      const message =
+      mergeErrorMessage =
         error instanceof Error ? error.message : "Failed to start merge.";
       logCommitMerge("startGitMerge failed", {
-        message,
+        message: mergeErrorMessage,
         gitMergeRequest,
       });
-      showErrorMessage(message);
     } finally {
       await refreshDashboard();
+
+      if (mergeErrorMessage !== null) {
+        showErrorMessage(mergeErrorMessage);
+      }
     }
   };
   const moveBranchPointer = async () => {
@@ -3073,7 +3077,6 @@ export const App = () => {
             className="icon-button"
             title="Refresh Git and Codex data"
             onClick={refreshDashboard}
-            disabled={isLoading}
           >
             <RefreshCw size={18} />
           </button>
