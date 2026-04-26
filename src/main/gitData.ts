@@ -205,6 +205,13 @@ const splitRefs = (value: string) => {
   return value.split(",").map((ref) => ref.trim());
 };
 
+const splitLines = (value: string) => {
+  return value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+};
+
 const parseGitChangeLineCounts = (stdout: string) => {
   const lineCounts = {
     added: 0,
@@ -284,12 +291,49 @@ const readCommits = async ({
   const format = `%H${FIELD_SEPARATOR}%P${FIELD_SEPARATOR}%D${FIELD_SEPARATOR}%an${FIELD_SEPARATOR}%ad${FIELD_SEPARATOR}%s`;
   const threadIdsOfSha: { [sha: string]: string[] } = {};
   const commits: GitCommit[] = [];
+  const refText = await readGitText({
+    cwd: repoSeed.root,
+    args: [
+      "for-each-ref",
+      "--format=%(refname)",
+      "refs/heads",
+      "refs/remotes",
+      "refs/tags",
+    ],
+  });
+  const rootHead = await readNullableGitText({
+    cwd: repoSeed.root,
+    args: ["rev-parse", "HEAD"],
+  });
   const worktreeHeads = worktrees
     .map((worktree) => worktree.head)
     .filter((head): head is string => head !== null);
+  const historyRoots = [
+    ...splitLines(refText),
+    ...(rootHead === null ? [] : [rootHead]),
+    ...worktreeHeads,
+  ];
+  const shaOfCwd: { [cwd: string]: string | null } = {};
+
+  if (historyRoots.length === 0) {
+    return commits;
+  }
 
   for (const thread of threads) {
-    const sha = thread.gitInfo?.sha;
+    let cwdSha = shaOfCwd[thread.cwd];
+
+    if (cwdSha === undefined) {
+      cwdSha =
+        thread.cwd.length === 0
+          ? null
+          : await readNullableGitText({
+              cwd: thread.cwd,
+              args: ["rev-parse", "HEAD"],
+            });
+      shaOfCwd[thread.cwd] = cwdSha;
+    }
+
+    const sha = cwdSha ?? thread.gitInfo?.sha;
 
     if (sha === undefined || sha === null) {
       continue;
@@ -307,11 +351,10 @@ const readCommits = async ({
       cwd: repoSeed.root,
       args: [
         "rev-list",
-        "--all",
-        ...worktreeHeads,
         "--topo-order",
         `--max-count=${COMMIT_PAGE_SIZE}`,
         `--skip=${skip}`,
+        ...historyRoots,
       ],
     });
     const shas = shaStdout
