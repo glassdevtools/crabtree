@@ -820,6 +820,7 @@ const BranchTags = ({
   repoRoot,
   commitSha,
   commitShortSha,
+  isBranchDeleteSafeOfBranch,
   openBranchDeleteModal,
   startBranchPointerDrag,
   finishBranchPointerDrag,
@@ -831,6 +832,7 @@ const BranchTags = ({
   repoRoot: string;
   commitSha: string;
   commitShortSha: string;
+  isBranchDeleteSafeOfBranch: { [branch: string]: boolean };
   openBranchDeleteModal: (
     event: MouseEvent<HTMLButtonElement>,
     branch: string,
@@ -861,7 +863,6 @@ const BranchTags = ({
     ...normalRefs.filter((ref) => !ref.startsWith("tag: ")),
     ...normalRefs.filter((ref) => ref.startsWith("tag: ")),
   ];
-  const gitAnchorCount = refs.length + worktrees.length;
   const isLocalBranchOfName: { [name: string]: boolean } = {};
 
   for (const localBranch of localBranches) {
@@ -973,7 +974,8 @@ const BranchTags = ({
         const isTag = ref.startsWith("tag: ");
         const isOriginBranch = refName.startsWith("origin/");
         let refClassName = "commit-ref commit-ref-local";
-        const shouldShowDelete = isLocalBranch && gitAnchorCount > 1;
+        const shouldShowDelete =
+          isLocalBranch && isBranchDeleteSafeOfBranch[refName] === true;
 
         if (isOriginBranch) {
           refClassName = "commit-ref commit-ref-origin";
@@ -1385,6 +1387,7 @@ const CommitHistoryRow = ({
   threadOfId,
   isMergeDragSource,
   isMergeDropTarget,
+  isBranchDeleteSafeOfBranch,
   startCommitMergeDrag,
   updateCommitMergeDropTarget,
   clearCommitMergeDropTarget,
@@ -1399,6 +1402,7 @@ const CommitHistoryRow = ({
   threadOfId: { [id: string]: CodexThread };
   isMergeDragSource: boolean;
   isMergeDropTarget: boolean;
+  isBranchDeleteSafeOfBranch: { [branch: string]: boolean };
   startCommitMergeDrag: (event: DragEvent<HTMLDivElement>) => void;
   updateCommitMergeDropTarget: (event: DragEvent<HTMLDivElement>) => void;
   clearCommitMergeDropTarget: () => void;
@@ -1488,6 +1492,7 @@ const CommitHistoryRow = ({
           repoRoot={repoRoot}
           commitSha={commit.sha}
           commitShortSha={commit.shortSha}
+          isBranchDeleteSafeOfBranch={isBranchDeleteSafeOfBranch}
           openBranchDeleteModal={openBranchDeleteModal}
           startBranchPointerDrag={startBranchPointerDrag}
           finishBranchPointerDrag={finishBranchPointerDrag}
@@ -1601,6 +1606,169 @@ const CommitHistory = ({
     () => createCommitGraph(commits, worktreesOfHead),
     [commits, worktreesOfHead],
   );
+  // Branch delete buttons are only shown when the branch tip would stay visible after removing that branch and its matching origin ref.
+  const isBranchDeleteSafeOfBranch = useMemo(() => {
+    const commitOfSha: { [sha: string]: GitCommit } = {};
+    const branchShaOfBranch: { [branch: string]: string } = {};
+    const isBranchCheckedOutOfBranch: { [branch: string]: boolean } = {};
+    const rootShas: {
+      sha: string;
+      ignoredBranchOfBranch: { [branch: string]: boolean };
+    }[] = [];
+
+    const pushRootSha = ({
+      sha,
+      ignoredBranch,
+    }: {
+      sha: string;
+      ignoredBranch: string | null;
+    }) => {
+      const ignoredBranchOfBranch: { [branch: string]: boolean } = {};
+
+      if (ignoredBranch !== null) {
+        ignoredBranchOfBranch[ignoredBranch] = true;
+      }
+
+      rootShas.push({ sha, ignoredBranchOfBranch });
+    };
+    const pushReachableShas = ({
+      startSha,
+      isReachableSha,
+    }: {
+      startSha: string;
+      isReachableSha: { [sha: string]: boolean };
+    }) => {
+      const shasToRead = [startSha];
+
+      while (shasToRead.length > 0) {
+        const sha = shasToRead.pop();
+
+        if (sha === undefined || isReachableSha[sha] === true) {
+          continue;
+        }
+
+        isReachableSha[sha] = true;
+        const commit = commitOfSha[sha];
+
+        if (commit === undefined) {
+          continue;
+        }
+
+        for (const parent of commit.parents) {
+          shasToRead.push(parent);
+        }
+      }
+    };
+
+    // First collect the local branches and checked-out branches.
+    for (const commit of commits) {
+      commitOfSha[commit.sha] = commit;
+
+      for (const localBranch of commit.localBranches) {
+        branchShaOfBranch[localBranch] = commit.sha;
+      }
+
+      for (const ref of commit.refs) {
+        if (ref.startsWith("HEAD -> ")) {
+          isBranchCheckedOutOfBranch[cleanRefName(ref)] = true;
+        }
+      }
+    }
+
+    for (const worktree of worktrees) {
+      if (worktree.branch !== null) {
+        isBranchCheckedOutOfBranch[worktree.branch] = true;
+      }
+    }
+
+    // Then collect the refs that would keep commits visible.
+    for (const commit of commits) {
+      for (const localBranch of commit.localBranches) {
+        pushRootSha({ sha: commit.sha, ignoredBranch: localBranch });
+      }
+
+      for (const ref of commit.refs) {
+        if (ref.startsWith("HEAD -> ")) {
+          continue;
+        }
+
+        if (readIsHeadRef(ref)) {
+          pushRootSha({ sha: commit.sha, ignoredBranch: null });
+          continue;
+        }
+
+        if (ref.startsWith("tag: ")) {
+          pushRootSha({ sha: commit.sha, ignoredBranch: null });
+          continue;
+        }
+
+        const refName = cleanRefName(ref);
+
+        if (commit.localBranches.includes(refName)) {
+          continue;
+        }
+
+        if (refName === "origin/HEAD") {
+          const ignoredBranchOfBranch: { [branch: string]: boolean } = {};
+
+          for (const branch of Object.keys(branchShaOfBranch)) {
+            if (commit.refs.includes(`origin/${branch}`)) {
+              ignoredBranchOfBranch[branch] = true;
+            }
+          }
+
+          rootShas.push({ sha: commit.sha, ignoredBranchOfBranch });
+          continue;
+        }
+
+        if (refName.startsWith("origin/")) {
+          pushRootSha({
+            sha: commit.sha,
+            ignoredBranch: refName.slice("origin/".length),
+          });
+          continue;
+        }
+
+        pushRootSha({ sha: commit.sha, ignoredBranch: null });
+      }
+    }
+
+    for (const worktree of worktrees) {
+      if (worktree.head === null) {
+        continue;
+      }
+
+      pushRootSha({ sha: worktree.head, ignoredBranch: worktree.branch });
+    }
+
+    // Finally test each branch as if both the local branch and origin branch were gone.
+    const nextIsBranchDeleteSafeOfBranch: { [branch: string]: boolean } = {};
+
+    for (const branch of Object.keys(branchShaOfBranch)) {
+      if (isBranchCheckedOutOfBranch[branch] === true) {
+        nextIsBranchDeleteSafeOfBranch[branch] = false;
+        continue;
+      }
+
+      const isReachableSha: { [sha: string]: boolean } = {};
+
+      for (const root of rootShas) {
+        if (root.ignoredBranchOfBranch[branch] === true) {
+          continue;
+        }
+
+        pushReachableShas({
+          startSha: root.sha,
+          isReachableSha,
+        });
+      }
+
+      nextIsBranchDeleteSafeOfBranch[branch] =
+        isReachableSha[branchShaOfBranch[branch]] === true;
+    }
+
+    return nextIsBranchDeleteSafeOfBranch;
+  }, [commits, worktrees]);
   const visibleGraph = useMemo(() => {
     if (!shouldShowChatOnly) {
       return graph;
@@ -2438,6 +2606,7 @@ const CommitHistory = ({
                 mergeDropTargetRowId === row.id ||
                 branchPointerDropTargetRowId === row.id
               }
+              isBranchDeleteSafeOfBranch={isBranchDeleteSafeOfBranch}
               startCommitMergeDrag={(event) =>
                 startCommitMergeDrag({ event, row })
               }
