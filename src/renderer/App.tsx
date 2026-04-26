@@ -2,14 +2,14 @@ import {
   Bot,
   ExternalLink,
   GitBranch,
-  GitBranchMinus,
-  GitBranchPlus,
   GitCommitHorizontal,
   MessageSquare,
   MessageSquarePlus,
   Plus,
   RefreshCw,
+  RotateCcw,
   Trash2,
+  Upload,
 } from "lucide-react";
 import {
   useCallback,
@@ -2787,7 +2787,10 @@ export const App = () => {
             onClick={() => openBranchTagChangeModal("push")}
             disabled={branchTagChanges.length === 0}
           >
-            <GitBranchPlus size={18} />
+            <span className="branch-action-icon">
+              <GitBranch size={18} />
+              <Upload className="branch-action-icon-mark" size={10} />
+            </span>
           </button>
           <button
             className="icon-button"
@@ -2795,7 +2798,10 @@ export const App = () => {
             onClick={() => openBranchTagChangeModal("reset")}
             disabled={branchTagChanges.length === 0}
           >
-            <GitBranchMinus size={18} />
+            <span className="branch-action-icon">
+              <GitBranch size={18} />
+              <RotateCcw className="branch-action-icon-mark" size={10} />
+            </span>
           </button>
           <button
             className="icon-button"
