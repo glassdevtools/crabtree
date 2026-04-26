@@ -1,4 +1,8 @@
-import type { CodexGitInfo, CodexThread } from "../shared/types";
+import type {
+  CodexGitInfo,
+  CodexThread,
+  CodexThreadStatus,
+} from "../shared/types";
 import type { AppServerClient } from "./appServerClient";
 
 // These limits keep the first dashboard load bounded while still showing a useful history.
@@ -61,6 +65,33 @@ const convertGitInfo = (value: unknown): CodexGitInfo | null => {
   };
 };
 
+const convertThreadStatus = (value: unknown): CodexThreadStatus => {
+  if (!isObject(value) || typeof value.type !== "string") {
+    return { type: "notLoaded" };
+  }
+
+  switch (value.type) {
+    case "active": {
+      const activeFlags = Array.isArray(value.activeFlags)
+        ? value.activeFlags.filter(
+            (activeFlag): activeFlag is string =>
+              typeof activeFlag === "string",
+          )
+        : [];
+
+      return { type: "active", activeFlags };
+    }
+    case "idle":
+      return { type: "idle" };
+    case "systemError":
+      return { type: "systemError" };
+    case "notLoaded":
+      return { type: "notLoaded" };
+    default:
+      return { type: "notLoaded" };
+  }
+};
+
 const convertThread = ({
   value,
   archived,
@@ -86,6 +117,7 @@ const convertThread = ({
     createdAt: readNumber({ value: value.createdAt, fallback: 0 }),
     updatedAt: readNumber({ value: value.updatedAt, fallback: 0 }),
     archived,
+    status: convertThreadStatus(value.status),
     gitInfo: convertGitInfo(value.gitInfo),
   };
 

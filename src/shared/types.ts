@@ -4,6 +4,12 @@ export type CodexGitInfo = {
   originUrl: string | null;
 };
 
+export type CodexThreadStatus =
+  | { type: "notLoaded" }
+  | { type: "idle" }
+  | { type: "systemError" }
+  | { type: "active"; activeFlags: string[] };
+
 export type CodexThread = {
   id: string;
   name: string | null;
@@ -15,6 +21,7 @@ export type CodexThread = {
   createdAt: number;
   updatedAt: number;
   archived: boolean;
+  status: CodexThreadStatus;
   gitInfo: CodexGitInfo | null;
 };
 
