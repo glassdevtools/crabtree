@@ -153,16 +153,13 @@ const syncBranchTagChangesWithDashboardData = ({
     }
   }
 
-  // Deleted local branches no longer show up in the dashboard comparison, so keep those explicit delete choices in memory.
+  // Keep explicit branch choices that the dashboard cannot report, like local deletes and local-only branch moves.
   for (const branchTagChange of branchTagChanges) {
-    if (branchTagChange.newSha !== null) {
-      continue;
-    }
-
     const branchTagChangeOfBranch =
       branchTagChangeOfBranchOfRepo[branchTagChange.repoRoot];
 
     if (branchTagChangeOfBranch === undefined) {
+      nextBranchTagChanges.push(branchTagChange);
       continue;
     }
 
