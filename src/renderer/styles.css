@@ -283,6 +283,11 @@ button {
   pointer-events: none;
 }
 
+.commit-graph-chat-link {
+  cursor: pointer;
+  pointer-events: all;
+}
+
 .commit-history-row {
   position: relative;
   z-index: 2;
@@ -299,19 +304,6 @@ button {
 
 .commit-history-row-worktree {
   color: #4f5660;
-}
-
-.commit-history-row-clickable {
-  cursor: pointer;
-}
-
-.commit-history-row-clickable:hover {
-  background: #eaf4ff;
-}
-
-.commit-history-row:focus {
-  outline: 2px solid #3f8cff;
-  outline-offset: -2px;
 }
 
 .commit-graph-cell {

@@ -8,7 +8,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type { KeyboardEvent, MouseEvent } from "react";
+import type { MouseEvent } from "react";
 import type {
   CodexThread,
   DashboardData,
@@ -43,6 +43,7 @@ type CommitGraphRow = {
   id: string;
   commit: GitCommit;
   worktree: GitWorktree | null;
+  threadIds: string[];
   lane: number;
   colorIndex: number;
   rowIndex: number;
@@ -54,6 +55,7 @@ type CommitGraphItem = {
   worktree: GitWorktree | null;
   sha: string;
   parents: string[];
+  threadIds: string[];
 };
 
 type CommitGraphLane = {
@@ -160,6 +162,9 @@ const createCommitGraph = (
 
   for (const commit of commits) {
     const worktrees = worktreesOfHead[commit.sha] ?? [];
+    const shouldWorktreeOwnChat = worktrees.some(
+      (worktree) => worktree.threadIds.length > 0,
+    );
 
     for (const worktree of worktrees) {
       graphItems.push({
@@ -168,6 +173,7 @@ const createCommitGraph = (
         worktree,
         sha: `worktree:${worktree.path}:${commit.sha}`,
         parents: [commit.sha],
+        threadIds: worktree.threadIds,
       });
     }
 
@@ -177,6 +183,7 @@ const createCommitGraph = (
       worktree: null,
       sha: commit.sha,
       parents: commit.parents,
+      threadIds: shouldWorktreeOwnChat ? [] : commit.threadIds,
     });
   }
 
@@ -230,6 +237,7 @@ const createCommitGraph = (
       id: graphItem.id,
       commit: graphItem.commit,
       worktree: graphItem.worktree,
+      threadIds: graphItem.threadIds,
       lane,
       colorIndex: commitLane.colorIndex,
       rowIndex,
@@ -449,6 +457,20 @@ const CommitGraphSvg = ({
     return readCommitGraphY(rowIndex);
   };
 
+  const openRowThread = async (
+    event: MouseEvent<SVGGElement>,
+    row: CommitGraphRow,
+  ) => {
+    event.stopPropagation();
+    const threadId = row.threadIds[0];
+
+    if (threadId === undefined) {
+      return;
+    }
+
+    await window.molttree.openCodexThread(threadId);
+  };
+
   return (
     <svg
       className="commit-graph-svg"
@@ -503,9 +525,7 @@ const CommitGraphSvg = ({
       ))}
 
       {graph.rows.map((row) => {
-        const threadIds =
-          row.worktree === null ? row.commit.threadIds : row.worktree.threadIds;
-        const shouldShowChat = threadIds.length > 0;
+        const shouldShowChat = row.threadIds.length > 0;
 
         if (!shouldShowChat) {
           return null;
@@ -518,7 +538,11 @@ const CommitGraphSvg = ({
           COMMIT_GRAPH_MARKER_SLOT_WIDTH;
 
         return (
-          <g key={`chat-${row.id}`}>
+          <g
+            className="commit-graph-chat-link"
+            key={`chat-${row.id}`}
+            onClick={(event) => openRowThread(event, row)}
+          >
             <MessageSquare
               x={chatCenterX - COMMIT_GRAPH_CHAT_ICON_SIZE / 2}
               y={centerY - COMMIT_GRAPH_CHAT_ICON_SIZE / 2}
@@ -545,56 +569,21 @@ const CommitHistoryRow = ({
   const { commit } = row;
   const refs = row.worktree === null ? commit.refs : [];
   const worktrees = row.worktree === null ? [] : [row.worktree];
-  const threadIds =
-    row.worktree === null ? commit.threadIds : row.worktree.threadIds;
   const subject = row.worktree === null ? commit.subject : row.worktree.path;
-  const shouldOpenThread = threadIds.length > 0;
-  let rowClassName =
+  const rowClassName =
     row.worktree === null
       ? "commit-history-row"
       : "commit-history-row commit-history-row-worktree";
 
-  if (shouldOpenThread) {
-    rowClassName += " commit-history-row-clickable";
-  }
-
-  const openCommitThread = async () => {
-    const threadId = threadIds[0];
-
-    if (threadId === undefined) {
-      return;
-    }
-
-    await window.molttree.openCodexThread(threadId);
-  };
-
-  const openCommitThreadFromKey = async (
-    event: KeyboardEvent<HTMLDivElement>,
-  ) => {
-    if (event.key !== "Enter" && event.key !== " ") {
-      return;
-    }
-
-    event.preventDefault();
-    await openCommitThread();
-  };
-
   return (
-    <div
-      className={rowClassName}
-      style={{ gridTemplateColumns }}
-      role={shouldOpenThread ? "button" : undefined}
-      tabIndex={shouldOpenThread ? 0 : undefined}
-      onClick={shouldOpenThread ? openCommitThread : undefined}
-      onKeyDown={shouldOpenThread ? openCommitThreadFromKey : undefined}
-    >
+    <div className={rowClassName} style={{ gridTemplateColumns }}>
       <div className="commit-graph-cell" />
       <div className="commit-message-cell">
         <div className="commit-message-line">
           <CommitLabels
             refs={refs}
             worktrees={worktrees}
-            threadIds={threadIds}
+            threadIds={row.threadIds}
             threadOfId={threadOfId}
           />
           <span className="commit-subject" title={subject}>
