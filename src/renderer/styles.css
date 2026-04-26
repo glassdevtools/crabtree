@@ -244,19 +244,24 @@ button {
   text-overflow: ellipsis;
 }
 
-.commit-history-graph-title,
-.commit-history-graph-filter {
+.commit-history-graph-title {
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.commit-history-graph-filter {
-  overflow: hidden;
+.commit-history-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: -2px 0 8px;
+  color: #5d6571;
+  font-size: 12px;
+  font-weight: 650;
 }
 
-.commit-history-graph-filter input {
+.commit-history-filter input {
   margin: 0;
 }
 

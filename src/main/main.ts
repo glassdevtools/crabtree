@@ -3,7 +3,11 @@ import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { simpleGit } from "simple-git";
-import type { GitMergeRequest } from "../shared/types";
+import type {
+  GitCommitChangesRequest,
+  GitDeleteWorktreeRequest,
+  GitMergeRequest,
+} from "../shared/types";
 import { readDashboardData } from "./dashboard";
 
 // The main process owns local system access. The renderer only receives narrow, typed IPC methods through preload.
@@ -103,6 +107,54 @@ const readGitMergeRequest = (value: unknown) => {
   };
 
   return gitMergeRequest;
+};
+
+const readGitCommitChangesRequest = (value: unknown) => {
+  if (!isObject(value)) {
+    throw new Error("gitCommitChangesRequest must be an object.");
+  }
+
+  if (
+    typeof value.path !== "string" ||
+    value.path.length === 0 ||
+    typeof value.message !== "string" ||
+    value.message.trim().length === 0
+  ) {
+    throw new Error("gitCommitChangesRequest needs a path and message.");
+  }
+
+  const gitCommitChangesRequest: GitCommitChangesRequest = {
+    path: value.path,
+    message: value.message.trim(),
+  };
+
+  return gitCommitChangesRequest;
+};
+
+const readGitDeleteWorktreeRequest = (value: unknown) => {
+  if (!isObject(value)) {
+    throw new Error("gitDeleteWorktreeRequest must be an object.");
+  }
+
+  if (
+    typeof value.repoRoot !== "string" ||
+    value.repoRoot.length === 0 ||
+    typeof value.path !== "string" ||
+    value.path.length === 0
+  ) {
+    throw new Error("gitDeleteWorktreeRequest needs a repo root and path.");
+  }
+
+  if (value.repoRoot === value.path) {
+    throw new Error("Cannot delete the main repository worktree.");
+  }
+
+  const gitDeleteWorktreeRequest: GitDeleteWorktreeRequest = {
+    repoRoot: value.repoRoot,
+    path: value.path,
+  };
+
+  return gitDeleteWorktreeRequest;
 };
 
 const logGitMerge = (message: string, value: unknown) => {
@@ -234,6 +286,24 @@ const startGitMerge = async ({
   }
 };
 
+const commitAllGitChanges = async ({
+  path,
+  message,
+}: GitCommitChangesRequest) => {
+  await runGitCommandForPath({ path, args: ["add", "--all", "--", "."] });
+  await runGitCommandForPath({ path, args: ["commit", "-m", message] });
+};
+
+const deleteGitWorktree = async ({
+  repoRoot,
+  path,
+}: GitDeleteWorktreeRequest) => {
+  await runGitCommandForPath({
+    path: repoRoot,
+    args: ["worktree", "remove", path],
+  });
+};
+
 ipcMain.handle("dashboard:read", async () => {
   return await readDashboardData();
 });
@@ -275,6 +345,18 @@ ipcMain.handle("git:unstageChanges", async (_event, path: unknown) => {
     path,
     args: ["restore", "--staged", "--", "."],
   });
+});
+
+ipcMain.handle("git:commitAllChanges", async (_event, value: unknown) => {
+  const gitCommitChangesRequest = readGitCommitChangesRequest(value);
+
+  await commitAllGitChanges(gitCommitChangesRequest);
+});
+
+ipcMain.handle("git:deleteWorktree", async (_event, value: unknown) => {
+  const gitDeleteWorktreeRequest = readGitDeleteWorktreeRequest(value);
+
+  await deleteGitWorktree(gitDeleteWorktreeRequest);
 });
 
 ipcMain.handle("git:startMerge", async (_event, value: unknown) => {

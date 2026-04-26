@@ -43,7 +43,9 @@ const COMMIT_GRAPH_CODE_ICON_SIZE = 14;
 const COMMIT_GRAPH_COMMIT_ICON_SIZE = 12;
 const COMMIT_GRAPH_TRASH_ICON_SIZE = 13;
 const COMMIT_GRAPH_ACTION_HIT_SIZE = 14;
-const COMMIT_GRAPH_MARKER_SLOT_WIDTH = 18;
+// TODO: AI-PICKED-VALUE: The action group sits close to the graph edge while keeping icons easy to click.
+const COMMIT_GRAPH_ACTION_RIGHT_PADDING = 5;
+const COMMIT_GRAPH_ACTION_ICON_SPACING = 20;
 const COMMIT_GRAPH_CHANGE_TEXT_WIDTH = 46;
 const COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO = 0;
 // Dashboard reads touch Codex and Git, so automatic refreshes are spaced out and share the manual refresh path.
@@ -179,6 +181,36 @@ type CommitGraph = {
   rows: CommitGraphRow[];
   segments: CommitGraphSegment[];
   laneCount: number;
+};
+
+const readCommitGraphRowThread = (
+  row: CommitGraphRow,
+  threadOfId: { [id: string]: CodexThread },
+) => {
+  const threadId = row.threadIds[0];
+
+  if (threadId === undefined) {
+    return null;
+  }
+
+  return threadOfId[threadId] ?? null;
+};
+
+const readCommitGraphRowCwd = (
+  row: CommitGraphRow,
+  threadOfId: { [id: string]: CodexThread },
+) => {
+  if (row.kind === "worktree" && row.worktree !== null) {
+    return row.worktree.path;
+  }
+
+  const thread = readCommitGraphRowThread(row, threadOfId);
+
+  if (thread === null || thread.cwd.length === 0) {
+    return null;
+  }
+
+  return thread.cwd;
 };
 
 const formatDate = (timestamp: number) => {
@@ -695,17 +727,21 @@ const BranchTags = ({
 const CommitGraphSvg = ({
   graph,
   graphWidth,
+  repoRoot,
   threadOfId,
   gitChangesOfCwd,
   isWorktreeMergedOfPath,
   openCommitMessageModal,
+  deleteGitWorktree,
 }: {
   graph: CommitGraph;
   graphWidth: number;
+  repoRoot: string;
   threadOfId: { [id: string]: CodexThread };
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   isWorktreeMergedOfPath: { [path: string]: boolean };
   openCommitMessageModal: (row: CommitGraphRow) => void;
+  deleteGitWorktree: (worktree: GitWorktree) => Promise<void>;
 }) => {
   const graphHeight = Math.max(
     COMMIT_GRAPH_ROW_HEIGHT,
@@ -719,22 +755,12 @@ const CommitGraphSvg = ({
     return readCommitGraphY(rowIndex);
   };
 
-  const readRowThread = (row: CommitGraphRow) => {
-    const threadId = row.threadIds[0];
-
-    if (threadId === undefined) {
-      return null;
-    }
-
-    return threadOfId[threadId] ?? null;
-  };
-
   const openRowThread = async (
     event: MouseEvent<SVGGElement>,
     row: CommitGraphRow,
   ) => {
     event.stopPropagation();
-    const thread = readRowThread(row);
+    const thread = readCommitGraphRowThread(row, threadOfId);
 
     if (thread === null) {
       return;
@@ -747,7 +773,7 @@ const CommitGraphSvg = ({
     row: CommitGraphRow,
   ) => {
     event.stopPropagation();
-    const thread = readRowThread(row);
+    const thread = readCommitGraphRowThread(row, threadOfId);
 
     if (thread === null || thread.cwd.length === 0) {
       return;
@@ -762,19 +788,14 @@ const CommitGraphSvg = ({
     event.stopPropagation();
     openCommitMessageModal(row);
   };
-  const readRowCwd = (row: CommitGraphRow) => {
-    if (row.kind === "worktree" && row.worktree !== null) {
-      return row.worktree.path;
-    }
-
-    const thread = readRowThread(row);
-
-    if (thread === null || thread.cwd.length === 0) {
-      return null;
-    }
-
-    return thread.cwd;
+  const deleteRowWorktree = async (
+    event: MouseEvent<SVGGElement>,
+    worktree: GitWorktree,
+  ) => {
+    event.stopPropagation();
+    await deleteGitWorktree(worktree);
   };
+
   const renderChangeCount = ({
     changeSummary,
     rightX,
@@ -885,7 +906,8 @@ const CommitGraphSvg = ({
 
       {graph.rows.map((row) => {
         const shouldShowChat = row.threadIds.length > 0;
-        const rowCwd = readRowCwd(row);
+        const worktree = row.worktree;
+        const rowCwd = readCommitGraphRowCwd(row, threadOfId);
         const storedChangeSummary =
           rowCwd === null ? undefined : gitChangesOfCwd[rowCwd];
         const changeSummary = storedChangeSummary ?? EMPTY_GIT_CHANGE_SUMMARY;
@@ -894,12 +916,13 @@ const CommitGraphSvg = ({
           totalChangeSummary.added > 0 || totalChangeSummary.removed > 0;
         const shouldShowTrash =
           row.kind === "worktree" &&
-          row.worktree !== null &&
+          worktree !== null &&
+          worktree.path !== repoRoot &&
           storedChangeSummary !== undefined &&
           readIsGitChangeSummaryEmpty(changeSummary) &&
-          isWorktreeMergedOfPath[row.worktree.path] === true;
+          isWorktreeMergedOfPath[worktree.path] === true;
 
-        const thread = readRowThread(row);
+        const thread = readCommitGraphRowThread(row, threadOfId);
         const canOpenPath = thread !== null && thread.cwd.length > 0;
         const canOpenCommitMessage = rowCwd !== null;
 
@@ -914,20 +937,37 @@ const CommitGraphSvg = ({
         }
 
         const centerY = readCommitGraphY(row.rowIndex);
-        const trashCenterX =
+        let nextIconCenterX =
           graphWidth -
-          COMMIT_GRAPH_PADDING_LEFT -
-          COMMIT_GRAPH_MARKER_SLOT_WIDTH * 4;
-        const changeTextRightX = trashCenterX - COMMIT_GRAPH_MARKER_SLOT_WIDTH;
-        const commitCenterX = changeTextRightX - COMMIT_GRAPH_CHANGE_TEXT_WIDTH;
-        const chatCenterX =
-          graphWidth -
-          COMMIT_GRAPH_PADDING_LEFT -
-          COMMIT_GRAPH_MARKER_SLOT_WIDTH * 2;
-        const vscodeCenterX =
-          graphWidth -
-          COMMIT_GRAPH_PADDING_LEFT -
-          COMMIT_GRAPH_MARKER_SLOT_WIDTH;
+          COMMIT_GRAPH_ACTION_RIGHT_PADDING -
+          COMMIT_GRAPH_ACTION_HIT_SIZE / 2;
+        let trashCenterX: number | null = null;
+        let vscodeCenterX: number | null = null;
+        let chatCenterX: number | null = null;
+        let commitCenterX: number | null = null;
+
+        if (shouldShowTrash) {
+          trashCenterX = nextIconCenterX;
+          nextIconCenterX -= COMMIT_GRAPH_ACTION_ICON_SPACING;
+        }
+
+        if (canOpenPath) {
+          vscodeCenterX = nextIconCenterX;
+          nextIconCenterX -= COMMIT_GRAPH_ACTION_ICON_SPACING;
+        }
+
+        if (shouldShowChat) {
+          chatCenterX = nextIconCenterX;
+          nextIconCenterX -= COMMIT_GRAPH_ACTION_ICON_SPACING;
+        }
+
+        if (canOpenCommitMessage) {
+          commitCenterX = nextIconCenterX;
+          nextIconCenterX -= COMMIT_GRAPH_ACTION_ICON_SPACING;
+        }
+
+        const changeTextRightX =
+          nextIconCenterX + COMMIT_GRAPH_ACTION_HIT_SIZE / 2;
 
         return (
           <g key={`actions-${row.id}`}>
@@ -939,17 +979,7 @@ const CommitGraphSvg = ({
                   title: "Total changes",
                 })
               : null}
-            {shouldShowTrash ? (
-              <Trash2
-                className="commit-graph-action-muted"
-                x={trashCenterX - COMMIT_GRAPH_TRASH_ICON_SIZE / 2}
-                y={centerY - COMMIT_GRAPH_TRASH_ICON_SIZE / 2}
-                size={COMMIT_GRAPH_TRASH_ICON_SIZE}
-                color={COMMIT_GRAPH_GRAY_COLOR}
-                strokeWidth={2}
-              />
-            ) : null}
-            {canOpenCommitMessage ? (
+            {commitCenterX === null ? null : (
               <g
                 className="commit-graph-action-link"
                 onClick={(event) => openRowCommitMessageModal(event, row)}
@@ -969,8 +999,8 @@ const CommitGraphSvg = ({
                   strokeWidth={2.5}
                 />
               </g>
-            ) : null}
-            {shouldShowChat ? (
+            )}
+            {chatCenterX === null ? null : (
               <g
                 className="commit-graph-action-link"
                 onClick={(event) => openRowThread(event, row)}
@@ -990,8 +1020,8 @@ const CommitGraphSvg = ({
                   strokeWidth={2}
                 />
               </g>
-            ) : null}
-            {canOpenPath ? (
+            )}
+            {vscodeCenterX === null ? null : (
               <g
                 className="commit-graph-action-link"
                 onClick={(event) => openRowVSCode(event, row)}
@@ -1007,6 +1037,27 @@ const CommitGraphSvg = ({
                   x={vscodeCenterX - COMMIT_GRAPH_CODE_ICON_SIZE / 2}
                   y={centerY - COMMIT_GRAPH_CODE_ICON_SIZE / 2}
                   size={COMMIT_GRAPH_CODE_ICON_SIZE}
+                  color={COMMIT_GRAPH_GRAY_COLOR}
+                  strokeWidth={2}
+                />
+              </g>
+            )}
+            {trashCenterX !== null && worktree !== null ? (
+              <g
+                className="commit-graph-action-link"
+                onClick={(event) => deleteRowWorktree(event, worktree)}
+              >
+                <rect
+                  className="commit-graph-action-hit-area"
+                  x={trashCenterX - COMMIT_GRAPH_ACTION_HIT_SIZE / 2}
+                  y={centerY - COMMIT_GRAPH_ACTION_HIT_SIZE / 2}
+                  width={COMMIT_GRAPH_ACTION_HIT_SIZE}
+                  height={COMMIT_GRAPH_ACTION_HIT_SIZE}
+                />
+                <Trash2
+                  x={trashCenterX - COMMIT_GRAPH_TRASH_ICON_SIZE / 2}
+                  y={centerY - COMMIT_GRAPH_TRASH_ICON_SIZE / 2}
+                  size={COMMIT_GRAPH_TRASH_ICON_SIZE}
                   color={COMMIT_GRAPH_GRAY_COLOR}
                   strokeWidth={2}
                 />
@@ -1693,7 +1744,6 @@ const CommitHistory = ({
     try {
       await window.molttree.startGitMerge(gitMergeRequest);
       logCommitMerge("startGitMerge finished", gitMergeRequest);
-      await refreshDashboard();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to start merge.";
@@ -1702,6 +1752,8 @@ const CommitHistory = ({
         gitMergeRequest,
       });
       showErrorMessage(message);
+    } finally {
+      await refreshDashboard();
     }
   };
   const openCommitMessageModal = (row: CommitGraphRow) => {
@@ -1712,132 +1764,177 @@ const CommitHistory = ({
     setCommitMessageRow(null);
     setCommitMessage("");
   };
-  const submitCommitMessage = (event: FormEvent<HTMLFormElement>) => {
+  const submitCommitMessage = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    closeCommitMessageModal();
+
+    if (commitMessageRow === null) {
+      return;
+    }
+
+    const path = readCommitGraphRowCwd(commitMessageRow, threadOfId);
+
+    if (path === null) {
+      showErrorMessage("No working directory found for this row.");
+      return;
+    }
+
+    try {
+      await window.molttree.commitAllGitChanges({
+        path,
+        message: commitMessage.trim(),
+      });
+      closeCommitMessageModal();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to commit changes.";
+      showErrorMessage(message);
+    } finally {
+      await refreshDashboard();
+    }
+  };
+  const deleteGitWorktree = async (worktree: GitWorktree) => {
+    try {
+      await window.molttree.deleteGitWorktree({
+        repoRoot,
+        path: worktree.path,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to delete worktree.";
+      showErrorMessage(message);
+    } finally {
+      await refreshDashboard();
+    }
   };
 
   return (
-    <div className="commit-history" ref={commitHistoryRef}>
-      <div className="commit-history-header">
-        <div className="commit-history-header-cell commit-history-graph-title">
-          <label className="commit-history-graph-filter">
-            Graph
-            <input
-              type="checkbox"
-              checked={shouldShowChatOnly}
-              onChange={(event) => setShouldShowChatOnly(event.target.checked)}
-            />
-            Chat only
-          </label>
-          <CommitHistoryColumnResizeHandle
-            columnKey="graph"
-            startColumnResize={startColumnResize}
-            updateColumnResize={updateColumnResize}
-            finishColumnResize={finishColumnResize}
-          />
-        </div>
-        <div className="commit-history-header-cell">
-          <span>Branch Tags</span>
-          <CommitHistoryColumnResizeHandle
-            columnKey="branchTags"
-            startColumnResize={startColumnResize}
-            updateColumnResize={updateColumnResize}
-            finishColumnResize={finishColumnResize}
-          />
-        </div>
-        <div className="commit-history-header-cell">
-          <span>Description</span>
-          <CommitHistoryColumnResizeHandle
-            columnKey="description"
-            startColumnResize={startColumnResize}
-            updateColumnResize={updateColumnResize}
-            finishColumnResize={finishColumnResize}
-          />
-        </div>
-        <div className="commit-history-header-cell">
-          <span>Commit</span>
-          <CommitHistoryColumnResizeHandle
-            columnKey="commit"
-            startColumnResize={startColumnResize}
-            updateColumnResize={updateColumnResize}
-            finishColumnResize={finishColumnResize}
-          />
-        </div>
-        <div className="commit-history-header-cell">
-          <span>Author</span>
-          <CommitHistoryColumnResizeHandle
-            columnKey="author"
-            startColumnResize={startColumnResize}
-            updateColumnResize={updateColumnResize}
-            finishColumnResize={finishColumnResize}
-          />
-        </div>
-        <div className="commit-history-header-cell">
-          <span>Date</span>
-          <CommitHistoryColumnResizeHandle
-            columnKey="date"
-            startColumnResize={startColumnResize}
-            updateColumnResize={updateColumnResize}
-            finishColumnResize={finishColumnResize}
-          />
-        </div>
-      </div>
-      <div className="commit-history-body">
-        <CommitGraphSvg
-          graph={visibleGraph}
-          graphWidth={graphWidth}
-          threadOfId={threadOfId}
-          gitChangesOfCwd={gitChangesOfCwd}
-          isWorktreeMergedOfPath={isWorktreeMergedOfPath}
-          openCommitMessageModal={openCommitMessageModal}
+    <>
+      <label className="commit-history-filter">
+        <input
+          type="checkbox"
+          checked={shouldShowChatOnly}
+          onChange={(event) => setShouldShowChatOnly(event.target.checked)}
         />
-        {visibleGraph.rows.map((row) => (
-          <CommitHistoryRow
-            key={row.id}
-            row={row}
+        Show chats only
+      </label>
+      <div className="commit-history" ref={commitHistoryRef}>
+        <div className="commit-history-header">
+          <div className="commit-history-header-cell commit-history-graph-title">
+            <span>Graph</span>
+            <CommitHistoryColumnResizeHandle
+              columnKey="graph"
+              startColumnResize={startColumnResize}
+              updateColumnResize={updateColumnResize}
+              finishColumnResize={finishColumnResize}
+            />
+          </div>
+          <div className="commit-history-header-cell">
+            <span>Branch Tags</span>
+            <CommitHistoryColumnResizeHandle
+              columnKey="branchTags"
+              startColumnResize={startColumnResize}
+              updateColumnResize={updateColumnResize}
+              finishColumnResize={finishColumnResize}
+            />
+          </div>
+          <div className="commit-history-header-cell">
+            <span>Description</span>
+            <CommitHistoryColumnResizeHandle
+              columnKey="description"
+              startColumnResize={startColumnResize}
+              updateColumnResize={updateColumnResize}
+              finishColumnResize={finishColumnResize}
+            />
+          </div>
+          <div className="commit-history-header-cell">
+            <span>Commit</span>
+            <CommitHistoryColumnResizeHandle
+              columnKey="commit"
+              startColumnResize={startColumnResize}
+              updateColumnResize={updateColumnResize}
+              finishColumnResize={finishColumnResize}
+            />
+          </div>
+          <div className="commit-history-header-cell">
+            <span>Author</span>
+            <CommitHistoryColumnResizeHandle
+              columnKey="author"
+              startColumnResize={startColumnResize}
+              updateColumnResize={updateColumnResize}
+              finishColumnResize={finishColumnResize}
+            />
+          </div>
+          <div className="commit-history-header-cell">
+            <span>Date</span>
+            <CommitHistoryColumnResizeHandle
+              columnKey="date"
+              startColumnResize={startColumnResize}
+              updateColumnResize={updateColumnResize}
+              finishColumnResize={finishColumnResize}
+            />
+          </div>
+        </div>
+        <div className="commit-history-body">
+          <CommitGraphSvg
+            graph={visibleGraph}
+            graphWidth={graphWidth}
             repoRoot={repoRoot}
             threadOfId={threadOfId}
-            isMergeDragSource={commitMergeDrag?.rowId === row.id}
-            isMergeDropTarget={mergeDropTargetRowId === row.id}
-            startCommitMergeDrag={(event) =>
-              startCommitMergeDrag({ event, row })
-            }
-            updateCommitMergeDropTarget={(event) =>
-              updateCommitMergeDropTarget({ event, row })
-            }
-            clearCommitMergeDropTarget={clearCommitMergeDropTarget}
-            finishCommitMergeDrop={(event) =>
-              finishCommitMergeDrop({ event, row })
-            }
-            finishCommitMergeDrag={finishCommitMergeDrag}
+            gitChangesOfCwd={gitChangesOfCwd}
+            isWorktreeMergedOfPath={isWorktreeMergedOfPath}
+            openCommitMessageModal={openCommitMessageModal}
+            deleteGitWorktree={deleteGitWorktree}
           />
-        ))}
-      </div>
-      {commitMessageRow === null ? null : (
-        <div className="commit-message-modal-backdrop">
-          <form className="commit-message-modal" onSubmit={submitCommitMessage}>
-            <h3>Commit Message</h3>
-            <input
-              autoFocus
-              value={commitMessage}
-              onChange={(event) => setCommitMessage(event.target.value)}
+          {visibleGraph.rows.map((row) => (
+            <CommitHistoryRow
+              key={row.id}
+              row={row}
+              repoRoot={repoRoot}
+              threadOfId={threadOfId}
+              isMergeDragSource={commitMergeDrag?.rowId === row.id}
+              isMergeDropTarget={mergeDropTargetRowId === row.id}
+              startCommitMergeDrag={(event) =>
+                startCommitMergeDrag({ event, row })
+              }
+              updateCommitMergeDropTarget={(event) =>
+                updateCommitMergeDropTarget({ event, row })
+              }
+              clearCommitMergeDropTarget={clearCommitMergeDropTarget}
+              finishCommitMergeDrop={(event) =>
+                finishCommitMergeDrop({ event, row })
+              }
+              finishCommitMergeDrag={finishCommitMergeDrag}
             />
-            <div className="commit-message-modal-actions">
-              <button type="button" onClick={closeCommitMessageModal}>
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={commitMessage.trim().length === 0}
-              >
-                Commit
-              </button>
-            </div>
-          </form>
+          ))}
         </div>
-      )}
-    </div>
+        {commitMessageRow === null ? null : (
+          <div className="commit-message-modal-backdrop">
+            <form
+              className="commit-message-modal"
+              onSubmit={submitCommitMessage}
+            >
+              <h3>Commit Message</h3>
+              <input
+                autoFocus
+                value={commitMessage}
+                onChange={(event) => setCommitMessage(event.target.value)}
+              />
+              <div className="commit-message-modal-actions">
+                <button type="button" onClick={closeCommitMessageModal}>
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={commitMessage.trim().length === 0}
+                >
+                  Commit
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+      </div>
+    </>
   );
 };
 

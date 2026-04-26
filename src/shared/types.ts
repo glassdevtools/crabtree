@@ -44,6 +44,16 @@ export type GitMergeRequest = {
   targetWorktreePath: string | null;
 };
 
+export type GitCommitChangesRequest = {
+  path: string;
+  message: string;
+};
+
+export type GitDeleteWorktreeRequest = {
+  repoRoot: string;
+  path: string;
+};
+
 export type GitCommit = {
   sha: string;
   shortSha: string;
@@ -81,5 +91,11 @@ export type MoltTreeApi = {
   openVSCodePath: (path: string) => Promise<void>;
   stageGitChanges: (path: string) => Promise<void>;
   unstageGitChanges: (path: string) => Promise<void>;
+  commitAllGitChanges: (
+    gitCommitChangesRequest: GitCommitChangesRequest,
+  ) => Promise<void>;
+  deleteGitWorktree: (
+    gitDeleteWorktreeRequest: GitDeleteWorktreeRequest,
+  ) => Promise<void>;
   startGitMerge: (gitMergeRequest: GitMergeRequest) => Promise<void>;
 };
