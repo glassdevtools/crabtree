@@ -555,6 +555,13 @@ const BranchTags = ({
     return null;
   }
 
+  const isHead = refs.some(
+    (ref) => ref === "HEAD" || ref.startsWith("HEAD -> "),
+  );
+  const normalRefs = refs.filter(
+    (ref) => ref !== "HEAD" && !ref.startsWith("HEAD -> "),
+  );
+
   const readWorktreeTagText = (path: string) => {
     if (path === repoRoot) {
       return "HEAD";
@@ -580,7 +587,13 @@ const BranchTags = ({
 
   return (
     <div className="commit-label-list">
-      {refs.map((ref) => (
+      {isHead ? (
+        <span className="commit-head" title="HEAD" key="HEAD">
+          <GitBranch size={13} />
+          <span>HEAD</span>
+        </span>
+      ) : null}
+      {normalRefs.map((ref) => (
         <span className="commit-ref" title={ref} key={ref}>
           <GitBranch size={13} />
           <span>{cleanRefName(ref)}</span>
@@ -772,19 +785,33 @@ const CommitGraphSvg = ({
         );
       })}
 
-      {graph.rows.map((row) => (
-        <circle
-          key={row.id}
-          cx={readCommitGraphX(row.lane)}
-          cy={readCommitGraphY(row.rowIndex)}
-          r={COMMIT_GRAPH_DOT_RADIUS}
-          fill={
-            row.kind === "commit"
-              ? readCommitGraphColor(row.colorIndex)
-              : COMMIT_GRAPH_GRAY_COLOR
-          }
-        />
-      ))}
+      {graph.rows.map((row) => {
+        const centerX = readCommitGraphX(row.lane);
+        const centerY = readCommitGraphY(row.rowIndex);
+
+        if (row.kind === "commit") {
+          return (
+            <circle
+              key={row.id}
+              cx={centerX}
+              cy={centerY}
+              r={COMMIT_GRAPH_DOT_RADIUS}
+              fill={readCommitGraphColor(row.colorIndex)}
+            />
+          );
+        }
+
+        return (
+          <Bot
+            key={row.id}
+            x={centerX - COMMIT_GRAPH_BOT_ICON_SIZE / 2}
+            y={centerY - COMMIT_GRAPH_BOT_ICON_SIZE / 2}
+            size={COMMIT_GRAPH_BOT_ICON_SIZE}
+            color={COMMIT_GRAPH_GRAY_COLOR}
+            strokeWidth={2}
+          />
+        );
+      })}
 
       {graph.rows.map((row) => {
         const shouldShowChat = row.threadIds.length > 0;
@@ -799,14 +826,10 @@ const CommitGraphSvg = ({
           ? (gitChangesOfCwd[thread.cwd] ?? EMPTY_GIT_CHANGE_SUMMARY)
           : EMPTY_GIT_CHANGE_SUMMARY;
         const centerY = readCommitGraphY(row.rowIndex);
-        const botCenterX =
-          graphWidth -
-          COMMIT_GRAPH_PADDING_LEFT -
-          COMMIT_GRAPH_MARKER_SLOT_WIDTH * 3;
         const commitCenterX =
           graphWidth -
           COMMIT_GRAPH_PADDING_LEFT -
-          COMMIT_GRAPH_MARKER_SLOT_WIDTH * 4;
+          COMMIT_GRAPH_MARKER_SLOT_WIDTH * 3;
         const unstagedTextRightX =
           commitCenterX - COMMIT_GRAPH_MARKER_SLOT_WIDTH;
         const unstageCenterX =
@@ -886,13 +909,6 @@ const CommitGraphSvg = ({
               color={COMMIT_GRAPH_GRAY_COLOR}
               strokeWidth={2.5}
             />
-            <Bot
-              x={botCenterX - COMMIT_GRAPH_BOT_ICON_SIZE / 2}
-              y={centerY - COMMIT_GRAPH_BOT_ICON_SIZE / 2}
-              size={COMMIT_GRAPH_BOT_ICON_SIZE}
-              color={COMMIT_GRAPH_GRAY_COLOR}
-              strokeWidth={2}
-            />
             <g
               className="commit-graph-action-link"
               onClick={(event) => openRowThread(event, row)}
@@ -969,7 +985,7 @@ const CommitHistoryRow = ({
   const threads = row.threadIds
     .map((rowThreadId) => threadOfId[rowThreadId])
     .filter((rowThread): rowThread is CodexThread => rowThread !== undefined);
-  const refs = row.kind === "commit" ? commit.refs : [];
+  const refs = commit.refs;
   let worktrees: GitWorktree[] = [];
   let subject = commit.subject;
   let subjectTitle = commit.subject;

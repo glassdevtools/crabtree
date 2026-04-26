@@ -404,6 +404,22 @@ button {
   font-weight: 720;
 }
 
+.commit-head {
+  max-width: 142px;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border: 1px solid #b9c0c9;
+  border-radius: 5px;
+  background: #eef0f3;
+  color: #343a43;
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 720;
+}
+
 .commit-ref:nth-child(2n) {
   background: #eaf1ff;
   color: #162d54;
@@ -447,12 +463,14 @@ button {
 }
 
 .commit-ref svg,
+.commit-head svg,
 .commit-worktree svg,
 .commit-thread svg {
   flex: 0 0 auto;
 }
 
 .commit-ref span,
+.commit-head span,
 .commit-worktree span,
 .commit-thread span,
 .commit-subject,
