@@ -66,6 +66,13 @@ export type GitMoveBranchRequest = {
   newSha: string;
 };
 
+export type GitBranchTagChange = {
+  repoRoot: string;
+  branch: string;
+  oldSha: string;
+  newSha: string | null;
+};
+
 export type GitCommit = {
   sha: string;
   shortSha: string;
@@ -113,5 +120,11 @@ export type MoltTreeApi = {
     gitDeleteBranchRequest: GitDeleteBranchRequest,
   ) => Promise<void>;
   moveGitBranch: (gitMoveBranchRequest: GitMoveBranchRequest) => Promise<void>;
+  pushGitBranchTagChanges: (
+    gitBranchTagChanges: GitBranchTagChange[],
+  ) => Promise<void>;
+  resetGitBranchTagChanges: (
+    gitBranchTagChanges: GitBranchTagChange[],
+  ) => Promise<void>;
   startGitMerge: (gitMergeRequest: GitMergeRequest) => Promise<void>;
 };

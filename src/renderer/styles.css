@@ -346,6 +346,11 @@ button {
   box-shadow: 0 12px 32px rgba(26, 33, 44, 0.18);
 }
 
+/* TODO: AI-PICKED-VALUE: The wider modal and list columns leave room for repo paths while matching the existing modal style. */
+.branch-tag-change-modal {
+  width: 520px;
+}
+
 .commit-message-modal h3 {
   margin: 0;
   color: #262a30;
@@ -393,6 +398,44 @@ button {
   margin: 0;
   color: #343a43;
   font-size: 13px;
+}
+
+.branch-tag-change-list {
+  max-height: 240px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+  border: 1px solid #e0e5ec;
+  border-radius: 6px;
+}
+
+.branch-tag-change-list li {
+  display: grid;
+  grid-template-columns: 150px 1fr 110px;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 9px;
+  border-bottom: 1px solid #edf0f4;
+  font-size: 12px;
+}
+
+.branch-tag-change-list li:last-child {
+  border-bottom: 0;
+}
+
+.branch-tag-change-list strong,
+.branch-tag-change-list span,
+.branch-tag-change-list code {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.branch-tag-change-list code {
+  color: #4f5660;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 .commit-history-row {
@@ -600,6 +643,12 @@ button {
   min-width: 80px;
   flex: 1 1 auto;
   font-size: 14px;
+}
+
+/* TODO: AI-PICKED-VALUE: This fades placeholder descriptions more than normal row metadata without making them unreadable. */
+.commit-subject-muted {
+  color: #8b929c;
+  opacity: 0.72;
 }
 
 .commit-hash-cell {

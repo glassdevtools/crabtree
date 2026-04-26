@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { simpleGit } from "simple-git";
 import type {
+  GitBranchTagChange,
   GitCommitChangesRequest,
   GitDeleteBranchRequest,
   GitDeleteWorktreeRequest,
@@ -211,6 +212,45 @@ const readGitMoveBranchRequest = (value: unknown) => {
   return gitMoveBranchRequest;
 };
 
+const readGitBranchTagChanges = (value: unknown) => {
+  if (!Array.isArray(value)) {
+    throw new Error("gitBranchTagChanges must be an array.");
+  }
+
+  const gitBranchTagChanges: GitBranchTagChange[] = [];
+
+  for (const changeValue of value) {
+    if (!isObject(changeValue)) {
+      throw new Error("Each branch tag change must be an object.");
+    }
+
+    if (
+      typeof changeValue.repoRoot !== "string" ||
+      changeValue.repoRoot.length === 0 ||
+      typeof changeValue.branch !== "string" ||
+      changeValue.branch.length === 0 ||
+      typeof changeValue.oldSha !== "string" ||
+      changeValue.oldSha.length === 0 ||
+      (changeValue.newSha !== null &&
+        (typeof changeValue.newSha !== "string" ||
+          changeValue.newSha.length === 0))
+    ) {
+      throw new Error(
+        "Branch tag changes need a repo root, branch, old sha, and new sha.",
+      );
+    }
+
+    gitBranchTagChanges.push({
+      repoRoot: changeValue.repoRoot,
+      branch: changeValue.branch,
+      oldSha: changeValue.oldSha,
+      newSha: changeValue.newSha,
+    });
+  }
+
+  return gitBranchTagChanges;
+};
+
 const logGitMerge = (message: string, value: unknown) => {
   console.info(`[Molt Tree merge] ${message}`, value);
 };
@@ -368,63 +408,69 @@ const deleteGitBranch = async ({
   });
 };
 
+const readGitWorktreePathForBranch = async ({
+  repoRoot,
+  branch,
+}: {
+  repoRoot: string;
+  branch: string;
+}) => {
+  const text = await readGitTextForPath({
+    path: repoRoot,
+    args: ["worktree", "list", "--porcelain"],
+  });
+  const branchReferencePrefix = "refs/heads/";
+  let path: string | null = null;
+  let worktreeBranch: string | null = null;
+  let branchWorktreePath: string | null = null;
+
+  const pushWorktree = () => {
+    if (path === null || worktreeBranch !== branch) {
+      return;
+    }
+
+    branchWorktreePath = path;
+  };
+
+  for (const line of text.split("\n")) {
+    if (line.length === 0) {
+      pushWorktree();
+      path = null;
+      worktreeBranch = null;
+      continue;
+    }
+
+    const [key, ...rest] = line.split(" ");
+    const value = rest.join(" ");
+
+    if (key === "worktree") {
+      path = value;
+      continue;
+    }
+
+    if (key !== "branch") {
+      continue;
+    }
+
+    if (value.startsWith(branchReferencePrefix)) {
+      worktreeBranch = value.slice(branchReferencePrefix.length);
+      continue;
+    }
+
+    worktreeBranch = value;
+  }
+
+  pushWorktree();
+
+  return branchWorktreePath;
+};
+
 const moveGitBranch = async ({
   repoRoot,
   branch,
   oldSha,
   newSha,
 }: GitMoveBranchRequest) => {
-  const readWorktreePathForBranch = async () => {
-    const text = await readGitTextForPath({
-      path: repoRoot,
-      args: ["worktree", "list", "--porcelain"],
-    });
-    const branchReferencePrefix = "refs/heads/";
-    let path: string | null = null;
-    let worktreeBranch: string | null = null;
-    let branchWorktreePath: string | null = null;
-
-    const pushWorktree = () => {
-      if (path === null || worktreeBranch !== branch) {
-        return;
-      }
-
-      branchWorktreePath = path;
-    };
-
-    for (const line of text.split("\n")) {
-      if (line.length === 0) {
-        pushWorktree();
-        path = null;
-        worktreeBranch = null;
-        continue;
-      }
-
-      const [key, ...rest] = line.split(" ");
-      const value = rest.join(" ");
-
-      if (key === "worktree") {
-        path = value;
-        continue;
-      }
-
-      if (key !== "branch") {
-        continue;
-      }
-
-      if (value.startsWith(branchReferencePrefix)) {
-        worktreeBranch = value.slice(branchReferencePrefix.length);
-        continue;
-      }
-
-      worktreeBranch = value;
-    }
-
-    pushWorktree();
-
-    return branchWorktreePath;
-  };
-
   await runGitCommandForPath({
     path: repoRoot,
     args: ["check-ref-format", "--branch", branch],
@@ -443,7 +489,10 @@ const moveGitBranch = async ({
     path: repoRoot,
     args: ["rev-parse", "--verify", `${newSha}^{commit}`],
   });
-  const worktreePath = await readWorktreePathForBranch();
+  const worktreePath = await readGitWorktreePathForBranch({
+    repoRoot,
+    branch,
+  });
 
   if (worktreePath === null) {
     await runGitCommandForPath({
@@ -482,6 +531,145 @@ const moveGitBranch = async ({
     path: worktreePath,
     args: ["reset", "--keep", targetSha],
   });
+};
+
+const pushGitBranchTagChanges = async (
+  gitBranchTagChanges: GitBranchTagChange[],
+) => {
+  for (const { repoRoot, branch, newSha } of gitBranchTagChanges) {
+    await runGitCommandForPath({
+      path: repoRoot,
+      args: ["check-ref-format", "--branch", branch],
+    });
+
+    if (newSha === null) {
+      let doesLocalBranchExist = false;
+
+      try {
+        await readGitTextForPath({
+          path: repoRoot,
+          args: ["rev-parse", "--verify", `refs/heads/${branch}`],
+        });
+        doesLocalBranchExist = true;
+      } catch {
+        doesLocalBranchExist = false;
+      }
+
+      if (doesLocalBranchExist) {
+        throw new Error(`${branch} exists locally. Refresh and try again.`);
+      }
+
+      await runGitCommandForPath({
+        path: repoRoot,
+        args: ["push", "origin", "--delete", branch],
+      });
+      continue;
+    }
+
+    const branchRef = `refs/heads/${branch}`;
+    const branchHead = await readGitTextForPath({
+      path: repoRoot,
+      args: ["rev-parse", "--verify", branchRef],
+    });
+
+    if (branchHead !== newSha) {
+      throw new Error(`${branch} moved. Refresh and try again.`);
+    }
+
+    await runGitCommandForPath({
+      path: repoRoot,
+      args: [
+        "push",
+        "--force-with-lease",
+        "origin",
+        `${branchRef}:${branchRef}`,
+      ],
+    });
+  }
+};
+
+const resetGitBranchTagChanges = async (
+  gitBranchTagChanges: GitBranchTagChange[],
+) => {
+  const fetchedRepoRoots: string[] = [];
+
+  for (const { repoRoot } of gitBranchTagChanges) {
+    if (fetchedRepoRoots.includes(repoRoot)) {
+      continue;
+    }
+
+    await runGitCommandForPath({
+      path: repoRoot,
+      args: ["fetch", "origin", "--prune"],
+    });
+    fetchedRepoRoots.push(repoRoot);
+  }
+
+  for (const { repoRoot, branch } of gitBranchTagChanges) {
+    await runGitCommandForPath({
+      path: repoRoot,
+      args: ["check-ref-format", "--branch", branch],
+    });
+
+    const remoteSha = await readGitTextForPath({
+      path: repoRoot,
+      args: ["rev-parse", "--verify", `refs/remotes/origin/${branch}^{commit}`],
+    });
+    let localSha: string | null = null;
+
+    try {
+      localSha = await readGitTextForPath({
+        path: repoRoot,
+        args: ["rev-parse", "--verify", `refs/heads/${branch}`],
+      });
+    } catch {
+      localSha = null;
+    }
+
+    if (localSha === null) {
+      await runGitCommandForPath({
+        path: repoRoot,
+        args: ["branch", branch, remoteSha],
+      });
+      continue;
+    }
+
+    const worktreePath = await readGitWorktreePathForBranch({
+      repoRoot,
+      branch,
+    });
+
+    if (worktreePath === null) {
+      await runGitCommandForPath({
+        path: repoRoot,
+        args: ["branch", "-f", branch, remoteSha],
+      });
+      continue;
+    }
+
+    const statusText = await readGitTextForPath({
+      path: worktreePath,
+      args: ["status", "--porcelain"],
+    });
+
+    if (statusText.length > 0) {
+      throw new Error(`Working tree must be clean before resetting ${branch}.`);
+    }
+
+    const worktreeHead = await readGitTextForPath({
+      path: worktreePath,
+      args: ["rev-parse", "HEAD"],
+    });
+
+    if (worktreeHead !== localSha) {
+      throw new Error(`${branch} moved. Refresh and try again.`);
+    }
+
+    await runGitCommandForPath({
+      path: worktreePath,
+      args: ["reset", "--keep", remoteSha],
+    });
+  }
 };
 
 ipcMain.handle("dashboard:read", async () => {
@@ -549,6 +737,18 @@ ipcMain.handle("git:moveBranch", async (_event, value: unknown) => {
   const gitMoveBranchRequest = readGitMoveBranchRequest(value);
 
   await moveGitBranch(gitMoveBranchRequest);
+});
+
+ipcMain.handle("git:pushBranchTagChanges", async (_event, value: unknown) => {
+  const gitBranchTagChanges = readGitBranchTagChanges(value);
+
+  await pushGitBranchTagChanges(gitBranchTagChanges);
+});
+
+ipcMain.handle("git:resetBranchTagChanges", async (_event, value: unknown) => {
+  const gitBranchTagChanges = readGitBranchTagChanges(value);
+
+  await resetGitBranchTagChanges(gitBranchTagChanges);
 });
 
 ipcMain.handle("git:startMerge", async (_event, value: unknown) => {

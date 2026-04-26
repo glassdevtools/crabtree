@@ -1,8 +1,9 @@
 import {
   Bot,
-  Code,
   ExternalLink,
   GitBranch,
+  GitBranchMinus,
+  GitBranchPlus,
   GitCommitHorizontal,
   MessageSquare,
   MessageSquarePlus,
@@ -22,6 +23,7 @@ import type { DragEvent, FormEvent, MouseEvent, PointerEvent } from "react";
 import type {
   CodexThread,
   DashboardData,
+  GitBranchTagChange,
   GitChangeSummary,
   GitCommit,
   GitMergeRequest,
@@ -160,6 +162,13 @@ type BranchPointerMove = {
   newSha: string;
   newShortSha: string;
 };
+
+type BranchDeleteTarget = {
+  branch: string;
+  oldSha: string;
+};
+
+type BranchTagChangeAction = "push" | "reset";
 
 type CommitMergeTarget = {
   targetBranch: string | null;
@@ -825,6 +834,7 @@ const BranchTags = ({
   openBranchDeleteModal: (
     event: MouseEvent<HTMLButtonElement>,
     branch: string,
+    oldSha: string,
   ) => void;
   startBranchPointerDrag: ({
     event,
@@ -1004,7 +1014,9 @@ const BranchTags = ({
                 type="button"
                 draggable={false}
                 onMouseDown={(event) => event.stopPropagation()}
-                onClick={(event) => openBranchDeleteModal(event, refName)}
+                onClick={(event) =>
+                  openBranchDeleteModal(event, refName, commitSha)
+                }
               >
                 <Trash2 size={11} />
               </button>
@@ -1330,7 +1342,7 @@ const CommitGraphSvg = ({
                   width={COMMIT_GRAPH_ACTION_HIT_SIZE}
                   height={COMMIT_GRAPH_ACTION_HIT_SIZE}
                 />
-                <Code
+                <ExternalLink
                   x={vscodeCenterX - COMMIT_GRAPH_CODE_ICON_SIZE / 2}
                   y={centerY - COMMIT_GRAPH_CODE_ICON_SIZE / 2}
                   size={COMMIT_GRAPH_CODE_ICON_SIZE}
@@ -1395,6 +1407,7 @@ const CommitHistoryRow = ({
   openBranchDeleteModal: (
     event: MouseEvent<HTMLButtonElement>,
     branch: string,
+    oldSha: string,
   ) => void;
   startBranchPointerDrag: ({
     event,
@@ -1419,16 +1432,25 @@ const CommitHistoryRow = ({
   let worktrees: GitWorktree[] = [];
   let subject = commit.subject;
   let subjectTitle = commit.subject;
+  let subjectClassName = "commit-subject";
   let rowClassName = "commit-history-row";
 
   if (row.kind === "worktree" && row.worktree !== null) {
     worktrees = [row.worktree];
     subject = "(Worktree)";
     subjectTitle = row.worktree.path;
+    subjectClassName = "commit-subject commit-subject-muted";
     rowClassName = "commit-history-row commit-history-row-worktree";
   }
 
   if (row.kind === "head") {
+    const headBranchRef = refs.find((ref) => ref.startsWith("HEAD -> "));
+
+    if (headBranchRef === undefined) {
+      subject = "(Head)";
+      subjectClassName = "commit-subject commit-subject-muted";
+    }
+
     rowClassName = "commit-history-row commit-history-row-head";
   }
 
@@ -1472,7 +1494,7 @@ const CommitHistoryRow = ({
         />
       </div>
       <div className="commit-description-cell">
-        <span className="commit-subject" title={subjectTitle}>
+        <span className={subjectClassName} title={subjectTitle}>
           {subject}
         </span>
       </div>
@@ -1522,6 +1544,7 @@ const CommitHistory = ({
   gitChangesOfCwd,
   refreshDashboard,
   showErrorMessage,
+  rememberBranchTagChange,
 }: {
   commits: GitCommit[];
   worktrees: GitWorktree[];
@@ -1530,6 +1553,7 @@ const CommitHistory = ({
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   refreshDashboard: () => Promise<void>;
   showErrorMessage: (message: string) => void;
+  rememberBranchTagChange: (branchTagChange: GitBranchTagChange) => void;
 }) => {
   const commitHistoryRef = useRef<HTMLDivElement | null>(null);
   const columnResizeRef = useRef<CommitHistoryColumnResize | null>(null);
@@ -1545,7 +1569,8 @@ const CommitHistory = ({
   const [commitMessageRow, setCommitMessageRow] =
     useState<CommitGraphRow | null>(null);
   const [commitMessage, setCommitMessage] = useState("");
-  const [branchToDelete, setBranchToDelete] = useState<string | null>(null);
+  const [branchToDelete, setBranchToDelete] =
+    useState<BranchDeleteTarget | null>(null);
   const [commitMergeConfirmation, setCommitMergeConfirmation] =
     useState<CommitMergeConfirmation | null>(null);
   const [branchPointerMove, setBranchPointerMove] =
@@ -2228,10 +2253,11 @@ const CommitHistory = ({
   const openBranchDeleteModal = (
     event: MouseEvent<HTMLButtonElement>,
     branch: string,
+    oldSha: string,
   ) => {
     event.preventDefault();
     event.stopPropagation();
-    setBranchToDelete(branch);
+    setBranchToDelete({ branch, oldSha });
   };
   const closeBranchDeleteModal = () => {
     setBranchToDelete(null);
@@ -2247,11 +2273,20 @@ const CommitHistory = ({
       return;
     }
 
-    const branch = branchToDelete;
+    const branchDeleteTarget = branchToDelete;
     closeBranchDeleteModal();
 
     try {
-      await window.molttree.deleteGitBranch({ repoRoot, branch });
+      await window.molttree.deleteGitBranch({
+        repoRoot,
+        branch: branchDeleteTarget.branch,
+      });
+      rememberBranchTagChange({
+        repoRoot,
+        branch: branchDeleteTarget.branch,
+        oldSha: branchDeleteTarget.oldSha,
+        newSha: null,
+      });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to delete branch.";
@@ -2294,6 +2329,12 @@ const CommitHistory = ({
 
     try {
       await window.molttree.moveGitBranch({
+        repoRoot: request.repoRoot,
+        branch: request.branch,
+        oldSha: request.oldSha,
+        newSha: request.newSha,
+      });
+      rememberBranchTagChange({
         repoRoot: request.repoRoot,
         branch: request.branch,
         oldSha: request.oldSha,
@@ -2445,7 +2486,7 @@ const CommitHistory = ({
             <div className="commit-message-modal">
               <h3>Delete Branch Tag</h3>
               <p className="branch-delete-modal-message">
-                Are you sure you want to delete {branchToDelete} tag?
+                Are you sure you want to delete {branchToDelete.branch} tag?
               </p>
               <div className="commit-message-modal-actions">
                 <button type="button" onClick={closeBranchDeleteModal}>
@@ -2512,12 +2553,14 @@ const RepoSection = ({
   gitChangesOfCwd,
   refreshDashboard,
   showErrorMessage,
+  rememberBranchTagChange,
 }: {
   repo: RepoGraph;
   threadOfId: { [id: string]: CodexThread };
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   refreshDashboard: () => Promise<void>;
   showErrorMessage: (message: string) => void;
+  rememberBranchTagChange: (branchTagChange: GitBranchTagChange) => void;
 }) => {
   const repoThreads = repo.threadIds
     .map((threadId) => threadOfId[threadId])
@@ -2552,6 +2595,7 @@ const RepoSection = ({
           gitChangesOfCwd={gitChangesOfCwd}
           refreshDashboard={refreshDashboard}
           showErrorMessage={showErrorMessage}
+          rememberBranchTagChange={rememberBranchTagChange}
         />
       </div>
     </section>
@@ -2585,6 +2629,11 @@ export const App = () => {
   );
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [branchTagChanges, setBranchTagChanges] = useState<
+    GitBranchTagChange[]
+  >([]);
+  const [branchTagChangeAction, setBranchTagChangeAction] =
+    useState<BranchTagChangeAction | null>(null);
   const isDashboardRefreshRunningRef = useRef(false);
 
   const threadOfId = useMemo(() => {
@@ -2621,6 +2670,43 @@ export const App = () => {
   const showErrorMessage = useCallback((message: string) => {
     setErrorMessage(message);
   }, []);
+  const rememberBranchTagChange = useCallback(
+    (nextBranchTagChange: GitBranchTagChange) => {
+      setBranchTagChanges((currentBranchTagChanges) => {
+        const nextBranchTagChanges: GitBranchTagChange[] = [];
+        let didReplaceBranchTagChange = false;
+
+        for (const branchTagChange of currentBranchTagChanges) {
+          if (
+            branchTagChange.repoRoot !== nextBranchTagChange.repoRoot ||
+            branchTagChange.branch !== nextBranchTagChange.branch
+          ) {
+            nextBranchTagChanges.push(branchTagChange);
+            continue;
+          }
+
+          didReplaceBranchTagChange = true;
+
+          if (branchTagChange.oldSha !== nextBranchTagChange.newSha) {
+            nextBranchTagChanges.push({
+              ...nextBranchTagChange,
+              oldSha: branchTagChange.oldSha,
+            });
+          }
+        }
+
+        if (
+          !didReplaceBranchTagChange &&
+          nextBranchTagChange.oldSha !== nextBranchTagChange.newSha
+        ) {
+          nextBranchTagChanges.push(nextBranchTagChange);
+        }
+
+        return nextBranchTagChanges;
+      });
+    },
+    [],
+  );
 
   useEffect(() => {
     void refreshDashboard();
@@ -2636,6 +2722,43 @@ export const App = () => {
 
   const openNewThread = async () => {
     await window.molttree.openNewCodexThread();
+  };
+  const openBranchTagChangeModal = (action: BranchTagChangeAction) => {
+    if (branchTagChanges.length === 0) {
+      return;
+    }
+
+    setBranchTagChangeAction(action);
+  };
+  const closeBranchTagChangeModal = () => {
+    setBranchTagChangeAction(null);
+  };
+  const confirmBranchTagChanges = async () => {
+    if (branchTagChangeAction === null) {
+      return;
+    }
+
+    const changes = branchTagChanges;
+    const action = branchTagChangeAction;
+    closeBranchTagChangeModal();
+
+    try {
+      if (action === "push") {
+        await window.molttree.pushGitBranchTagChanges(changes);
+      } else {
+        await window.molttree.resetGitBranchTagChanges(changes);
+      }
+
+      setBranchTagChanges([]);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to apply branch tag changes.";
+      showErrorMessage(message);
+    } finally {
+      await refreshDashboard();
+    }
   };
 
   return (
@@ -2660,6 +2783,22 @@ export const App = () => {
           </button>
           <button
             className="icon-button"
+            title="Push branch tag changes"
+            onClick={() => openBranchTagChangeModal("push")}
+            disabled={branchTagChanges.length === 0}
+          >
+            <GitBranchPlus size={18} />
+          </button>
+          <button
+            className="icon-button"
+            title="Reset branch tag changes"
+            onClick={() => openBranchTagChangeModal("reset")}
+            disabled={branchTagChanges.length === 0}
+          >
+            <GitBranchMinus size={18} />
+          </button>
+          <button
+            className="icon-button"
             title="New Codex thread"
             onClick={openNewThread}
           >
@@ -2667,6 +2806,46 @@ export const App = () => {
           </button>
         </div>
       </header>
+
+      {branchTagChangeAction === null ? null : (
+        <div className="commit-message-modal-backdrop">
+          <div className="commit-message-modal branch-tag-change-modal">
+            <h3>
+              {branchTagChangeAction === "push"
+                ? "Push Branch Tag Changes"
+                : "Reset Branch Tag Changes"}
+            </h3>
+            <p className="branch-delete-modal-message">
+              {branchTagChangeAction === "push"
+                ? "Are you sure you want to push all branch tag changes?"
+                : "Are you sure you want to revert your branch tag changes to what's on origin?"}
+            </p>
+            <ul className="branch-tag-change-list">
+              {branchTagChanges.map((branchTagChange) => (
+                <li
+                  key={`${branchTagChange.repoRoot}:${branchTagChange.branch}`}
+                >
+                  <strong>{branchTagChange.branch}</strong>
+                  <span>{branchTagChange.repoRoot}</span>
+                  <code>
+                    {branchTagChange.newSha === null
+                      ? `${branchTagChange.oldSha.slice(0, 7)} -> deleted`
+                      : `${branchTagChange.oldSha.slice(0, 7)} -> ${branchTagChange.newSha.slice(0, 7)}`}
+                  </code>
+                </li>
+              ))}
+            </ul>
+            <div className="commit-message-modal-actions">
+              <button type="button" onClick={closeBranchTagChangeModal}>
+                Cancel
+              </button>
+              <button type="button" onClick={confirmBranchTagChanges}>
+                {branchTagChangeAction === "push" ? "Push" : "Reset"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {errorMessage !== null && (
         <div className="error-banner">{errorMessage}</div>
@@ -2691,6 +2870,7 @@ export const App = () => {
               gitChangesOfCwd={dashboardData.gitChangesOfCwd}
               refreshDashboard={refreshDashboard}
               showErrorMessage={showErrorMessage}
+              rememberBranchTagChange={rememberBranchTagChange}
             />
           ))}
           {dashboardData !== null &&
