@@ -597,6 +597,7 @@ const createCommitGraph = (
   worktreesOfHead: { [sha: string]: GitWorktree[] },
 ) => {
   const graphItems: CommitGraphItem[] = [];
+  const commitOfSha: { [sha: string]: GitCommit } = {};
   const colorIndexOfSha: { [sha: string]: number } = {};
   const lanes: CommitGraphLane[] = [];
   const rows: CommitGraphRow[] = [];
@@ -604,16 +605,64 @@ const createCommitGraph = (
   const isSegmentAddedOfKey: { [key: string]: boolean } = {};
   let laneCount = 1;
 
-  const readNewLaneColorIndex = ({
-    graphKey,
+  for (const commit of commits) {
+    commitOfSha[commit.sha] = commit;
+  }
+
+  const readEarliestLaneColorSeedSha = ({
+    sha,
     lanesToCheck,
     parentLanes,
   }: {
-    graphKey: string;
+    sha: string;
     lanesToCheck: CommitGraphLane[];
     parentLanes: CommitGraphLane[];
   }) => {
-    const preferredColorIndex = readCommitGraphColorIndex(graphKey);
+    const isBoundarySha: { [sha: string]: boolean } = {};
+    const isSeenSha: { [sha: string]: boolean } = {};
+    let colorSeedSha = sha;
+
+    for (const laneItem of lanesToCheck) {
+      isBoundarySha[laneItem.sha] = true;
+    }
+
+    for (const laneItem of parentLanes) {
+      isBoundarySha[laneItem.sha] = true;
+    }
+
+    // Use the oldest commit available for this line before it joins another active line, so newer commits do not repaint the lane.
+    while (true) {
+      const commit = commitOfSha[colorSeedSha];
+      const firstParent = commit?.parents[0];
+
+      if (
+        firstParent === undefined ||
+        isBoundarySha[firstParent] === true ||
+        isSeenSha[firstParent] === true
+      ) {
+        return colorSeedSha;
+      }
+
+      isSeenSha[colorSeedSha] = true;
+      colorSeedSha = firstParent;
+    }
+  };
+
+  const readNewLaneColorIndex = ({
+    sha,
+    lanesToCheck,
+    parentLanes,
+  }: {
+    sha: string;
+    lanesToCheck: CommitGraphLane[];
+    parentLanes: CommitGraphLane[];
+  }) => {
+    const colorSeedSha = readEarliestLaneColorSeedSha({
+      sha,
+      lanesToCheck,
+      parentLanes,
+    });
+    const preferredColorIndex = readCommitGraphColorIndex(colorSeedSha);
     const isColorIndexUsed: { [colorIndex: number]: boolean } = {};
 
     for (const laneItem of lanesToCheck) {
@@ -745,7 +794,7 @@ const createCommitGraph = (
 
       if (colorIndex === undefined) {
         colorIndex = readNewLaneColorIndex({
-          graphKey: graphItem.sha,
+          sha: graphItem.sha,
           lanesToCheck: lanes,
           parentLanes: [],
         });
@@ -802,7 +851,7 @@ const createCommitGraph = (
           parentColorIndex = commitLane.colorIndex;
         } else {
           parentColorIndex = readNewLaneColorIndex({
-            graphKey: parent,
+            sha: parent,
             lanesToCheck: nextLanes,
             parentLanes,
           });
