@@ -375,6 +375,10 @@ const threadTitle = (thread: CodexThread) => {
   return thread.id;
 };
 
+const readIsThreadActive = (thread: CodexThread) => {
+  return thread.status.type === "active";
+};
+
 const readCommitGraphColor = (colorIndex: number) => {
   return COMMIT_GRAPH_COLORS[colorIndex % COMMIT_GRAPH_COLORS.length];
 };
@@ -1158,18 +1162,23 @@ const ChatTags = ({ threads }: { threads: CodexThread[] }) => {
     <div className="commit-label-list">
       {threads.map((thread) => {
         const title = threadTitle(thread);
+        const isThreadActive = readIsThreadActive(thread);
 
         return (
           <button
             className="commit-thread"
-            title={title}
+            title={isThreadActive ? `${title} is loading` : title}
             type="button"
             key={thread.id}
             onMouseDown={(event) => event.stopPropagation()}
             onDoubleClick={(event) => event.stopPropagation()}
             onClick={(event) => openThread(event, thread.id)}
           >
-            <MessageSquare size={13} />
+            {isThreadActive ? (
+              <RefreshCw className="thread-loading-icon" size={13} />
+            ) : (
+              <MessageSquare size={13} />
+            )}
             <span>{title}</span>
           </button>
         );
@@ -2953,17 +2962,27 @@ const ThreadList = ({ threads }: { threads: CodexThread[] }) => {
     <aside className="sidebar">
       <h2>Codex threads</h2>
       <div className="sidebar-list">
-        {threads.slice(0, 80).map((thread) => (
-          <button
-            className="sidebar-thread"
-            key={thread.id}
-            onClick={() => window.molttree.openCodexThread(thread.id)}
-          >
-            <span>{threadTitle(thread)}</span>
-            <small>{thread.gitInfo?.branch ?? thread.cwd}</small>
-            <small>{formatDate(thread.updatedAt)}</small>
-          </button>
-        ))}
+        {threads.slice(0, 80).map((thread) => {
+          const title = threadTitle(thread);
+          const isThreadActive = readIsThreadActive(thread);
+
+          return (
+            <button
+              className="sidebar-thread"
+              key={thread.id}
+              onClick={() => window.molttree.openCodexThread(thread.id)}
+            >
+              <div className="sidebar-thread-title">
+                <span>{title}</span>
+                {isThreadActive ? (
+                  <RefreshCw className="thread-loading-icon" size={13} />
+                ) : null}
+              </div>
+              <small>{thread.gitInfo?.branch ?? thread.cwd}</small>
+              <small>{formatDate(thread.updatedAt)}</small>
+            </button>
+          );
+        })}
       </div>
     </aside>
   );
