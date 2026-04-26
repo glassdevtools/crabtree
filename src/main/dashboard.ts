@@ -23,7 +23,7 @@ export const readDashboardData = async () => {
   }
 
   const repoGraphResult = await readRepoGraphs({ threads });
-  const gitChangesOfCwd = await readGitChangesOfCwd({
+  const gitChangeResult = await readGitChangesOfCwd({
     threads,
     repos: repoGraphResult.repos,
   });
@@ -32,7 +32,8 @@ export const readDashboardData = async () => {
     generatedAt: new Date().toISOString(),
     repos: repoGraphResult.repos,
     threads,
-    gitChangesOfCwd,
+    gitChangesOfCwd: gitChangeResult.gitChangesOfCwd,
+    gitErrors: [...repoGraphResult.gitErrors, ...gitChangeResult.gitErrors],
     warnings: [...warnings, ...repoGraphResult.warnings],
   };
 

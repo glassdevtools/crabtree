@@ -585,10 +585,6 @@ const readIsHeadRef = (ref: string) => {
   return ref === "HEAD" || ref.startsWith("HEAD -> ");
 };
 
-const logCommitMerge = (message: string, value: unknown) => {
-  console.info(`[MoltTree merge] ${message}`, value);
-};
-
 const createCommitGraph = (
   commits: GitCommit[],
   worktreesOfHead: { [sha: string]: GitWorktree[] },
@@ -1629,7 +1625,6 @@ const CommitHistory = ({
     useState<CommitMergeDrag | null>(null);
   const commitMergeDragRef = useRef<CommitMergeDrag | null>(null);
   const branchPointerDragRef = useRef<BranchPointerDrag | null>(null);
-  const commitMergeDragOverLogKeyRef = useRef<string | null>(null);
   const [commitMessageRow, setCommitMessageRow] =
     useState<CommitGraphRow | null>(null);
   const [commitMessage, setCommitMessage] = useState("");
@@ -2109,12 +2104,6 @@ const CommitHistory = ({
       showErrorMessage(
         "Cancelled your drag. You must commit your changes on that item in order to drag and merge it.",
       );
-      logCommitMerge("drag start blocked: row has changes", {
-        rowId: row.id,
-        rowKind: row.kind,
-        rowSha: row.commit.sha,
-        rowCwd,
-      });
       return;
     }
 
@@ -2128,18 +2117,7 @@ const CommitHistory = ({
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", row.commit.shortSha);
     commitMergeDragRef.current = nextCommitMergeDrag;
-    commitMergeDragOverLogKeyRef.current = null;
     setCommitMergeDrag(nextCommitMergeDrag);
-    logCommitMerge("drag start", {
-      drag: nextCommitMergeDrag,
-      rowId: row.id,
-      rowKind: row.kind,
-      rowSha: row.commit.sha,
-      rowRefs: row.commit.refs,
-      rowLocalBranches: row.commit.localBranches,
-      rowThreadIds: row.threadIds,
-      rowWorktreePath: row.worktree?.path,
-    });
   };
   const updateCommitMergeDropTarget = ({
     event,
@@ -2169,71 +2147,20 @@ const CommitHistory = ({
     const activeCommitMergeDrag = commitMergeDragRef.current;
 
     if (activeCommitMergeDrag === null) {
-      const logKey = `no-active-drag:${row.id}`;
-
-      if (commitMergeDragOverLogKeyRef.current !== logKey) {
-        commitMergeDragOverLogKeyRef.current = logKey;
-        logCommitMerge("drag over blocked: no active drag", {
-          rowId: row.id,
-          rowKind: row.kind,
-          rowSha: row.commit.sha,
-        });
-      }
-
       return;
     }
 
     if (activeCommitMergeDrag.repoRoot !== repoRoot) {
-      const logKey = `different-repo:${row.id}`;
-
-      if (commitMergeDragOverLogKeyRef.current !== logKey) {
-        commitMergeDragOverLogKeyRef.current = logKey;
-        logCommitMerge("drag over blocked: different repo", {
-          drag: activeCommitMergeDrag,
-          repoRoot,
-          rowId: row.id,
-          rowKind: row.kind,
-          rowSha: row.commit.sha,
-        });
-      }
-
       return;
     }
 
     if (activeCommitMergeDrag.sha === row.commit.sha) {
-      const logKey = `same-sha:${row.id}`;
-
-      if (commitMergeDragOverLogKeyRef.current !== logKey) {
-        commitMergeDragOverLogKeyRef.current = logKey;
-        logCommitMerge("drag over blocked: same sha", {
-          drag: activeCommitMergeDrag,
-          rowId: row.id,
-          rowKind: row.kind,
-          rowSha: row.commit.sha,
-        });
-      }
-
       return;
     }
 
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
     setMergeDropTargetRowId(row.id);
-    const logKey = `accepted:${row.id}`;
-
-    if (commitMergeDragOverLogKeyRef.current !== logKey) {
-      commitMergeDragOverLogKeyRef.current = logKey;
-      logCommitMerge("drag over accepted", {
-        drag: activeCommitMergeDrag,
-        rowId: row.id,
-        rowKind: row.kind,
-        rowSha: row.commit.sha,
-        rowRefs: row.commit.refs,
-        rowLocalBranches: row.commit.localBranches,
-        rowThreadIds: row.threadIds,
-        rowWorktreePath: row.worktree?.path,
-      });
-    }
   };
   const clearCommitMergeDropTarget = () => {
     setMergeDropTargetRowId(null);
@@ -2241,10 +2168,8 @@ const CommitHistory = ({
   };
   const finishCommitMergeDrag = () => {
     commitMergeDragRef.current = null;
-    commitMergeDragOverLogKeyRef.current = null;
     setCommitMergeDrag(null);
     setMergeDropTargetRowId(null);
-    logCommitMerge("drag finished", {});
   };
   const readCommitMergeTargetForBranch = (localBranch: string) => {
     for (const worktree of worktrees) {
@@ -2278,12 +2203,6 @@ const CommitHistory = ({
         targetWorktreePath: row.worktree.path,
       };
 
-      logCommitMerge("target resolved from worktree row", {
-        rowId: row.id,
-        rowSha: row.commit.sha,
-        target,
-      });
-
       return target;
     }
 
@@ -2300,13 +2219,6 @@ const CommitHistory = ({
         targetWorktreePath: thread.cwd,
       };
 
-      logCommitMerge("target resolved from chat row", {
-        rowId: row.id,
-        rowSha: row.commit.sha,
-        threadId,
-        target,
-      });
-
       return target;
     }
 
@@ -2319,13 +2231,6 @@ const CommitHistory = ({
         }
 
         const target = readCommitMergeTargetForBranch(localBranch);
-        logCommitMerge("target resolved from matching ref", {
-          rowId: row.id,
-          rowSha: row.commit.sha,
-          ref,
-          localBranch,
-          target,
-        });
 
         return target;
       }
@@ -2340,12 +2245,6 @@ const CommitHistory = ({
     }
 
     const target = readCommitMergeTargetForBranch(localBranch);
-    logCommitMerge("target resolved from first local branch", {
-      rowId: row.id,
-      rowSha: row.commit.sha,
-      localBranch,
-      target,
-    });
 
     return target;
   };
@@ -2381,38 +2280,18 @@ const CommitHistory = ({
     }
 
     const activeCommitMergeDrag = commitMergeDragRef.current;
-    logCommitMerge("drop started", {
-      drag: activeCommitMergeDrag,
-      rowId: row.id,
-      rowKind: row.kind,
-      rowSha: row.commit.sha,
-      rowRefs: row.commit.refs,
-      rowLocalBranches: row.commit.localBranches,
-      rowThreadIds: row.threadIds,
-      rowWorktreePath: row.worktree?.path,
-    });
 
     if (activeCommitMergeDrag === null) {
-      logCommitMerge("drop stopped: no active drag", { rowId: row.id });
       finishCommitMergeDrag();
       return;
     }
 
     if (activeCommitMergeDrag.repoRoot !== repoRoot) {
-      logCommitMerge("drop stopped: different repo", {
-        drag: activeCommitMergeDrag,
-        repoRoot,
-        rowId: row.id,
-      });
       finishCommitMergeDrag();
       return;
     }
 
     if (activeCommitMergeDrag.sha === row.commit.sha) {
-      logCommitMerge("drop stopped: same sha", {
-        drag: activeCommitMergeDrag,
-        rowId: row.id,
-      });
       finishCommitMergeDrag();
       return;
     }
@@ -2431,12 +2310,6 @@ const CommitHistory = ({
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to read merge target.";
-      logCommitMerge("drop stopped: target read failed", {
-        message,
-        rowId: row.id,
-        rowKind: row.kind,
-        rowSha: row.commit.sha,
-      });
       showErrorMessage(message);
       finishCommitMergeDrag();
       return;
@@ -2562,19 +2435,13 @@ const CommitHistory = ({
 
     const { gitMergeRequest } = commitMergeConfirmation;
     closeCommitMergeConfirmationModal();
-    logCommitMerge("calling startGitMerge", gitMergeRequest);
     let mergeErrorMessage: string | null = null;
 
     try {
       await window.molttree.startGitMerge(gitMergeRequest);
-      logCommitMerge("startGitMerge finished", gitMergeRequest);
     } catch (error) {
       mergeErrorMessage =
         error instanceof Error ? error.message : "Failed to start merge.";
-      logCommitMerge("startGitMerge failed", {
-        message: mergeErrorMessage,
-        gitMergeRequest,
-      });
     } finally {
       await refreshDashboardThenShowGitError(mergeErrorMessage);
     }
@@ -2987,6 +2854,11 @@ export const App = () => {
           dashboardData: nextDashboardData,
         }),
       );
+
+      if (nextDashboardData.gitErrors.length > 0) {
+        setSuccessMessage(null);
+        setErrorMessage(nextDashboardData.gitErrors.join("\n"));
+      }
     } catch (error) {
       const message =
         error instanceof Error

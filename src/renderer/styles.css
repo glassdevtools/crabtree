@@ -717,6 +717,7 @@ button {
   box-shadow: 0 12px 28px rgba(26, 33, 44, 0.18);
   color: #7c2d1e;
   font-size: 13px;
+  white-space: pre-wrap;
 }
 
 .success-banner {

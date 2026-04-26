@@ -1,3 +1,4 @@
+import { stat } from "node:fs/promises";
 import { simpleGit } from "simple-git";
 import type {
   GitBranchTagChange,
@@ -51,6 +52,29 @@ const readNullableGitText = async ({
   } catch {
     return null;
   }
+};
+
+const readIsDirectory = async (path: string) => {
+  try {
+    const pathStat = await stat(path);
+
+    return pathStat.isDirectory();
+  } catch {
+    return false;
+  }
+};
+
+const readIsGitWorkingTree = async ({ cwd }: { cwd: string }) => {
+  if (!(await readIsDirectory(cwd))) {
+    return false;
+  }
+
+  const isInsideWorkTree = await readNullableGitText({
+    cwd,
+    args: ["rev-parse", "--is-inside-work-tree"],
+  });
+
+  return isInsideWorkTree === "true";
 };
 
 const readRepoSeedForThread = async ({ thread }: { thread: CodexThread }) => {
@@ -341,6 +365,7 @@ export const readGitChangesOfCwd = async ({
   repos: RepoGraph[];
 }) => {
   const gitChangesOfCwd: { [cwd: string]: GitChangeSummary } = {};
+  const gitErrors: string[] = [];
   const isCwdRead: { [cwd: string]: boolean } = {};
   const cwds = threads
     .map((thread) => thread.cwd)
@@ -359,14 +384,20 @@ export const readGitChangesOfCwd = async ({
 
     isCwdRead[cwd] = true;
 
+    if (!(await readIsGitWorkingTree({ cwd }))) {
+      continue;
+    }
+
     try {
       gitChangesOfCwd[cwd] = await readGitChangeSummary({ cwd });
-    } catch {
-      continue;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unknown Git error.";
+      gitErrors.push(`${cwd}: ${message}`);
     }
   }
 
-  return gitChangesOfCwd;
+  return { gitChangesOfCwd, gitErrors };
 };
 
 const readCommits = async ({
@@ -554,6 +585,7 @@ export const readRepoGraphs = async ({
   const repoSeeds = await readRepoSeeds({ threads });
   const repos: RepoGraph[] = [];
   const warnings: string[] = [];
+  const gitErrors: string[] = [];
 
   const readMissingParentCount = (commits: GitCommit[]) => {
     const isCommitOfSha: { [sha: string]: boolean } = {};
@@ -622,9 +654,9 @@ export const readRepoGraphs = async ({
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Unknown Git error.";
-      warnings.push(`${repoSeed.root}: ${message}`);
+      gitErrors.push(`${repoSeed.root}: ${message}`);
     }
   }
 
-  return { repos, warnings };
+  return { repos, warnings, gitErrors };
 };

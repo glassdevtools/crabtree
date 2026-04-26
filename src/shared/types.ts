@@ -113,6 +113,7 @@ export type DashboardData = {
   repos: RepoGraph[];
   threads: CodexThread[];
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
+  gitErrors: string[];
   warnings: string[];
 };
 
