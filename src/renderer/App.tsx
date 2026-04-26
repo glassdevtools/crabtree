@@ -129,7 +129,7 @@ const readCommitGraphWidth = (laneCount: number) => {
 };
 
 const readCommitGridTemplateColumns = (graphWidth: number) => {
-  return `${graphWidth}px minmax(340px, 1fr) 104px 180px 210px`;
+  return `${graphWidth}px minmax(220px, 320px) minmax(280px, 1fr) 84px 150px 170px`;
 };
 
 const cleanRefName = (ref: string) => {
@@ -387,18 +387,14 @@ const ThreadPill = ({ thread }: { thread: CodexThread }) => {
   );
 };
 
-const CommitLabels = ({
+const BranchTags = ({
   refs,
   worktrees,
-  threadIds,
-  threadOfId,
 }: {
   refs: string[];
   worktrees: GitWorktree[];
-  threadIds: string[];
-  threadOfId: { [id: string]: CodexThread };
 }) => {
-  if (refs.length === 0 && worktrees.length === 0 && threadIds.length === 0) {
+  if (refs.length === 0 && worktrees.length === 0) {
     return null;
   }
 
@@ -424,15 +420,6 @@ const CommitLabels = ({
             <span>{worktree.branch ?? pathName}</span>
           </span>
         );
-      })}
-      {threadIds.map((threadId) => {
-        const thread = threadOfId[threadId];
-
-        if (thread === undefined) {
-          return null;
-        }
-
-        return <ThreadPill key={thread.id} thread={thread} />;
       })}
     </div>
   );
@@ -559,11 +546,9 @@ const CommitGraphSvg = ({
 
 const CommitHistoryRow = ({
   row,
-  threadOfId,
   gridTemplateColumns,
 }: {
   row: CommitGraphRow;
-  threadOfId: { [id: string]: CodexThread };
   gridTemplateColumns: string;
 }) => {
   const { commit } = row;
@@ -578,18 +563,13 @@ const CommitHistoryRow = ({
   return (
     <div className={rowClassName} style={{ gridTemplateColumns }}>
       <div className="commit-graph-cell" />
-      <div className="commit-message-cell">
-        <div className="commit-message-line">
-          <CommitLabels
-            refs={refs}
-            worktrees={worktrees}
-            threadIds={row.threadIds}
-            threadOfId={threadOfId}
-          />
-          <span className="commit-subject" title={subject}>
-            {subject}
-          </span>
-        </div>
+      <div className="commit-branch-tags-cell">
+        <BranchTags refs={refs} worktrees={worktrees} />
+      </div>
+      <div className="commit-description-cell">
+        <span className="commit-subject" title={subject}>
+          {subject}
+        </span>
       </div>
       <code className="commit-hash-cell">{commit.shortSha}</code>
       <div className="commit-author-cell" title={commit.author}>
@@ -603,11 +583,9 @@ const CommitHistoryRow = ({
 const CommitHistory = ({
   commits,
   worktrees,
-  threadOfId,
 }: {
   commits: GitCommit[];
   worktrees: GitWorktree[];
-  threadOfId: { [id: string]: CodexThread };
 }) => {
   const worktreesOfHead = useMemo(() => {
     const nextWorktreesOfHead: { [sha: string]: GitWorktree[] } = {};
@@ -630,25 +608,71 @@ const CommitHistory = ({
     () => createCommitGraph(commits, worktreesOfHead),
     [commits, worktreesOfHead],
   );
-  const graphWidth = readCommitGraphWidth(graph.laneCount);
+  const [shouldShowChatOnly, setShouldShowChatOnly] = useState(false);
+  const visibleGraph = useMemo(() => {
+    if (!shouldShowChatOnly) {
+      return graph;
+    }
+
+    const rows: CommitGraphRow[] = [];
+    const rowIndexOfOldRowIndex: { [rowIndex: number]: number } = {};
+
+    for (const row of graph.rows) {
+      if (row.threadIds.length === 0) {
+        continue;
+      }
+
+      const rowIndex = rows.length;
+      rowIndexOfOldRowIndex[row.rowIndex] = rowIndex;
+      rows.push({ ...row, rowIndex });
+    }
+
+    const segments: CommitGraphSegment[] = [];
+
+    for (const segment of graph.segments) {
+      const fromRowIndex = rowIndexOfOldRowIndex[segment.fromRowIndex];
+      const toRowIndex = rowIndexOfOldRowIndex[segment.toRowIndex];
+
+      if (fromRowIndex === undefined || toRowIndex === undefined) {
+        continue;
+      }
+
+      segments.push({ ...segment, fromRowIndex, toRowIndex });
+    }
+
+    return {
+      rows,
+      segments,
+      laneCount: graph.laneCount,
+    };
+  }, [graph, shouldShowChatOnly]);
+  const graphWidth = readCommitGraphWidth(visibleGraph.laneCount);
   const gridTemplateColumns = readCommitGridTemplateColumns(graphWidth);
 
   return (
     <div className="commit-history">
       <div className="commit-history-header" style={{ gridTemplateColumns }}>
-        <span>Graph</span>
+        <label className="commit-history-graph-title">
+          Graph
+          <input
+            type="checkbox"
+            checked={shouldShowChatOnly}
+            onChange={(event) => setShouldShowChatOnly(event.target.checked)}
+          />
+          Chat only
+        </label>
+        <span>Branch Tags</span>
         <span>Description</span>
         <span>Commit</span>
         <span>Author</span>
         <span>Date</span>
       </div>
       <div className="commit-history-body">
-        <CommitGraphSvg graph={graph} graphWidth={graphWidth} />
-        {graph.rows.map((row) => (
+        <CommitGraphSvg graph={visibleGraph} graphWidth={graphWidth} />
+        {visibleGraph.rows.map((row) => (
           <CommitHistoryRow
             key={row.id}
             row={row}
-            threadOfId={threadOfId}
             gridTemplateColumns={gridTemplateColumns}
           />
         ))}
@@ -738,11 +762,7 @@ const RepoSection = ({
 
       <div className="repo-panel">
         <h2>History</h2>
-        <CommitHistory
-          commits={repo.commits}
-          worktrees={repo.worktrees}
-          threadOfId={threadOfId}
-        />
+        <CommitHistory commits={repo.commits} worktrees={repo.worktrees} />
       </div>
     </section>
   );

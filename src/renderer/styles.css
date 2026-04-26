@@ -247,7 +247,7 @@ button {
 .commit-history-header,
 .commit-history-row {
   display: grid;
-  min-width: 1040px;
+  min-width: 1080px;
 }
 
 .commit-history-header {
@@ -263,16 +263,28 @@ button {
   font-weight: 700;
 }
 
-.commit-history-header span {
+.commit-history-header span,
+.commit-history-graph-title {
   overflow: hidden;
   padding: 0 10px;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
+.commit-history-graph-title {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.commit-history-graph-title input {
+  margin: 0;
+}
+
 .commit-history-body {
   position: relative;
-  min-width: 1040px;
+  min-width: 1080px;
 }
 
 .commit-graph-svg {
@@ -310,7 +322,8 @@ button {
   min-width: 0;
 }
 
-.commit-message-cell,
+.commit-branch-tags-cell,
+.commit-description-cell,
 .commit-hash-cell,
 .commit-author-cell,
 .commit-date-cell {
@@ -321,20 +334,13 @@ button {
   border-left: 1px solid #edf0f4;
 }
 
-.commit-message-cell {
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: center;
-  gap: 2px;
+.commit-branch-tags-cell,
+.commit-description-cell {
   overflow: hidden;
 }
 
-.commit-message-line {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  overflow: hidden;
+.commit-description-cell {
+  justify-content: flex-start;
 }
 
 .commit-label-list,
@@ -445,11 +451,6 @@ button {
   text-overflow: ellipsis;
   font-size: 12px;
   font-weight: 650;
-}
-
-.commit-label-list .thread-pill {
-  flex: 0 0 auto;
-  max-width: 174px;
 }
 
 .error-banner,
