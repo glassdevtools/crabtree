@@ -136,6 +136,13 @@ type CommitMergeDrag = {
   rowId: string;
   repoRoot: string;
   sha: string;
+  shortSha: string;
+};
+
+type CommitMergeConfirmation = {
+  gitMergeRequest: GitMergeRequest;
+  fromShortSha: string;
+  toShortSha: string;
 };
 
 type BranchPointerDrag = {
@@ -360,6 +367,7 @@ const readCommitGraphRowActionWidth = ({
   const thread = readCommitGraphRowThread(row, threadOfId);
   const canOpenPath = thread !== null && thread.cwd.length > 0;
   const canOpenCommitMessage = rowCwd !== null;
+  const shouldShowCommitAction = canOpenCommitMessage && shouldShowChangeCount;
   let iconCount = 0;
 
   if (shouldShowTrash) {
@@ -374,7 +382,7 @@ const readCommitGraphRowActionWidth = ({
     iconCount += 1;
   }
 
-  if (canOpenCommitMessage) {
+  if (shouldShowCommitAction) {
     iconCount += 1;
   }
 
@@ -1213,12 +1221,13 @@ const CommitGraphSvg = ({
         const thread = readCommitGraphRowThread(row, threadOfId);
         const canOpenPath = thread !== null && thread.cwd.length > 0;
         const canOpenCommitMessage = rowCwd !== null;
+        const shouldShowCommitAction =
+          canOpenCommitMessage && shouldShowChangeCount;
 
         if (
           !shouldShowChat &&
           !shouldShowTrash &&
           !shouldShowChangeCount &&
-          !canOpenCommitMessage &&
           !canOpenPath
         ) {
           return null;
@@ -1249,7 +1258,7 @@ const CommitGraphSvg = ({
           nextIconCenterX -= COMMIT_GRAPH_ACTION_ICON_SPACING;
         }
 
-        if (canOpenCommitMessage) {
+        if (shouldShowCommitAction) {
           commitCenterX = nextIconCenterX;
           nextIconCenterX -= COMMIT_GRAPH_ACTION_ICON_SPACING;
         }
@@ -1539,6 +1548,8 @@ const CommitHistory = ({
     useState<CommitGraphRow | null>(null);
   const [commitMessage, setCommitMessage] = useState("");
   const [branchToDelete, setBranchToDelete] = useState<string | null>(null);
+  const [commitMergeConfirmation, setCommitMergeConfirmation] =
+    useState<CommitMergeConfirmation | null>(null);
   const [branchPointerMove, setBranchPointerMove] =
     useState<BranchPointerMove | null>(null);
   const [mergeDropTargetRowId, setMergeDropTargetRowId] = useState<
@@ -1841,6 +1852,7 @@ const CommitHistory = ({
       rowId: row.id,
       repoRoot,
       sha: row.commit.sha,
+      shortSha: row.commit.shortSha,
     };
 
     event.dataTransfer.effectAllowed = "move";
@@ -2158,23 +2170,12 @@ const CommitHistory = ({
       return;
     }
 
-    logCommitMerge("calling startGitMerge", gitMergeRequest);
+    setCommitMergeConfirmation({
+      gitMergeRequest,
+      fromShortSha: activeCommitMergeDrag.shortSha,
+      toShortSha: row.commit.shortSha,
+    });
     finishCommitMergeDrag();
-
-    try {
-      await window.molttree.startGitMerge(gitMergeRequest);
-      logCommitMerge("startGitMerge finished", gitMergeRequest);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to start merge.";
-      logCommitMerge("startGitMerge failed", {
-        message,
-        gitMergeRequest,
-      });
-      showErrorMessage(message);
-    } finally {
-      await refreshDashboard();
-    }
   };
   const openCommitMessageModal = (row: CommitGraphRow) => {
     setCommitMessageRow(row);
@@ -2237,6 +2238,9 @@ const CommitHistory = ({
   const closeBranchDeleteModal = () => {
     setBranchToDelete(null);
   };
+  const closeCommitMergeConfirmationModal = () => {
+    setCommitMergeConfirmation(null);
+  };
   const closeBranchPointerMoveModal = () => {
     setBranchPointerMove(null);
   };
@@ -2253,6 +2257,30 @@ const CommitHistory = ({
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to delete branch.";
+      showErrorMessage(message);
+    } finally {
+      await refreshDashboard();
+    }
+  };
+  const confirmCommitMerge = async () => {
+    if (commitMergeConfirmation === null) {
+      return;
+    }
+
+    const { gitMergeRequest } = commitMergeConfirmation;
+    closeCommitMergeConfirmationModal();
+    logCommitMerge("calling startGitMerge", gitMergeRequest);
+
+    try {
+      await window.molttree.startGitMerge(gitMergeRequest);
+      logCommitMerge("startGitMerge finished", gitMergeRequest);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to start merge.";
+      logCommitMerge("startGitMerge failed", {
+        message,
+        gitMergeRequest,
+      });
       showErrorMessage(message);
     } finally {
       await refreshDashboard();
@@ -2427,6 +2455,29 @@ const CommitHistory = ({
                 </button>
                 <button type="button" onClick={deleteBranchTag}>
                   Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {commitMergeConfirmation === null ? null : (
+          <div className="commit-message-modal-backdrop">
+            <div className="commit-message-modal">
+              <h3>Merge Branches</h3>
+              <p className="branch-delete-modal-message">
+                are you sure you want to merge{" "}
+                {commitMergeConfirmation.fromShortSha} into{" "}
+                {commitMergeConfirmation.toShortSha} and switch to it?
+              </p>
+              <div className="commit-message-modal-actions">
+                <button
+                  type="button"
+                  onClick={closeCommitMergeConfirmationModal}
+                >
+                  Cancel
+                </button>
+                <button type="button" onClick={confirmCommitMerge}>
+                  Merge
                 </button>
               </div>
             </div>
