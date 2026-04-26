@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import type {
   DashboardData,
   GitCommitChangesRequest,
+  GitDeleteBranchRequest,
   GitDeleteWorktreeRequest,
   GitMergeRequest,
   MoltTreeApi,
@@ -38,6 +39,9 @@ const api: MoltTreeApi = {
     gitDeleteWorktreeRequest: GitDeleteWorktreeRequest,
   ) => {
     await ipcRenderer.invoke("git:deleteWorktree", gitDeleteWorktreeRequest);
+  },
+  deleteGitBranch: async (gitDeleteBranchRequest: GitDeleteBranchRequest) => {
+    await ipcRenderer.invoke("git:deleteBranch", gitDeleteBranchRequest);
   },
   startGitMerge: async (gitMergeRequest: GitMergeRequest) => {
     await ipcRenderer.invoke("git:startMerge", gitMergeRequest);

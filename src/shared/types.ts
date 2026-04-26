@@ -54,6 +54,11 @@ export type GitDeleteWorktreeRequest = {
   path: string;
 };
 
+export type GitDeleteBranchRequest = {
+  repoRoot: string;
+  branch: string;
+};
+
 export type GitCommit = {
   sha: string;
   shortSha: string;
@@ -96,6 +101,9 @@ export type MoltTreeApi = {
   ) => Promise<void>;
   deleteGitWorktree: (
     gitDeleteWorktreeRequest: GitDeleteWorktreeRequest,
+  ) => Promise<void>;
+  deleteGitBranch: (
+    gitDeleteBranchRequest: GitDeleteBranchRequest,
   ) => Promise<void>;
   startGitMerge: (gitMergeRequest: GitMergeRequest) => Promise<void>;
 };

@@ -673,14 +673,21 @@ const createThreadOfId = (threads: CodexThread[]) => {
 
 const BranchTags = ({
   refs,
+  localBranches,
   worktrees,
   threads,
   repoRoot,
+  openBranchDeleteModal,
 }: {
   refs: string[];
+  localBranches: string[];
   worktrees: GitWorktree[];
   threads: CodexThread[];
   repoRoot: string;
+  openBranchDeleteModal: (
+    event: MouseEvent<HTMLButtonElement>,
+    branch: string,
+  ) => void;
 }) => {
   if (refs.length === 0 && worktrees.length === 0 && threads.length === 0) {
     return null;
@@ -688,6 +695,21 @@ const BranchTags = ({
 
   const isHead = refs.some((ref) => readIsHeadRef(ref));
   const normalRefs = refs.filter((ref) => !readIsHeadRef(ref));
+  const gitAnchorCount = refs.length + worktrees.length;
+  const isLocalBranchOfName: { [name: string]: boolean } = {};
+
+  for (const localBranch of localBranches) {
+    isLocalBranchOfName[localBranch] = true;
+  }
+
+  const openCodePath = async (
+    event: MouseEvent<HTMLButtonElement>,
+    path: string,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    await window.molttree.openVSCodePath(path);
+  };
 
   const readWorktreeTagText = (path: string) => {
     if (path === repoRoot) {
@@ -715,33 +737,57 @@ const BranchTags = ({
   return (
     <div className="commit-label-list">
       {isHead ? (
-        <span className="commit-head" title="HEAD" key="HEAD">
+        <button
+          className="commit-head"
+          title="HEAD"
+          type="button"
+          key="HEAD"
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => openCodePath(event, repoRoot)}
+        >
           <GitBranch size={13} />
           <span>HEAD</span>
-        </span>
+        </button>
       ) : null}
-      {normalRefs.map((ref) => (
-        <span className="commit-ref" title={ref} key={ref}>
-          <GitBranch size={13} />
-          <span>{cleanRefName(ref)}</span>
-        </span>
-      ))}
+      {normalRefs.map((ref) => {
+        const refName = cleanRefName(ref);
+        const isLocalBranch = isLocalBranchOfName[refName] === true;
+        const shouldShowDelete = isLocalBranch && gitAnchorCount > 1;
+
+        return (
+          <span className="commit-ref" title={ref} key={ref}>
+            <span>{refName}</span>
+            {shouldShowDelete ? (
+              <button
+                className="commit-ref-delete"
+                type="button"
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={(event) => openBranchDeleteModal(event, refName)}
+              >
+                <Trash2 size={11} />
+              </button>
+            ) : null}
+          </span>
+        );
+      })}
       {worktrees.map((worktree) => (
-        <span
+        <button
           className="commit-worktree"
           title={worktree.path}
+          type="button"
           key={worktree.path}
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => openCodePath(event, worktree.path)}
         >
           <FolderGit2 size={13} />
           <span>{readWorktreeTagText(worktree.path)}</span>
-        </span>
+        </button>
       ))}
       {threads.map((thread) => {
         const title = threadTitle(thread);
 
         return (
           <span className="commit-thread" title={title} key={thread.id}>
-            <MessageSquare size={13} />
             <span>{title}</span>
           </span>
         );
@@ -1107,6 +1153,7 @@ const CommitHistoryRow = ({
   clearCommitMergeDropTarget,
   finishCommitMergeDrop,
   finishCommitMergeDrag,
+  openBranchDeleteModal,
 }: {
   row: CommitGraphRow;
   repoRoot: string;
@@ -1118,6 +1165,10 @@ const CommitHistoryRow = ({
   clearCommitMergeDropTarget: () => void;
   finishCommitMergeDrop: (event: DragEvent<HTMLDivElement>) => void;
   finishCommitMergeDrag: () => void;
+  openBranchDeleteModal: (
+    event: MouseEvent<HTMLButtonElement>,
+    branch: string,
+  ) => void;
 }) => {
   const { commit } = row;
   const threadId = row.threadIds[0];
@@ -1172,9 +1223,11 @@ const CommitHistoryRow = ({
       <div className="commit-branch-tags-cell">
         <BranchTags
           refs={refs}
+          localBranches={commit.localBranches}
           worktrees={worktrees}
           threads={threads}
           repoRoot={repoRoot}
+          openBranchDeleteModal={openBranchDeleteModal}
         />
       </div>
       <div className="commit-description-cell">
@@ -1250,6 +1303,7 @@ const CommitHistory = ({
   const [commitMessageRow, setCommitMessageRow] =
     useState<CommitGraphRow | null>(null);
   const [commitMessage, setCommitMessage] = useState("");
+  const [branchToDelete, setBranchToDelete] = useState<string | null>(null);
   const [mergeDropTargetRowId, setMergeDropTargetRowId] = useState<
     string | null
   >(null);
@@ -1838,6 +1892,35 @@ const CommitHistory = ({
       await refreshDashboard();
     }
   };
+  const openBranchDeleteModal = (
+    event: MouseEvent<HTMLButtonElement>,
+    branch: string,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setBranchToDelete(branch);
+  };
+  const closeBranchDeleteModal = () => {
+    setBranchToDelete(null);
+  };
+  const deleteBranchTag = async () => {
+    if (branchToDelete === null) {
+      return;
+    }
+
+    const branch = branchToDelete;
+    closeBranchDeleteModal();
+
+    try {
+      await window.molttree.deleteGitBranch({ repoRoot, branch });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to delete branch.";
+      showErrorMessage(message);
+    } finally {
+      await refreshDashboard();
+    }
+  };
 
   return (
     <>
@@ -1936,6 +2019,7 @@ const CommitHistory = ({
                 finishCommitMergeDrop({ event, row })
               }
               finishCommitMergeDrag={finishCommitMergeDrag}
+              openBranchDeleteModal={openBranchDeleteModal}
             />
           ))}
         </div>
@@ -1963,6 +2047,24 @@ const CommitHistory = ({
                 </button>
               </div>
             </form>
+          </div>
+        )}
+        {branchToDelete === null ? null : (
+          <div className="commit-message-modal-backdrop">
+            <div className="commit-message-modal">
+              <h3>Delete Branch Tag</h3>
+              <p className="branch-delete-modal-message">
+                Are you sure you want to delete {branchToDelete} tag?
+              </p>
+              <div className="commit-message-modal-actions">
+                <button type="button" onClick={closeBranchDeleteModal}>
+                  Cancel
+                </button>
+                <button type="button" onClick={deleteBranchTag}>
+                  Delete
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

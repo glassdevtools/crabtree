@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 import { simpleGit } from "simple-git";
 import type {
   GitCommitChangesRequest,
+  GitDeleteBranchRequest,
   GitDeleteWorktreeRequest,
   GitMergeRequest,
 } from "../shared/types";
@@ -157,6 +158,28 @@ const readGitDeleteWorktreeRequest = (value: unknown) => {
   return gitDeleteWorktreeRequest;
 };
 
+const readGitDeleteBranchRequest = (value: unknown) => {
+  if (!isObject(value)) {
+    throw new Error("gitDeleteBranchRequest must be an object.");
+  }
+
+  if (
+    typeof value.repoRoot !== "string" ||
+    value.repoRoot.length === 0 ||
+    typeof value.branch !== "string" ||
+    value.branch.length === 0
+  ) {
+    throw new Error("gitDeleteBranchRequest needs a repo root and branch.");
+  }
+
+  const gitDeleteBranchRequest: GitDeleteBranchRequest = {
+    repoRoot: value.repoRoot,
+    branch: value.branch,
+  };
+
+  return gitDeleteBranchRequest;
+};
+
 const logGitMerge = (message: string, value: unknown) => {
   console.info(`[Molt Tree merge] ${message}`, value);
 };
@@ -304,6 +327,16 @@ const deleteGitWorktree = async ({
   });
 };
 
+const deleteGitBranch = async ({
+  repoRoot,
+  branch,
+}: GitDeleteBranchRequest) => {
+  await runGitCommandForPath({
+    path: repoRoot,
+    args: ["branch", "-D", branch],
+  });
+};
+
 ipcMain.handle("dashboard:read", async () => {
   return await readDashboardData();
 });
@@ -357,6 +390,12 @@ ipcMain.handle("git:deleteWorktree", async (_event, value: unknown) => {
   const gitDeleteWorktreeRequest = readGitDeleteWorktreeRequest(value);
 
   await deleteGitWorktree(gitDeleteWorktreeRequest);
+});
+
+ipcMain.handle("git:deleteBranch", async (_event, value: unknown) => {
+  const gitDeleteBranchRequest = readGitDeleteBranchRequest(value);
+
+  await deleteGitBranch(gitDeleteBranchRequest);
 });
 
 ipcMain.handle("git:startMerge", async (_event, value: unknown) => {

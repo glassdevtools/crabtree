@@ -388,6 +388,12 @@ button {
   background: #ffffff;
 }
 
+.branch-delete-modal-message {
+  margin: 0;
+  color: #343a43;
+  font-size: 13px;
+}
+
 .commit-history-row {
   position: relative;
   z-index: 2;
@@ -490,6 +496,7 @@ button {
   flex: 0 0 auto;
   font-size: 13px;
   font-weight: 720;
+  cursor: pointer;
 }
 
 .commit-ref:nth-child(2n) {
@@ -500,6 +507,24 @@ button {
 .commit-ref:nth-child(3n) {
   background: #fff4df;
   color: #4f3200;
+}
+
+/* TODO: AI-PICKED-VALUE: This keeps the delete affordance small enough to fit inside compact branch tags. */
+.commit-ref-delete {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #8b929c;
+  cursor: pointer;
+}
+
+.commit-ref-delete:hover {
+  color: #c53a13;
 }
 
 .commit-worktree {
@@ -516,6 +541,7 @@ button {
   flex: 0 0 auto;
   font-size: 13px;
   font-weight: 720;
+  cursor: pointer;
 }
 
 .commit-thread {
@@ -549,6 +575,7 @@ button {
 .commit-author-cell,
 .commit-date-cell {
   overflow: hidden;
+  min-width: 0;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
