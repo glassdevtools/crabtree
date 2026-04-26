@@ -7,7 +7,7 @@ import {
   MessageSquarePlus,
   RefreshCw,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import type {
   CodexThread,
@@ -28,6 +28,9 @@ const COMMIT_GRAPH_WORKTREE_COLOR = "#8b929c";
 const COMMIT_GRAPH_CHAT_ICON_SIZE = 14;
 const COMMIT_GRAPH_MARKER_SLOT_WIDTH = 18;
 const COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO = 0;
+// Dashboard reads touch Codex and Git, so automatic refreshes are spaced out and share the manual refresh path.
+// TODO: AI-PICKED-VALUE: Refreshing every 15 seconds keeps graph data current without constantly running Git commands.
+const DASHBOARD_REFRESH_INTERVAL_MS = 15000;
 const COMMIT_GRAPH_COLORS = [
   "#c53a13",
   "#0a84ff",
@@ -795,6 +798,7 @@ export const App = () => {
   );
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const isDashboardRefreshRunningRef = useRef(false);
 
   const threadOfId = useMemo(() => {
     if (dashboardData === null) {
@@ -804,7 +808,12 @@ export const App = () => {
     return createThreadOfId(dashboardData.threads);
   }, [dashboardData]);
 
-  const refreshDashboard = async () => {
+  const refreshDashboard = useCallback(async () => {
+    if (isDashboardRefreshRunningRef.current) {
+      return;
+    }
+
+    isDashboardRefreshRunningRef.current = true;
     setIsLoading(true);
     setErrorMessage(null);
 
@@ -818,13 +827,22 @@ export const App = () => {
           : "Failed to read dashboard data.";
       setErrorMessage(message);
     } finally {
+      isDashboardRefreshRunningRef.current = false;
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    refreshDashboard();
-  }, []);
+    void refreshDashboard();
+
+    const dashboardRefreshIntervalId = window.setInterval(() => {
+      void refreshDashboard();
+    }, DASHBOARD_REFRESH_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(dashboardRefreshIntervalId);
+    };
+  }, [refreshDashboard]);
 
   const openNewThread = async () => {
     await window.molttree.openNewCodexThread();
