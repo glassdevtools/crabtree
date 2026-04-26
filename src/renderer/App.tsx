@@ -997,7 +997,7 @@ const BranchTags = ({
   const isHead = shouldShowHeadTag && refs.some((ref) => readIsHeadRef(ref));
   const headRef = refs.find((ref) => ref.startsWith("HEAD -> "));
   const headBranch = headRef === undefined ? null : cleanRefName(headRef);
-  const normalRefs = refs.filter((ref) => !readIsHeadRef(ref));
+  const normalRefs = refs.filter((ref) => ref !== "HEAD");
   const orderedRefs = [
     ...normalRefs.filter((ref) => !ref.startsWith("tag: ")),
     ...normalRefs.filter((ref) => ref.startsWith("tag: ")),
@@ -2497,6 +2497,15 @@ const CommitHistory = ({
     setCommitMessageRow(null);
     setCommitMessage("");
   };
+  const refreshDashboardThenShowGitError = async (
+    gitErrorMessage: string | null,
+  ) => {
+    await refreshDashboard();
+
+    if (gitErrorMessage !== null) {
+      showErrorMessage(gitErrorMessage);
+    }
+  };
   const submitCommitMessage = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -2511,6 +2520,8 @@ const CommitHistory = ({
       return;
     }
 
+    let gitErrorMessage: string | null = null;
+
     try {
       await window.molttree.commitAllGitChanges({
         path,
@@ -2518,25 +2529,25 @@ const CommitHistory = ({
       });
       closeCommitMessageModal();
     } catch (error) {
-      const message =
+      gitErrorMessage =
         error instanceof Error ? error.message : "Failed to commit changes.";
-      showErrorMessage(message);
     } finally {
-      await refreshDashboard();
+      await refreshDashboardThenShowGitError(gitErrorMessage);
     }
   };
   const deleteGitWorktree = async (worktree: GitWorktree) => {
+    let gitErrorMessage: string | null = null;
+
     try {
       await window.molttree.deleteGitWorktree({
         repoRoot,
         path: worktree.path,
       });
     } catch (error) {
-      const message =
+      gitErrorMessage =
         error instanceof Error ? error.message : "Failed to delete worktree.";
-      showErrorMessage(message);
     } finally {
-      await refreshDashboard();
+      await refreshDashboardThenShowGitError(gitErrorMessage);
     }
   };
   const openBranchDeleteModal = (
@@ -2564,6 +2575,7 @@ const CommitHistory = ({
 
     const branchDeleteTarget = branchToDelete;
     closeBranchDeleteModal();
+    let gitErrorMessage: string | null = null;
 
     try {
       await window.molttree.deleteGitBranch({
@@ -2577,11 +2589,10 @@ const CommitHistory = ({
         newSha: null,
       });
     } catch (error) {
-      const message =
+      gitErrorMessage =
         error instanceof Error ? error.message : "Failed to delete branch.";
-      showErrorMessage(message);
     } finally {
-      await refreshDashboard();
+      await refreshDashboardThenShowGitError(gitErrorMessage);
     }
   };
   const confirmCommitMerge = async () => {
@@ -2605,11 +2616,7 @@ const CommitHistory = ({
         gitMergeRequest,
       });
     } finally {
-      await refreshDashboard();
-
-      if (mergeErrorMessage !== null) {
-        showErrorMessage(mergeErrorMessage);
-      }
+      await refreshDashboardThenShowGitError(mergeErrorMessage);
     }
   };
   const moveBranchPointer = async () => {
@@ -2619,6 +2626,7 @@ const CommitHistory = ({
 
     const request = branchPointerMove;
     closeBranchPointerMoveModal();
+    let gitErrorMessage: string | null = null;
 
     try {
       await window.molttree.moveGitBranch({
@@ -2634,11 +2642,10 @@ const CommitHistory = ({
         newSha: request.newSha,
       });
     } catch (error) {
-      const message =
+      gitErrorMessage =
         error instanceof Error ? error.message : "Failed to move branch.";
-      showErrorMessage(message);
     } finally {
-      await refreshDashboard();
+      await refreshDashboardThenShowGitError(gitErrorMessage);
     }
   };
   const openRowAfterDoubleClick = async (row: CommitGraphRow) => {
@@ -2654,6 +2661,8 @@ const CommitHistory = ({
       return;
     }
 
+    let gitErrorMessage: string | null = null;
+
     try {
       await window.molttree.checkoutGitCommit({
         repoRoot,
@@ -2661,11 +2670,10 @@ const CommitHistory = ({
       });
       await window.molttree.openVSCodePath(repoRoot);
     } catch (error) {
-      const message =
+      gitErrorMessage =
         error instanceof Error ? error.message : "Failed to open commit.";
-      showErrorMessage(message);
     } finally {
-      await refreshDashboard();
+      await refreshDashboardThenShowGitError(gitErrorMessage);
     }
   };
 
@@ -3134,6 +3142,7 @@ export const App = () => {
     }
 
     closeBranchTagChangeModal();
+    let gitErrorMessage: string | null = null;
 
     try {
       if (action === "push") {
@@ -3153,13 +3162,16 @@ export const App = () => {
           : "Branch tag changes reset.",
       );
     } catch (error) {
-      const message =
+      gitErrorMessage =
         error instanceof Error
           ? error.message
           : "Failed to apply branch tag changes.";
-      showErrorMessage(message);
     } finally {
       await refreshDashboard();
+
+      if (gitErrorMessage !== null) {
+        showErrorMessage(gitErrorMessage);
+      }
     }
   };
   const branchTagChangesInConfirmation =
