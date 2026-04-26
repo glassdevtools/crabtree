@@ -105,6 +105,10 @@ const readGitMergeRequest = (value: unknown) => {
   return gitMergeRequest;
 };
 
+const logGitMerge = (message: string, value: unknown) => {
+  console.info(`[Molt Tree merge] ${message}`, value);
+};
+
 const startGitMerge = async ({
   repoRoot,
   fromSha,
@@ -116,26 +120,50 @@ const startGitMerge = async ({
   const tempBranchName = `temp-${hash}`;
   let isTempBranchCreated = false;
   let targetPath = repoRoot;
+  logGitMerge("main start", {
+    repoRoot,
+    fromSha,
+    toSha,
+    targetBranch,
+    targetWorktreePath,
+    tempBranchName,
+  });
 
   if (targetBranch !== null) {
+    logGitMerge("main checking repo status before switch", {
+      repoRoot,
+      targetBranch,
+    });
     const statusText = await readGitTextForPath({
       path: repoRoot,
       args: ["status", "--porcelain"],
     });
 
     if (statusText.length > 0) {
+      logGitMerge("main stopped: repo is dirty before switch", {
+        repoRoot,
+        targetBranch,
+        statusText,
+      });
       throw new Error("Working tree must be clean before switching branches.");
     }
 
+    logGitMerge("main reading branch head", { repoRoot, targetBranch });
     const branchHead = await readGitTextForPath({
       path: repoRoot,
       args: ["rev-parse", targetBranch],
     });
 
     if (branchHead !== toSha) {
+      logGitMerge("main stopped: target branch moved", {
+        targetBranch,
+        branchHead,
+        toSha,
+      });
       throw new Error("Target branch moved. Refresh and try again.");
     }
 
+    logGitMerge("main switching branch", { repoRoot, targetBranch });
     await runGitCommandForPath({
       path: repoRoot,
       args: ["switch", targetBranch],
@@ -144,38 +172,60 @@ const startGitMerge = async ({
 
   if (targetWorktreePath !== null) {
     targetPath = targetWorktreePath;
+    logGitMerge("main reading worktree head", {
+      targetPath,
+      targetWorktreePath,
+    });
     const worktreeHead = await readGitTextForPath({
       path: targetPath,
       args: ["rev-parse", "HEAD"],
     });
 
     if (worktreeHead !== toSha) {
+      logGitMerge("main stopped: target worktree moved", {
+        targetPath,
+        worktreeHead,
+        toSha,
+      });
       throw new Error("Target worktree moved. Refresh and try again.");
     }
   }
 
+  logGitMerge("main checking target status before merge", { targetPath });
   const targetStatusText = await readGitTextForPath({
     path: targetPath,
     args: ["status", "--porcelain"],
   });
 
   if (targetStatusText.length > 0) {
+    logGitMerge("main stopped: target is dirty", {
+      targetPath,
+      targetStatusText,
+    });
     throw new Error("Merge target must be clean before starting a merge.");
   }
 
   try {
+    logGitMerge("main creating temp branch", {
+      targetPath,
+      tempBranchName,
+      fromSha,
+    });
     await runGitCommandForPath({
       path: targetPath,
       args: ["branch", tempBranchName, fromSha],
     });
     isTempBranchCreated = true;
 
+    logGitMerge("main merging temp branch", { targetPath, tempBranchName });
     await runGitCommandForPath({
       path: targetPath,
       args: ["merge", "--no-edit", tempBranchName],
     });
+    logGitMerge("main merge finished", { targetPath, tempBranchName });
   } finally {
     if (isTempBranchCreated) {
+      logGitMerge("main deleting temp branch", { targetPath, tempBranchName });
       await runGitCommandForPath({
         path: targetPath,
         args: ["branch", "-D", tempBranchName],
@@ -228,7 +278,22 @@ ipcMain.handle("git:unstageChanges", async (_event, path: unknown) => {
 });
 
 ipcMain.handle("git:startMerge", async (_event, value: unknown) => {
-  await startGitMerge(readGitMergeRequest(value));
+  logGitMerge("ipc received git:startMerge", value);
+  const gitMergeRequest = readGitMergeRequest(value);
+  logGitMerge("ipc parsed git:startMerge", gitMergeRequest);
+
+  try {
+    await startGitMerge(gitMergeRequest);
+    logGitMerge("ipc completed git:startMerge", gitMergeRequest);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown merge error.";
+    logGitMerge("ipc failed git:startMerge", {
+      message,
+      gitMergeRequest,
+    });
+    throw error;
+  }
 });
 
 app.whenReady().then(() => {
