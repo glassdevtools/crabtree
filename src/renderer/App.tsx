@@ -128,6 +128,54 @@ const readBranchTagChangesForRepo = ({
   return Object.values(branchTagChangeOfBranch);
 };
 
+const syncBranchTagChangesWithDashboardData = ({
+  branchTagChanges,
+  dashboardData,
+}: {
+  branchTagChanges: GitBranchTagChange[];
+  dashboardData: DashboardData;
+}) => {
+  const branchTagChangeOfBranchOfRepo: {
+    [repoRoot: string]: { [branch: string]: GitBranchTagChange };
+  } = {};
+  const nextBranchTagChanges: GitBranchTagChange[] = [];
+
+  // The dashboard data is the current local branch state compared to origin, so use it as the in-memory baseline after each refresh.
+  for (const repo of dashboardData.repos) {
+    const branchTagChangeOfBranch: {
+      [branch: string]: GitBranchTagChange;
+    } = {};
+    branchTagChangeOfBranchOfRepo[repo.root] = branchTagChangeOfBranch;
+
+    for (const branchTagChange of repo.branchTagChanges) {
+      branchTagChangeOfBranch[branchTagChange.branch] = branchTagChange;
+      nextBranchTagChanges.push(branchTagChange);
+    }
+  }
+
+  // Deleted local branches no longer show up in the dashboard comparison, so keep those explicit delete choices in memory.
+  for (const branchTagChange of branchTagChanges) {
+    if (branchTagChange.newSha !== null) {
+      continue;
+    }
+
+    const branchTagChangeOfBranch =
+      branchTagChangeOfBranchOfRepo[branchTagChange.repoRoot];
+
+    if (branchTagChangeOfBranch === undefined) {
+      continue;
+    }
+
+    if (branchTagChangeOfBranch[branchTagChange.branch] !== undefined) {
+      continue;
+    }
+
+    nextBranchTagChanges.push(branchTagChange);
+  }
+
+  return nextBranchTagChanges;
+};
+
 // TODO: AI-PICKED-VALUE: These column widths match the current table layout closely enough while making drag resizing concrete.
 const COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS = {
   graph: 300,
@@ -2873,6 +2921,12 @@ export const App = () => {
     try {
       const nextDashboardData = await window.molttree.readDashboard();
       setDashboardData(nextDashboardData);
+      setBranchTagChanges((currentBranchTagChanges) =>
+        syncBranchTagChangesWithDashboardData({
+          branchTagChanges: currentBranchTagChanges,
+          dashboardData: nextDashboardData,
+        }),
+      );
     } catch (error) {
       const message =
         error instanceof Error
