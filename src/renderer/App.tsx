@@ -2654,7 +2654,7 @@ const CommitHistory = ({
             <div className="commit-message-modal">
               <h3>Delete Branch Tag</h3>
               <p className="branch-delete-modal-message">
-                Are you sure you want to delete {branchToDelete.branch} tag?
+                Are you sure you want to delete the {branchToDelete.branch} tag?
               </p>
               <div className="commit-message-modal-actions">
                 <button type="button" onClick={closeBranchDeleteModal}>
@@ -2672,7 +2672,7 @@ const CommitHistory = ({
             <div className="commit-message-modal">
               <h3>Merge Branches</h3>
               <p className="branch-delete-modal-message">
-                are you sure you want to merge{" "}
+                Are you sure you want to merge{" "}
                 {commitMergeConfirmation.fromShortSha} into{" "}
                 {commitMergeConfirmation.toShortSha} and switch to it?
               </p>
@@ -2695,8 +2695,8 @@ const CommitHistory = ({
             <div className="commit-message-modal">
               <h3>Move Branch Pointer</h3>
               <p className="branch-delete-modal-message">
-                Are you sure you want to make {branchPointerMove.branch} branch
-                point to {branchPointerMove.newShortSha} and not{" "}
+                Are you sure you want to make the {branchPointerMove.branch}{" "}
+                branch point to {branchPointerMove.newShortSha} instead of{" "}
                 {branchPointerMove.oldShortSha}?
               </p>
               <div className="commit-message-modal-actions">
@@ -2966,7 +2966,7 @@ export const App = () => {
             <p className="branch-delete-modal-message">
               {branchTagChangeAction === "push"
                 ? "Are you sure you want to push all branch tag changes?"
-                : "Are you sure you want to revert your branch tag changes to what's on origin?"}
+                : "Are you sure you want to reset your branch tag changes to match origin?"}
             </p>
             <ul className="branch-tag-change-list">
               {branchTagChanges.map((branchTagChange) => (
