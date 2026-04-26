@@ -4,7 +4,6 @@ import {
   GitBranch,
   GitCommitHorizontal,
   MessageSquare,
-  MessageSquarePlus,
   Plus,
   RefreshCw,
   Trash2,
@@ -2731,31 +2730,15 @@ const RepoSection = ({
   showErrorMessage: (message: string) => void;
   rememberBranchTagChange: (branchTagChange: GitBranchTagChange) => void;
 }) => {
-  const repoThreads = repo.threadIds
-    .map((threadId) => threadOfId[threadId])
-    .filter((thread): thread is CodexThread => thread !== undefined);
+  const repoFolderName = repo.root.split("/").pop() ?? repo.root;
 
   return (
     <section className="repo-section">
       <div className="repo-header">
-        <div>
-          <div className="repo-title">{repo.originUrl ?? repo.root}</div>
-          <div className="meta-line">{repo.root}</div>
-        </div>
-        <div className="repo-stats">
-          <span>
-            <GitBranch size={15} />
-            {repo.currentBranch ?? "detached"}
-          </span>
-          <span>
-            <MessageSquarePlus size={15} />
-            {repoThreads.length}
-          </span>
-        </div>
+        <div className="repo-title">{repoFolderName}</div>
       </div>
 
       <div className="repo-panel">
-        <h2>History</h2>
         <CommitHistory
           commits={repo.commits}
           worktrees={repo.worktrees}
@@ -2889,9 +2872,6 @@ export const App = () => {
     };
   }, [refreshDashboard]);
 
-  const openNewThread = async () => {
-    await window.molttree.openNewCodexThread();
-  };
   const openBranchTagChangeModal = (action: BranchTagChangeAction) => {
     if (branchTagChanges.length === 0) {
       return;
@@ -2971,13 +2951,6 @@ export const App = () => {
               <GitBranch size={18} />
               <Upload className="branch-action-icon-mark" size={10} />
             </span>
-          </button>
-          <button
-            className="icon-button"
-            title="Create a new Codex thread"
-            onClick={openNewThread}
-          >
-            <MessageSquarePlus size={18} />
           </button>
         </div>
       </header>
