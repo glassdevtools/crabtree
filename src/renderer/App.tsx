@@ -1318,6 +1318,10 @@ const CommitHistory = ({
     return target;
   };
   const readCommitMergeTarget = (row: CommitGraphRow) => {
+    const localBranches = Array.isArray(row.commit.localBranches)
+      ? row.commit.localBranches
+      : [];
+
     if (row.kind === "worktree" && row.worktree !== null) {
       if (row.worktree.branch === null) {
         throw new Error("Drop target worktree is not on a branch.");
@@ -1334,7 +1338,7 @@ const CommitHistory = ({
     for (const ref of row.commit.refs) {
       const cleanedRef = cleanRefName(ref);
 
-      for (const localBranch of row.commit.localBranches) {
+      for (const localBranch of localBranches) {
         if (cleanedRef !== localBranch) {
           continue;
         }
@@ -1343,7 +1347,7 @@ const CommitHistory = ({
       }
     }
 
-    const localBranch = row.commit.localBranches[0];
+    const localBranch = localBranches[0];
 
     if (localBranch === undefined) {
       throw new Error("Drop target needs a local branch or worktree.");
