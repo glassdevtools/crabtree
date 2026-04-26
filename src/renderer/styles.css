@@ -430,13 +430,31 @@ button {
   font-weight: 720;
 }
 
+.commit-thread {
+  max-width: 142px;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border: 1px solid #aeb9c7;
+  border-radius: 5px;
+  background: #fff4df;
+  color: #4f3200;
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 720;
+}
+
 .commit-ref svg,
-.commit-worktree svg {
+.commit-worktree svg,
+.commit-thread svg {
   flex: 0 0 auto;
 }
 
 .commit-ref span,
 .commit-worktree span,
+.commit-thread span,
 .commit-subject,
 .commit-author-cell,
 .commit-date-cell {

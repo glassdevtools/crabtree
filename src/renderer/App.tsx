@@ -537,13 +537,15 @@ const createThreadOfId = (threads: CodexThread[]) => {
 const BranchTags = ({
   refs,
   worktrees,
+  threads,
   repoRoot,
 }: {
   refs: string[];
   worktrees: GitWorktree[];
+  threads: CodexThread[];
   repoRoot: string;
 }) => {
-  if (refs.length === 0 && worktrees.length === 0) {
+  if (refs.length === 0 && worktrees.length === 0 && threads.length === 0) {
     return null;
   }
 
@@ -588,6 +590,16 @@ const BranchTags = ({
           <span>{readWorktreeTagText(worktree.path)}</span>
         </span>
       ))}
+      {threads.map((thread) => {
+        const title = threadTitle(thread);
+
+        return (
+          <span className="commit-thread" title={title} key={thread.id}>
+            <MessageSquare size={13} />
+            <span>{title}</span>
+          </span>
+        );
+      })}
     </div>
   );
 };
@@ -948,6 +960,9 @@ const CommitHistoryRow = ({
   const { commit } = row;
   const threadId = row.threadIds[0];
   const thread = threadId === undefined ? undefined : threadOfId[threadId];
+  const threads = row.threadIds
+    .map((rowThreadId) => threadOfId[rowThreadId])
+    .filter((rowThread): rowThread is CodexThread => rowThread !== undefined);
   const refs = row.kind === "commit" ? commit.refs : [];
   let worktrees: GitWorktree[] = [];
   let subject = commit.subject;
@@ -987,7 +1002,12 @@ const CommitHistoryRow = ({
     >
       <div className="commit-graph-cell" />
       <div className="commit-branch-tags-cell">
-        <BranchTags refs={refs} worktrees={worktrees} repoRoot={repoRoot} />
+        <BranchTags
+          refs={refs}
+          worktrees={worktrees}
+          threads={threads}
+          repoRoot={repoRoot}
+        />
       </div>
       <div className="commit-description-cell">
         <span className="commit-subject" title={subjectTitle}>
