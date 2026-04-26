@@ -46,7 +46,11 @@ const COMMIT_GRAPH_ACTION_HIT_SIZE = 14;
 // TODO: AI-PICKED-VALUE: The action group sits close to the graph edge while keeping icons easy to click.
 const COMMIT_GRAPH_ACTION_RIGHT_PADDING = 5;
 const COMMIT_GRAPH_ACTION_ICON_SPACING = 20;
-const COMMIT_GRAPH_CHANGE_TEXT_WIDTH = 46;
+const COMMIT_GRAPH_LANE_ACTION_GAP = 18;
+const COMMIT_GRAPH_CHANGE_TEXT_MIN_WIDTH = 46;
+// TODO: AI-PICKED-VALUE: This approximates the 10px monospace SVG count text so large counts reserve enough room.
+const COMMIT_GRAPH_CHANGE_TEXT_CHARACTER_WIDTH = 7;
+const COMMIT_GRAPH_CHANGE_TEXT_GAP = 6;
 const COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO = 0;
 // Dashboard reads touch Codex and Git, so automatic refreshes are spaced out and share the manual refresh path.
 // TODO: AI-PICKED-VALUE: Refreshing every 15 seconds keeps graph data current without constantly running Git commands.
@@ -289,10 +293,114 @@ const readCommitGraphY = (rowIndex: number) => {
   return rowIndex * COMMIT_GRAPH_ROW_HEIGHT + COMMIT_GRAPH_ROW_HEIGHT / 2;
 };
 
-const readCommitGraphWidth = (laneCount: number) => {
+const readCommitGraphTextWidth = (text: string) => {
+  return text.length * COMMIT_GRAPH_CHANGE_TEXT_CHARACTER_WIDTH;
+};
+
+const readCommitGraphChangeCountWidth = (
+  changeSummary: GitChangeSummary["staged"],
+) => {
+  const addedText = `+${changeSummary.added}`;
+  const removedText = `-${changeSummary.removed}`;
+
+  return Math.max(
+    COMMIT_GRAPH_CHANGE_TEXT_MIN_WIDTH,
+    readCommitGraphTextWidth(addedText) +
+      COMMIT_GRAPH_CHANGE_TEXT_GAP +
+      readCommitGraphTextWidth(removedText),
+  );
+};
+
+const readCommitGraphWidth = ({
+  laneCount,
+  actionWidth,
+}: {
+  laneCount: number;
+  actionWidth: number;
+}) => {
+  const actionAreaWidth =
+    actionWidth === 0 ? 0 : COMMIT_GRAPH_LANE_ACTION_GAP + actionWidth;
+
   return Math.max(
     COMMIT_GRAPH_MIN_WIDTH,
-    COMMIT_GRAPH_PADDING_LEFT * 2 + laneCount * COMMIT_GRAPH_LANE_WIDTH,
+    COMMIT_GRAPH_PADDING_LEFT * 2 +
+      laneCount * COMMIT_GRAPH_LANE_WIDTH +
+      actionAreaWidth,
+  );
+};
+
+const readCommitGraphRowActionWidth = ({
+  row,
+  repoRoot,
+  threadOfId,
+  gitChangesOfCwd,
+  isWorktreeMergedOfPath,
+}: {
+  row: CommitGraphRow;
+  repoRoot: string;
+  threadOfId: { [id: string]: CodexThread };
+  gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
+  isWorktreeMergedOfPath: { [path: string]: boolean };
+}) => {
+  const worktree = row.worktree;
+  const rowCwd = readCommitGraphRowCwd(row, threadOfId, repoRoot);
+  const storedChangeSummary =
+    rowCwd === null ? undefined : gitChangesOfCwd[rowCwd];
+  const changeSummary = storedChangeSummary ?? EMPTY_GIT_CHANGE_SUMMARY;
+  const totalChangeSummary = readTotalGitChangeSummary(changeSummary);
+  const shouldShowChangeCount =
+    totalChangeSummary.added > 0 || totalChangeSummary.removed > 0;
+  const shouldShowTrash =
+    row.kind === "worktree" &&
+    worktree !== null &&
+    worktree.path !== repoRoot &&
+    storedChangeSummary !== undefined &&
+    readIsGitChangeSummaryEmpty(changeSummary) &&
+    isWorktreeMergedOfPath[worktree.path] === true;
+  const thread = readCommitGraphRowThread(row, threadOfId);
+  const canOpenPath = thread !== null && thread.cwd.length > 0;
+  const canOpenCommitMessage = rowCwd !== null;
+  let iconCount = 0;
+
+  if (shouldShowTrash) {
+    iconCount += 1;
+  }
+
+  if (canOpenPath) {
+    iconCount += 1;
+  }
+
+  if (row.threadIds.length > 0) {
+    iconCount += 1;
+  }
+
+  if (canOpenCommitMessage) {
+    iconCount += 1;
+  }
+
+  if (shouldShowChangeCount) {
+    const changeCountWidth =
+      readCommitGraphChangeCountWidth(totalChangeSummary);
+
+    if (iconCount === 0) {
+      return COMMIT_GRAPH_ACTION_RIGHT_PADDING + changeCountWidth;
+    }
+
+    return (
+      COMMIT_GRAPH_ACTION_RIGHT_PADDING +
+      iconCount * COMMIT_GRAPH_ACTION_ICON_SPACING +
+      changeCountWidth
+    );
+  }
+
+  if (iconCount === 0) {
+    return 0;
+  }
+
+  return (
+    COMMIT_GRAPH_ACTION_RIGHT_PADDING +
+    COMMIT_GRAPH_ACTION_HIT_SIZE +
+    (iconCount - 1) * COMMIT_GRAPH_ACTION_ICON_SPACING
   );
 };
 
@@ -983,15 +1091,19 @@ const CommitGraphSvg = ({
     centerY: number;
     title: string;
   }) => {
+    const addedText = `+${changeSummary.added}`;
+    const removedText = `-${changeSummary.removed}`;
+    const removedTextWidth = readCommitGraphTextWidth(removedText);
+
     return (
       <g className="commit-graph-change-count">
         <text
           className="commit-graph-change-added"
-          x={rightX - 22}
+          x={rightX - removedTextWidth - COMMIT_GRAPH_CHANGE_TEXT_GAP}
           y={centerY + 3}
           textAnchor="end"
         >
-          +{changeSummary.added}
+          {addedText}
         </text>
         <text
           className="commit-graph-change-removed"
@@ -999,7 +1111,7 @@ const CommitGraphSvg = ({
           y={centerY + 3}
           textAnchor="end"
         >
-          -{changeSummary.removed}
+          {removedText}
         </text>
         <title>{title}</title>
       </g>
@@ -1492,15 +1604,6 @@ const CommitHistory = ({
       laneCount: graph.laneCount,
     };
   }, [graph, shouldShowChatOnly]);
-  const graphMinimumWidth = readCommitGraphWidth(visibleGraph.laneCount);
-  const visibleColumnWidths: CommitHistoryColumnWidths = {
-    ...columnWidths,
-    graph: Math.max(columnWidths.graph, graphMinimumWidth),
-  };
-  const graphWidth = visibleColumnWidths.graph;
-  const gridTemplateColumns =
-    readCommitGridTemplateColumns(visibleColumnWidths);
-  const tableWidth = readCommitHistoryTableWidth(visibleColumnWidths);
   const isWorktreeMergedOfPath = useMemo(() => {
     const commitOfSha: { [sha: string]: GitCommit } = {};
     const childShasOfSha: { [sha: string]: string[] } = {};
@@ -1582,6 +1685,40 @@ const CommitHistory = ({
 
     return isMergedOfPath;
   }, [commits, worktrees]);
+  const graphActionWidth = useMemo(() => {
+    let maxActionWidth = 0;
+
+    for (const row of visibleGraph.rows) {
+      const actionWidth = readCommitGraphRowActionWidth({
+        row,
+        repoRoot,
+        threadOfId,
+        gitChangesOfCwd,
+        isWorktreeMergedOfPath,
+      });
+      maxActionWidth = Math.max(maxActionWidth, actionWidth);
+    }
+
+    return maxActionWidth;
+  }, [
+    visibleGraph,
+    repoRoot,
+    threadOfId,
+    gitChangesOfCwd,
+    isWorktreeMergedOfPath,
+  ]);
+  const graphMinimumWidth = readCommitGraphWidth({
+    laneCount: visibleGraph.laneCount,
+    actionWidth: graphActionWidth,
+  });
+  const visibleColumnWidths: CommitHistoryColumnWidths = {
+    ...columnWidths,
+    graph: Math.max(columnWidths.graph, graphMinimumWidth),
+  };
+  const graphWidth = visibleColumnWidths.graph;
+  const gridTemplateColumns =
+    readCommitGridTemplateColumns(visibleColumnWidths);
+  const tableWidth = readCommitHistoryTableWidth(visibleColumnWidths);
 
   useLayoutEffect(() => {
     if (commitHistoryRef.current === null) {

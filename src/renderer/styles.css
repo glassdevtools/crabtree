@@ -310,6 +310,7 @@ button {
 }
 
 .commit-graph-change-count {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 10px;
   font-weight: 760;
 }
