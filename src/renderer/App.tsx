@@ -335,11 +335,7 @@ const copyTextAfterContextMenu = async ({
     await window.molttree.copyText(text);
     toast(
       <div className="copy-toast">
-        <div>{`Copied ${
-          copiedLabel === "Commit SHA"
-            ? "commit SHA"
-            : copiedLabel.toLowerCase()
-        }!`}</div>
+        <div>{`Copied ${copiedLabel}!`}</div>
         <div className="copy-toast-value">{text}</div>
       </div>,
     );
@@ -1769,7 +1765,7 @@ const CommitHistoryRow = ({
           void copyTextAfterContextMenu({
             event,
             text: commit.subject,
-            copiedLabel: "Description",
+            copiedLabel: "description",
             errorMessage: "Failed to copy description.",
           });
         }}
@@ -1782,7 +1778,7 @@ const CommitHistoryRow = ({
           void copyTextAfterContextMenu({
             event,
             text: commit.sha,
-            copiedLabel: "Commit SHA",
+            copiedLabel: "commit SHA",
             errorMessage: "Failed to copy commit.",
           });
         }}
@@ -1795,7 +1791,7 @@ const CommitHistoryRow = ({
           void copyTextAfterContextMenu({
             event,
             text: commit.author,
-            copiedLabel: "Author",
+            copiedLabel: "author",
             errorMessage: "Failed to copy author.",
           });
         }}
@@ -1808,7 +1804,7 @@ const CommitHistoryRow = ({
           void copyTextAfterContextMenu({
             event,
             text: commitDateText,
-            copiedLabel: "Date",
+            copiedLabel: "date",
             errorMessage: "Failed to copy date.",
           });
         }}
