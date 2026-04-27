@@ -276,6 +276,12 @@ type CommitBranchTarget = {
   oldSha: string;
 };
 
+type ThreadGroup = {
+  key: string;
+  cwd: string;
+  threads: CodexThread[];
+};
+
 type CommitMessageTarget = {
   path: string;
   title: string;
@@ -772,6 +778,134 @@ const createThreadOfId = (threads: CodexThread[]) => {
   return threadOfId;
 };
 
+const readIsWorktreeCwd = ({
+  cwd,
+  worktrees,
+}: {
+  cwd: string;
+  worktrees: GitWorktree[];
+}) => {
+  for (const worktree of worktrees) {
+    if (cwd === worktree.path || cwd.startsWith(`${worktree.path}/`)) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+const readDisplayedThreadGroups = ({
+  threads,
+  worktrees,
+}: {
+  threads: CodexThread[];
+  worktrees: GitWorktree[];
+}) => {
+  const threadGroups: ThreadGroup[] = [];
+  const groupIndexOfKey: { [key: string]: number } = {};
+
+  for (const thread of threads) {
+    const groupKey =
+      thread.cwd.length === 0 ? `thread:${thread.id}` : `cwd:${thread.cwd}`;
+    const groupIndex = groupIndexOfKey[groupKey];
+
+    if (groupIndex !== undefined) {
+      threadGroups[groupIndex].threads.push(thread);
+      continue;
+    }
+
+    groupIndexOfKey[groupKey] = threadGroups.length;
+    threadGroups.push({ key: groupKey, cwd: thread.cwd, threads: [thread] });
+  }
+
+  return [
+    ...threadGroups.filter(
+      (threadGroup) => !readIsWorktreeCwd({ cwd: threadGroup.cwd, worktrees }),
+    ),
+    ...threadGroups.filter((threadGroup) =>
+      readIsWorktreeCwd({ cwd: threadGroup.cwd, worktrees }),
+    ),
+  ];
+};
+
+const readIsLocalBranch = ({
+  branch,
+  localBranches,
+}: {
+  branch: string;
+  localBranches: string[];
+}) => {
+  for (const localBranch of localBranches) {
+    if (localBranch === branch) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+const readCommitBranchTarget = ({
+  cwd,
+  groupThreads,
+  repoRoot,
+  currentBranch,
+  localBranches,
+  commitSha,
+}: {
+  cwd: string;
+  groupThreads: CodexThread[];
+  repoRoot: string;
+  currentBranch: string | null;
+  localBranches: string[];
+  commitSha: string;
+}) => {
+  for (const thread of groupThreads) {
+    const threadBranch = thread.gitInfo?.branch ?? null;
+
+    if (
+      threadBranch !== null &&
+      readIsLocalBranch({ branch: threadBranch, localBranches })
+    ) {
+      const commitBranchTarget: CommitBranchTarget = {
+        branch: threadBranch,
+        oldSha: commitSha,
+      };
+
+      return commitBranchTarget;
+    }
+  }
+
+  if (
+    cwd === repoRoot &&
+    currentBranch !== null &&
+    readIsLocalBranch({ branch: currentBranch, localBranches })
+  ) {
+    const commitBranchTarget: CommitBranchTarget = {
+      branch: currentBranch,
+      oldSha: commitSha,
+    };
+
+    return commitBranchTarget;
+  }
+
+  if (localBranches.length !== 1) {
+    return null;
+  }
+
+  const localBranch = localBranches[0];
+
+  if (localBranch === undefined) {
+    return null;
+  }
+
+  const commitBranchTarget: CommitBranchTarget = {
+    branch: localBranch,
+    oldSha: commitSha,
+  };
+
+  return commitBranchTarget;
+};
+
 const BranchTags = ({
   refs,
   worktrees,
@@ -942,28 +1076,23 @@ const BranchTags = ({
 };
 
 const ChatRobotTags = ({
-  threads,
+  threadGroups,
   gitChangesOfCwd,
   worktrees,
   repoRoot,
   commitSha,
   localBranches,
   currentBranch,
-  openBranchCreateModal,
   openCommitMessageModal,
   openChangeSummaryModal,
 }: {
-  threads: CodexThread[];
+  threadGroups: ThreadGroup[];
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   worktrees: GitWorktree[];
   repoRoot: string;
   commitSha: string;
   localBranches: string[];
   currentBranch: string | null;
-  openBranchCreateModal: (
-    event: MouseEvent<HTMLButtonElement>,
-    branchCreateTarget: BranchCreateTarget,
-  ) => void;
   openCommitMessageModal: (
     event: MouseEvent<HTMLButtonElement>,
     commitMessageTarget: CommitMessageTarget,
@@ -973,102 +1102,17 @@ const ChatRobotTags = ({
     changeSummaryTarget: ChangeSummaryTarget,
   ) => void;
 }) => {
-  if (threads.length === 0) {
+  if (threadGroups.length === 0) {
     return null;
   }
 
   const openThread = async (threadId: string) => {
     await window.molttree.openCodexThread(threadId);
   };
-  const threadGroups: { key: string; cwd: string; threads: CodexThread[] }[] =
-    [];
-  const groupIndexOfKey: { [key: string]: number } = {};
-  const isLocalBranchOfBranch: { [branch: string]: boolean } = {};
-  const readIsWorktreeCwd = (cwd: string) => {
-    for (const worktree of worktrees) {
-      if (cwd === worktree.path || cwd.startsWith(`${worktree.path}/`)) {
-        return true;
-      }
-    }
-
-    return false;
-  };
-
-  for (const localBranch of localBranches) {
-    isLocalBranchOfBranch[localBranch] = true;
-  }
-  const readCommitBranchTarget = (cwd: string, groupThreads: CodexThread[]) => {
-    for (const thread of groupThreads) {
-      const threadBranch = thread.gitInfo?.branch ?? null;
-
-      if (
-        threadBranch !== null &&
-        isLocalBranchOfBranch[threadBranch] === true
-      ) {
-        const commitBranchTarget: CommitBranchTarget = {
-          branch: threadBranch,
-          oldSha: commitSha,
-        };
-
-        return commitBranchTarget;
-      }
-    }
-
-    if (
-      cwd === repoRoot &&
-      currentBranch !== null &&
-      isLocalBranchOfBranch[currentBranch] === true
-    ) {
-      const commitBranchTarget: CommitBranchTarget = {
-        branch: currentBranch,
-        oldSha: commitSha,
-      };
-
-      return commitBranchTarget;
-    }
-
-    if (localBranches.length !== 1) {
-      return null;
-    }
-
-    const localBranch = localBranches[0];
-
-    if (localBranch === undefined) {
-      return null;
-    }
-
-    const commitBranchTarget: CommitBranchTarget = {
-      branch: localBranch,
-      oldSha: commitSha,
-    };
-
-    return commitBranchTarget;
-  };
-
-  for (const thread of threads) {
-    const groupKey =
-      thread.cwd.length === 0 ? `thread:${thread.id}` : `cwd:${thread.cwd}`;
-    const groupIndex = groupIndexOfKey[groupKey];
-
-    if (groupIndex !== undefined) {
-      threadGroups[groupIndex].threads.push(thread);
-      continue;
-    }
-
-    groupIndexOfKey[groupKey] = threadGroups.length;
-    threadGroups.push({ key: groupKey, cwd: thread.cwd, threads: [thread] });
-  }
-
-  const displayedThreadGroups = [
-    ...threadGroups.filter(
-      (threadGroup) => !readIsWorktreeCwd(threadGroup.cwd),
-    ),
-    ...threadGroups.filter((threadGroup) => readIsWorktreeCwd(threadGroup.cwd)),
-  ];
 
   return (
     <div className="commit-label-list commit-thread-group-list">
-      {displayedThreadGroups.map((threadGroup) => {
+      {threadGroups.map((threadGroup) => {
         const storedChangeSummary = gitChangesOfCwd[threadGroup.cwd];
         const changeSummary = storedChangeSummary ?? EMPTY_GIT_CHANGE_SUMMARY;
         const totalChangeSummary = readTotalGitChangeSummary(changeSummary);
@@ -1076,16 +1120,18 @@ const ChatRobotTags = ({
           totalChangeSummary.added === 0 && totalChangeSummary.removed === 0;
         const shouldShowChangeCount =
           storedChangeSummary !== undefined && !isChangeSummaryEmpty;
-        const commitBranchTarget = readCommitBranchTarget(
-          threadGroup.cwd,
-          threadGroup.threads,
-        );
-        const shouldShowBranchCreateAction =
-          threadGroup.cwd.length > 0 && commitBranchTarget === null;
+        const commitBranchTarget = readCommitBranchTarget({
+          cwd: threadGroup.cwd,
+          groupThreads: threadGroup.threads,
+          repoRoot,
+          currentBranch,
+          localBranches,
+          commitSha,
+        });
         const shouldShowCommitAction =
           threadGroup.cwd.length > 0 &&
           shouldShowChangeCount &&
-          !shouldShowBranchCreateAction;
+          commitBranchTarget !== null;
         return (
           <span className="commit-thread-group" key={threadGroup.key}>
             {threadGroup.threads.map((thread) => {
@@ -1117,7 +1163,7 @@ const ChatRobotTags = ({
                   }}
                 >
                   <IoChatbubbleOutline size={17} />
-                  {readIsWorktreeCwd(thread.cwd) ? (
+                  {readIsWorktreeCwd({ cwd: thread.cwd, worktrees }) ? (
                     <MdOutlineCallSplit
                       aria-hidden="true"
                       className="commit-thread-worktree-mark"
@@ -1148,23 +1194,6 @@ const ChatRobotTags = ({
                 <span className="commit-thread-change-removed">
                   -{totalChangeSummary.removed}
                 </span>
-              </button>
-            ) : null}
-            {shouldShowBranchCreateAction ? (
-              <button
-                className="commit-branch-create-action"
-                title={`Create branch for ${threadGroup.cwd}`}
-                type="button"
-                onMouseDown={(event) => event.stopPropagation()}
-                onDoubleClick={(event) => event.stopPropagation()}
-                onClick={(event) =>
-                  openBranchCreateModal(event, {
-                    path: threadGroup.cwd,
-                    title: threadGroup.cwd,
-                  })
-                }
-              >
-                <GitBranch size={13} />
               </button>
             ) : null}
             {shouldShowCommitAction ? (
@@ -1363,15 +1392,36 @@ const CommitHistoryRow = ({
   const threads = row.threadIds
     .map((rowThreadId) => threadOfId[rowThreadId])
     .filter((rowThread): rowThread is CodexThread => rowThread !== undefined);
+  const threadGroups = readDisplayedThreadGroups({ threads, worktrees });
   const isHeadRow = commit.refs.some((ref) => readIsHeadRef(ref));
-  const mergeableBranches =
-    isHeadRow || isHeadAncestor || isAfterHead || isHeadClean === false
-      ? []
-      : commit.localBranches.filter(
+  const mergeBranch =
+    isHeadRow || isHeadAncestor || isAfterHead
+      ? null
+      : (commit.localBranches.find(
           (localBranch) => localBranch !== currentBranch,
-        );
-  const mergeableBranch = mergeableBranches[0] ?? null;
+        ) ?? null);
+  let mergeDisabledReason: string | null = null;
+  let branchCreateTarget: BranchCreateTarget | null = null;
   let rowClassName = "commit-history-row";
+
+  if (mergeBranch !== null && isHeadClean === false) {
+    mergeDisabledReason =
+      "Current HEAD working tree must be clean before merging.";
+  }
+
+  if (commit.localBranches.length === 0) {
+    for (const threadGroup of threadGroups) {
+      if (threadGroup.cwd.length === 0) {
+        continue;
+      }
+
+      branchCreateTarget = {
+        path: threadGroup.cwd,
+        title: threadGroup.cwd,
+      };
+      break;
+    }
+  }
 
   if (isBranchPointerDropTarget) {
     rowClassName = `${rowClassName} commit-history-row-branch-drop-target`;
@@ -1388,31 +1438,50 @@ const CommitHistoryRow = ({
         className="commit-graph-cell"
         onDoubleClick={openRowAfterDoubleClick}
       >
-        {mergeableBranch === null ? null : (
+        {branchCreateTarget === null && mergeBranch === null ? null : (
           <div className="commit-graph-actions">
-            <button
-              className="commit-graph-merge-action"
-              title={`Merge ${mergeableBranch} into HEAD`}
-              type="button"
-              onMouseDown={(event) => event.stopPropagation()}
-              onDoubleClick={(event) => event.stopPropagation()}
-              onClick={(event) => openBranchMergeModal(event, mergeableBranch)}
-            >
-              <GitPullRequestArrow size={14} />
-            </button>
+            {branchCreateTarget !== null ? (
+              <button
+                className="commit-branch-create-action"
+                title={`Create branch for ${branchCreateTarget.title}`}
+                type="button"
+                onMouseDown={(event) => event.stopPropagation()}
+                onDoubleClick={(event) => event.stopPropagation()}
+                onClick={(event) =>
+                  openBranchCreateModal(event, branchCreateTarget)
+                }
+              >
+                <GitBranch size={14} />
+              </button>
+            ) : mergeBranch === null ? null : (
+              <button
+                className="commit-graph-merge-action"
+                title={
+                  mergeDisabledReason === null
+                    ? `Merge ${mergeBranch} into HEAD`
+                    : mergeDisabledReason
+                }
+                type="button"
+                disabled={mergeDisabledReason !== null}
+                onMouseDown={(event) => event.stopPropagation()}
+                onDoubleClick={(event) => event.stopPropagation()}
+                onClick={(event) => openBranchMergeModal(event, mergeBranch)}
+              >
+                <GitPullRequestArrow size={14} />
+              </button>
+            )}
           </div>
         )}
       </div>
       <div className="commit-actors-cell">
         <ChatRobotTags
-          threads={threads}
+          threadGroups={threadGroups}
           gitChangesOfCwd={gitChangesOfCwd}
           worktrees={worktrees}
           repoRoot={repoRoot}
           commitSha={commit.sha}
           localBranches={commit.localBranches}
           currentBranch={currentBranch}
-          openBranchCreateModal={openBranchCreateModal}
           openCommitMessageModal={openCommitMessageModal}
           openChangeSummaryModal={openChangeSummaryModal}
         />

@@ -603,6 +603,15 @@ button {
   color: #0a64c9;
 }
 
+.commit-graph-merge-action:disabled {
+  color: #b4bcc8;
+  cursor: default;
+}
+
+.commit-graph-merge-action:disabled:hover {
+  color: #b4bcc8;
+}
+
 .commit-thread-group {
   min-height: 24px;
   display: inline-flex;
