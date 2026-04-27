@@ -527,6 +527,17 @@ const checkoutGitCommit = async ({
     throw new Error("Working tree must be clean before checking out a row.");
   }
 
+  const localBranchText = await readGitTextForPath({
+    path: repoRoot,
+    args: ["branch", "--format=%(refname:short)", "--points-at", "HEAD"],
+  });
+
+  if (localBranchText.length === 0) {
+    throw new Error(
+      "Current HEAD must have a local branch before switching rows.",
+    );
+  }
+
   await runGitCommandForPath({
     path: repoRoot,
     args: ["switch", "--detach", targetSha],

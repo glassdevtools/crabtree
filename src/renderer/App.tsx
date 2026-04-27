@@ -994,7 +994,7 @@ const ChatRobotTags = ({
           shouldShowBranchCreateActions &&
           threadGroup.cwd.length > 0 &&
           storedChangeSummary !== undefined &&
-          isChangeSummaryEmpty;
+          !isChangeSummaryEmpty;
         const shouldShowCommitAction =
           threadGroup.cwd.length > 0 &&
           storedChangeSummary !== undefined &&
@@ -1057,6 +1057,23 @@ const ChatRobotTags = ({
                 </span>
               </button>
             ) : null}
+            {shouldShowBranchCreateAction ? (
+              <button
+                className="commit-branch-create-action"
+                title={`Create branch for ${threadGroup.cwd}`}
+                type="button"
+                onMouseDown={(event) => event.stopPropagation()}
+                onDoubleClick={(event) => event.stopPropagation()}
+                onClick={(event) =>
+                  openBranchCreateModal(event, {
+                    path: threadGroup.cwd,
+                    title: threadGroup.cwd,
+                  })
+                }
+              >
+                <GitBranchPlus size={13} />
+              </button>
+            ) : null}
             {shouldShowCommitAction ? (
               <button
                 className="commit-thread-commit-action"
@@ -1073,23 +1090,6 @@ const ChatRobotTags = ({
                 }
               >
                 <Check size={13} />
-              </button>
-            ) : null}
-            {shouldShowBranchCreateAction ? (
-              <button
-                className="commit-branch-create-action"
-                title={`Create branch for ${threadGroup.cwd}`}
-                type="button"
-                onMouseDown={(event) => event.stopPropagation()}
-                onDoubleClick={(event) => event.stopPropagation()}
-                onClick={(event) =>
-                  openBranchCreateModal(event, {
-                    path: threadGroup.cwd,
-                    title: threadGroup.cwd,
-                  })
-                }
-              >
-                <GitBranchPlus size={13} />
               </button>
             ) : null}
           </span>
@@ -1258,11 +1258,9 @@ const CommitHistoryRow = ({
   const threads = row.threadIds
     .map((rowThreadId) => threadOfId[rowThreadId])
     .filter((rowThread): rowThread is CodexThread => rowThread !== undefined);
-  const hasBranchRef = commit.refs.some(
-    (ref) => ref !== "HEAD" && !ref.startsWith("tag: "),
-  );
+  const isHeadRow = commit.refs.some((ref) => readIsHeadRef(ref));
   const mergeableBranches =
-    isHeadClean === false
+    isHeadRow || isHeadClean === false
       ? []
       : commit.localBranches.filter(
           (localBranch) => localBranch !== currentBranch,
@@ -1308,7 +1306,7 @@ const CommitHistoryRow = ({
           commitSha={commit.sha}
           localBranches={commit.localBranches}
           currentBranch={currentBranch}
-          shouldShowBranchCreateActions={!hasBranchRef}
+          shouldShowBranchCreateActions={commit.localBranches.length === 0}
           openBranchCreateModal={openBranchCreateModal}
           openCommitMessageModal={openCommitMessageModal}
           openChangeSummaryModal={openChangeSummaryModal}
@@ -2032,10 +2030,9 @@ const CommitHistory = ({
         repoRoot,
         sha: row.commit.sha,
       });
-      await window.molttree.openVSCodePath(repoRoot);
     } catch (error) {
       gitErrorMessage =
-        error instanceof Error ? error.message : "Failed to open commit.";
+        error instanceof Error ? error.message : "Failed to switch HEAD.";
     } finally {
       await refreshDashboardThenShowGitError(gitErrorMessage);
     }
