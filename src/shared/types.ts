@@ -56,6 +56,7 @@ export type GitCreateBranchRequest = {
 export type GitDeleteBranchRequest = {
   repoRoot: string;
   branch: string;
+  oldSha: string;
 };
 
 export type GitMoveBranchRequest = {

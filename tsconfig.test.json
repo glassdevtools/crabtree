@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "isolatedModules": false,
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "noEmit": false,
+    "outDir": ".test-out",
+    "rootDir": "."
+  },
+  "include": [
+    "tests/**/*.ts",
+    "src/main/gitActions.ts",
+    "src/main/gitData.ts",
+    "src/shared/types.ts"
+  ]
+}

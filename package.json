@@ -8,6 +8,7 @@
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
     "typecheck": "tsc --noEmit",
+    "test": "npm run typecheck && tsc -p tsconfig.test.json && node --test .test-out/tests/*.test.js",
     "format": "prettier --write ."
   },
   "dependencies": {
