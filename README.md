@@ -1,6 +1,6 @@
 # MoltTree
 
-Small README change for testing.
+MoltTree is a local tool for browsing Codex threads alongside their Git history and opening the right context back in Codex Desktop.
 
 ## Features by Interface
 
