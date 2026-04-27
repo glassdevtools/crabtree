@@ -373,7 +373,7 @@ textarea,
   flex-direction: column;
   overflow: visible;
   overflow-anchor: none;
-  padding: 12px 0;
+  padding: 12px 0 0;
 }
 
 .repo-section {
@@ -381,7 +381,6 @@ textarea,
   flex: 1;
   display: flex;
   flex-direction: column;
-  margin-bottom: 26px;
 }
 
 .repo-panel {
