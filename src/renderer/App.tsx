@@ -285,6 +285,11 @@ type ChangeSummaryTarget = {
   changeSummary: GitChangeSummary;
 };
 
+type ThreadArchiveTarget = {
+  title: string;
+  threadIds: string[];
+};
+
 type BranchMergeConfirmation = {
   branch: string;
   preview: GitMergePreview;
@@ -1503,6 +1508,8 @@ const CommitHistory = ({
   const [commitMessage, setCommitMessage] = useState("");
   const [changeSummaryTarget, setChangeSummaryTarget] =
     useState<ChangeSummaryTarget | null>(null);
+  const [threadArchiveTarget, setThreadArchiveTarget] =
+    useState<ThreadArchiveTarget | null>(null);
   const [branchToDelete, setBranchToDelete] =
     useState<BranchDeleteTarget | null>(null);
   const [branchMergeConfirmation, setBranchMergeConfirmation] =
@@ -2005,14 +2012,30 @@ const CommitHistory = ({
   const closeChangeSummaryModal = () => {
     setChangeSummaryTarget(null);
   };
-  const archiveThreadGroup = async (
+  const openThreadArchiveModal = (
     event: MouseEvent<HTMLButtonElement>,
     threads: CodexThread[],
   ) => {
     event.preventDefault();
     event.stopPropagation();
 
-    const threadIds = threads.map((thread) => thread.id);
+    const firstThread = threads[0];
+
+    setThreadArchiveTarget({
+      title: firstThread?.cwd ?? "this cwd group",
+      threadIds: threads.map((thread) => thread.id),
+    });
+  };
+  const closeThreadArchiveModal = () => {
+    setThreadArchiveTarget(null);
+  };
+  const archiveThreadGroup = async () => {
+    if (threadArchiveTarget === null) {
+      return;
+    }
+
+    const threadIds = threadArchiveTarget.threadIds;
+    closeThreadArchiveModal();
     let codexErrorMessage: string | null = null;
 
     try {
@@ -2329,7 +2352,7 @@ const CommitHistory = ({
               openCommitMessageModal={openCommitMessageModal}
               openChangeSummaryModal={openChangeSummaryModal}
               openBranchMergeModal={openBranchMergeModal}
-              archiveThreadGroup={archiveThreadGroup}
+              archiveThreadGroup={openThreadArchiveModal}
               startBranchPointerDrag={startBranchPointerDrag}
               finishBranchPointerDrag={finishBranchPointerDrag}
             />
@@ -2461,6 +2484,30 @@ const CommitHistory = ({
                 </button>
                 <button type="button" onClick={deleteBranchTag}>
                   Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {threadArchiveTarget === null ? null : (
+          <div className="commit-message-modal-backdrop">
+            <div className="commit-message-modal">
+              <h3>Archive Chats</h3>
+              <p className="branch-delete-modal-message">
+                Archive {threadArchiveTarget.threadIds.length}{" "}
+                {threadArchiveTarget.threadIds.length === 1 ? "chat" : "chats"}{" "}
+                for {threadArchiveTarget.title}?
+              </p>
+              <p className="branch-delete-modal-message">
+                The chats will be archived in Codex and removed from this graph
+                after the dashboard refreshes.
+              </p>
+              <div className="commit-message-modal-actions">
+                <button type="button" onClick={closeThreadArchiveModal}>
+                  Cancel
+                </button>
+                <button type="button" onClick={archiveThreadGroup}>
+                  Archive
                 </button>
               </div>
             </div>
