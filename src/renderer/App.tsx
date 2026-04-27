@@ -1081,9 +1081,7 @@ const ChatRobotTags = ({
           threadGroup.threads,
         );
         const shouldShowBranchCreateAction =
-          threadGroup.cwd.length > 0 &&
-          shouldShowChangeCount &&
-          commitBranchTarget === null;
+          threadGroup.cwd.length > 0 && commitBranchTarget === null;
         const shouldShowCommitAction =
           threadGroup.cwd.length > 0 &&
           shouldShowChangeCount &&
