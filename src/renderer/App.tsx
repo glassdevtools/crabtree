@@ -335,7 +335,11 @@ const copyTextAfterContextMenu = async ({
     await window.molttree.copyText(text);
     toast(
       <div className="copy-toast">
-        <div>{`Copied ${copiedLabel.toLowerCase()}!`}</div>
+        <div>{`Copied ${
+          copiedLabel === "Commit SHA"
+            ? "commit SHA"
+            : copiedLabel.toLowerCase()
+        }!`}</div>
         <div className="copy-toast-value">{text}</div>
       </div>,
     );
