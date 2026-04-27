@@ -7,6 +7,7 @@ import {
   GitCommitHorizontal,
   GitPullRequestArrow,
   LoaderCircle,
+  Settings,
   Trash2,
   User,
 } from "lucide-react";
@@ -315,6 +316,31 @@ const PathLauncherIcon = ({ pathLauncher }: { pathLauncher: PathLauncher }) => {
         </span>
       );
   }
+};
+
+const PathLauncherSelectItems = () => {
+  return (
+    <>
+      <SelectItem value="vscode">
+        <span className="path-launcher-option">
+          <PathLauncherIcon pathLauncher="vscode" />
+          <span>VS Code</span>
+        </span>
+      </SelectItem>
+      <SelectItem value="cursor">
+        <span className="path-launcher-option">
+          <PathLauncherIcon pathLauncher="cursor" />
+          <span>Cursor</span>
+        </span>
+      </SelectItem>
+      <SelectItem value="finder">
+        <span className="path-launcher-option">
+          <PathLauncherIcon pathLauncher="finder" />
+          <span>Finder</span>
+        </span>
+      </SelectItem>
+    </>
+  );
 };
 
 const copyTextAfterContextMenu = async ({
@@ -1675,11 +1701,12 @@ const CommitHistoryRow = ({
   }
 
   return (
-    <div className={rowClassName} onMouseDown={selectRow}>
-      <div
-        className="commit-graph-cell"
-        onDoubleClick={openRowAfterDoubleClick}
-      >
+    <div
+      className={rowClassName}
+      onMouseDown={selectRow}
+      onDoubleClick={openRowAfterDoubleClick}
+    >
+      <div className="commit-graph-cell">
         {shouldShowGraphActions ? (
           <div className="commit-graph-actions">
             {isHeadRow ? (
@@ -3279,6 +3306,7 @@ export const App = () => {
   );
   const [selectedRepoRoot, setSelectedRepoRoot] = useState<string | null>(null);
   const [pathLauncher, setPathLauncher] = useState<PathLauncher>("vscode");
+  const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [dashboardErrorMessage, setDashboardErrorMessage] = useState<
     string | null
@@ -3612,6 +3640,13 @@ export const App = () => {
       showErrorMessage(message);
     }
   };
+  const changePathLauncher = (value: string) => {
+    const nextPathLauncher = readPathLauncher(value);
+
+    if (nextPathLauncher !== null) {
+      setPathLauncher(nextPathLauncher);
+    }
+  };
   const selectedRepoBranchTagChanges =
     selectedRepo === null
       ? []
@@ -3654,40 +3689,14 @@ export const App = () => {
           >
             <PathLauncherIcon pathLauncher={pathLauncher} />
           </button>
-          <Select
-            value={pathLauncher}
-            onValueChange={(value) => {
-              const nextPathLauncher = readPathLauncher(value);
-
-              if (nextPathLauncher !== null) {
-                setPathLauncher(nextPathLauncher);
-              }
-            }}
-          >
+          <Select value={pathLauncher} onValueChange={changePathLauncher}>
             <SelectTrigger
               aria-label="Choose app for opening paths"
               className="path-launcher-select"
               size="sm"
             />
             <SelectContent align="end" className="path-launcher-select-content">
-              <SelectItem value="vscode">
-                <span className="path-launcher-option">
-                  <PathLauncherIcon pathLauncher="vscode" />
-                  <span>VS Code</span>
-                </span>
-              </SelectItem>
-              <SelectItem value="cursor">
-                <span className="path-launcher-option">
-                  <PathLauncherIcon pathLauncher="cursor" />
-                  <span>Cursor</span>
-                </span>
-              </SelectItem>
-              <SelectItem value="finder">
-                <span className="path-launcher-option">
-                  <PathLauncherIcon pathLauncher="finder" />
-                  <span>Finder</span>
-                </span>
-              </SelectItem>
+              <PathLauncherSelectItems />
             </SelectContent>
           </Select>
         </div>
@@ -3739,6 +3748,17 @@ export const App = () => {
             </button>
           </div>
         )}
+        <TitleTooltip title="Settings">
+          <button
+            aria-label="Settings"
+            className="repo-action-control repo-settings-button"
+            type="button"
+            onClick={() => setIsSettingsDialogOpen(true)}
+          >
+            <Settings aria-hidden="true" size={18} strokeWidth={1.75} />
+            <span>Settings</span>
+          </button>
+        </TitleTooltip>
       </div>
     </>
   );
@@ -3746,6 +3766,34 @@ export const App = () => {
   return (
     <TooltipProvider>
       <main className="app-shell">
+        <Dialog
+          open={isSettingsDialogOpen}
+          onOpenChange={setIsSettingsDialogOpen}
+        >
+          <DialogContent className="settings-dialog sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Settings</DialogTitle>
+              <DialogDescription className="sr-only">
+                Configure local app settings.
+              </DialogDescription>
+            </DialogHeader>
+            <label className="settings-field">
+              <span>Open paths with</span>
+              <Select value={pathLauncher} onValueChange={changePathLauncher}>
+                <SelectTrigger className="settings-select" size="sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent
+                  align="end"
+                  className="path-launcher-select-content"
+                >
+                  <PathLauncherSelectItems />
+                </SelectContent>
+              </Select>
+            </label>
+          </DialogContent>
+        </Dialog>
+
         <AlertDialog
           open={branchTagChangeConfirmation !== null}
           onOpenChange={(isOpen) => {

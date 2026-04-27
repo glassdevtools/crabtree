@@ -318,6 +318,14 @@ textarea,
   white-space: nowrap;
 }
 
+[data-sonner-toaster]
+  [data-sonner-toast][data-styled="true"]:hover
+  [data-close-button]:hover {
+  background: inherit;
+  border-color: inherit;
+  color: inherit;
+}
+
 .repo-picker {
   min-width: 0;
   width: auto;
@@ -403,6 +411,8 @@ textarea,
   display: flex;
   align-items: flex-start;
   gap: 10px;
+  /* TODO: AI-PICKED-VALUE: This separates the path launcher from the branch action group without moving the settings button away from the right edge. */
+  margin-left: 16px;
 }
 
 .repo-action-control {
@@ -436,6 +446,30 @@ textarea,
 .repo-action-control:disabled {
   cursor: default;
   opacity: 0.38;
+}
+
+.repo-settings-button {
+  flex: 0 0 auto;
+}
+
+.settings-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #343a43;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.settings-select {
+  width: 160px;
+  background: #ffffff;
+}
+
+.settings-select:hover,
+.settings-select[aria-expanded="true"] {
+  background: #ffffff;
 }
 
 .title-tooltip-trigger {
