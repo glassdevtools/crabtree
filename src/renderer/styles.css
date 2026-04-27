@@ -493,9 +493,15 @@ button {
   overflow: hidden;
 }
 
-/* TODO: AI-PICKED-VALUE: This separates cwd groups enough that each robot group reads as its own unit. */
+/* TODO: AI-PICKED-VALUE: These dividers make cwd groups read as separate actor clusters without adding row height. */
 .commit-thread-group-list {
-  gap: 12px;
+  gap: 0;
+}
+
+.commit-thread-group + .commit-thread-group {
+  margin-left: 12px;
+  padding-left: 12px;
+  border-left: 1px solid #d8dee8;
 }
 
 .commit-ref {
