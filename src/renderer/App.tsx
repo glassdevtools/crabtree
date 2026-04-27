@@ -8,6 +8,7 @@ import {
   GitPullRequestArrow,
   LoaderCircle,
   Trash2,
+  User,
 } from "lucide-react";
 import { MdOutlineCallSplit } from "react-icons/md";
 import { VscVscode } from "react-icons/vsc";
@@ -95,11 +96,14 @@ const COMMIT_GRAPH_LANE_WIDTH = 14;
 const COMMIT_GRAPH_PADDING_LEFT = 16;
 const COMMIT_GRAPH_MIN_WIDTH = 96;
 const COMMIT_GRAPH_DOT_RADIUS = 4;
-// TODO: AI-PICKED-VALUE: This makes HEAD read as part of the graph dot instead of as a separate row action.
-const COMMIT_GRAPH_HEAD_RING_RADIUS = 5.5;
-const COMMIT_GRAPH_HEAD_RING_STROKE_WIDTH = 2;
+// TODO: AI-PICKED-VALUE: This black HEAD outline is thick enough to cover the graph line underneath while preserving the dot color.
+const COMMIT_GRAPH_HEAD_OUTLINE_RADIUS = 6;
 // TODO: AI-PICKED-VALUE: This keeps graph lines readable in compact rows while making them less heavy.
 const COMMIT_GRAPH_SEGMENT_STROKE_WIDTH = 2.25;
+// TODO: AI-PICKED-VALUE: The HEAD icon is large enough to read in compact rows without taking over the graph column.
+const COMMIT_GRAPH_USER_ICON_SIZE = 12;
+// TODO: AI-PICKED-VALUE: This stroke weight keeps the HEAD icon visibly bolder than the graph lines.
+const COMMIT_GRAPH_USER_ICON_STROKE_WIDTH = 2.25;
 const COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO = 0;
 const COMMIT_HISTORY_HEADER_HEIGHT = 22;
 // Dashboard reads touch Codex and Git, so automatic refreshes share the manual refresh path and never overlap.
@@ -351,7 +355,7 @@ const readRepoFolderName = (repo: RepoGraph) => {
 const COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS = {
   graph: 140,
   branchTags: 272,
-  actors: 120,
+  actors: 240,
   description: 294,
   commit: 84,
   author: 150,
@@ -1250,10 +1254,37 @@ const BranchTags = ({
 
 const ChatRobotTags = ({
   threadGroups,
+  gitChangesOfCwd,
   worktrees,
+  repoRoot,
+  commitSha,
+  localBranches,
+  currentBranch,
+  branchCreateThreadGroupKey,
+  openBranchCreateModal,
+  openCommitMessageModal,
+  openChangeSummaryModal,
 }: {
   threadGroups: ThreadGroup[];
+  gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   worktrees: GitWorktree[];
+  repoRoot: string;
+  commitSha: string;
+  localBranches: string[];
+  currentBranch: string | null;
+  branchCreateThreadGroupKey: string | null;
+  openBranchCreateModal: (
+    event: MouseEvent<HTMLButtonElement>,
+    branchCreateTarget: BranchCreateTarget,
+  ) => void;
+  openCommitMessageModal: (
+    event: MouseEvent<HTMLButtonElement>,
+    commitMessageTarget: CommitMessageTarget,
+  ) => void;
+  openChangeSummaryModal: (
+    event: MouseEvent<HTMLButtonElement>,
+    changeSummaryTarget: ChangeSummaryTarget,
+  ) => void;
 }) => {
   if (threadGroups.length === 0) {
     return null;
@@ -1266,6 +1297,33 @@ const ChatRobotTags = ({
   return (
     <div className="commit-label-list commit-thread-group-list">
       {threadGroups.map((threadGroup) => {
+        const storedChangeSummary = gitChangesOfCwd[threadGroup.cwd];
+        const changeSummary = storedChangeSummary ?? EMPTY_GIT_CHANGE_SUMMARY;
+        const totalChangeSummary = readTotalGitChangeSummary(changeSummary);
+        const isChangeSummaryEmpty =
+          totalChangeSummary.added === 0 && totalChangeSummary.removed === 0;
+        const shouldShowChangeCount =
+          storedChangeSummary !== undefined && !isChangeSummaryEmpty;
+        const commitBranchTarget = readCommitBranchTarget({
+          cwd: threadGroup.cwd,
+          groupThreads: threadGroup.threads,
+          repoRoot,
+          currentBranch,
+          localBranches,
+          commitSha,
+        });
+        const shouldShowCommitAction =
+          threadGroup.cwd.length > 0 &&
+          shouldShowChangeCount &&
+          commitBranchTarget !== null;
+        const branchCreateTarget =
+          threadGroup.key === branchCreateThreadGroupKey
+            ? {
+                path: threadGroup.cwd,
+                title: threadGroup.cwd,
+              }
+            : null;
+
         return (
           <span className="commit-thread-group" key={threadGroup.key}>
             {threadGroup.threads.map((thread) => {
@@ -1342,6 +1400,69 @@ const ChatRobotTags = ({
                 </Button>
               );
             })}
+            {shouldShowChangeCount ? (
+              <TitleTooltip title="Show changes">
+                <Button
+                  className="commit-thread-change-count"
+                  variant="ghost"
+                  size="xs"
+                  type="button"
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onDoubleClick={(event) => event.stopPropagation()}
+                  onClick={(event) =>
+                    openChangeSummaryModal(event, {
+                      path: threadGroup.cwd,
+                      title: threadGroup.cwd,
+                      changeSummary,
+                    })
+                  }
+                >
+                  <span className="commit-thread-change-added">
+                    +{totalChangeSummary.added}
+                  </span>
+                  <span className="commit-thread-change-removed">
+                    -{totalChangeSummary.removed}
+                  </span>
+                </Button>
+              </TitleTooltip>
+            ) : null}
+            {shouldShowCommitAction ? (
+              <TitleTooltip title="Commit">
+                <Button
+                  className="commit-thread-commit-action"
+                  variant="ghost"
+                  size="icon-xs"
+                  type="button"
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onDoubleClick={(event) => event.stopPropagation()}
+                  onClick={(event) =>
+                    openCommitMessageModal(event, {
+                      path: threadGroup.cwd,
+                      title: threadGroup.cwd,
+                      branchTarget: commitBranchTarget,
+                    })
+                  }
+                >
+                  <Check size={10} />
+                </Button>
+              </TitleTooltip>
+            ) : branchCreateTarget === null ? null : (
+              <TitleTooltip title="Add branch here">
+                <Button
+                  className="commit-branch-create-action"
+                  variant="ghost"
+                  size="icon-xs"
+                  type="button"
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onDoubleClick={(event) => event.stopPropagation()}
+                  onClick={(event) =>
+                    openBranchCreateModal(event, branchCreateTarget)
+                  }
+                >
+                  <GitBranch size={10} />
+                </Button>
+              </TitleTooltip>
+            )}
           </span>
         );
       })}
@@ -1411,22 +1532,20 @@ const CommitGraphSvg = ({
 
         return (
           <g key={row.id}>
+            {isHeadRow ? (
+              <circle
+                cx={centerX}
+                cy={centerY}
+                r={COMMIT_GRAPH_HEAD_OUTLINE_RADIUS}
+                fill="#202124"
+              />
+            ) : null}
             <circle
               cx={centerX}
               cy={centerY}
               r={COMMIT_GRAPH_DOT_RADIUS}
               fill={readCommitGraphColor(row.colorIndex)}
             />
-            {isHeadRow ? (
-              <circle
-                cx={centerX}
-                cy={centerY}
-                r={COMMIT_GRAPH_HEAD_RING_RADIUS}
-                fill="none"
-                stroke="#ffffff"
-                strokeWidth={COMMIT_GRAPH_HEAD_RING_STROKE_WIDTH}
-              />
-            ) : null}
           </g>
         );
       })}
@@ -1548,64 +1667,7 @@ const CommitHistoryRow = ({
     }
   }
 
-  const graphThreadActions: {
-    threadGroup: ThreadGroup;
-    changeSummary: GitChangeSummary;
-    totalChangeSummary: { added: number; removed: number };
-    shouldShowChangeCount: boolean;
-    shouldShowCommitAction: boolean;
-    commitBranchTarget: CommitBranchTarget | null;
-    branchCreateTarget: BranchCreateTarget | null;
-  }[] = [];
-
-  for (const threadGroup of threadGroups) {
-    let branchCreateTarget: BranchCreateTarget | null = null;
-    const storedChangeSummary = gitChangesOfCwd[threadGroup.cwd];
-    const changeSummary = storedChangeSummary ?? EMPTY_GIT_CHANGE_SUMMARY;
-    const totalChangeSummary = readTotalGitChangeSummary(changeSummary);
-    const isChangeSummaryEmpty =
-      totalChangeSummary.added === 0 && totalChangeSummary.removed === 0;
-    const shouldShowChangeCount =
-      storedChangeSummary !== undefined && !isChangeSummaryEmpty;
-    const commitBranchTarget = readCommitBranchTarget({
-      cwd: threadGroup.cwd,
-      groupThreads: threadGroup.threads,
-      repoRoot,
-      currentBranch,
-      localBranches: commit.localBranches,
-      commitSha: commit.sha,
-    });
-    const shouldShowCommitAction =
-      threadGroup.cwd.length > 0 &&
-      shouldShowChangeCount &&
-      commitBranchTarget !== null;
-
-    if (threadGroup.key === branchCreateThreadGroupKey) {
-      branchCreateTarget = {
-        path: threadGroup.cwd,
-        title: threadGroup.cwd,
-      };
-    }
-
-    if (
-      shouldShowChangeCount ||
-      shouldShowCommitAction ||
-      branchCreateTarget !== null
-    ) {
-      graphThreadActions.push({
-        threadGroup,
-        changeSummary,
-        totalChangeSummary,
-        shouldShowChangeCount,
-        shouldShowCommitAction,
-        commitBranchTarget,
-        branchCreateTarget,
-      });
-    }
-  }
-
-  const shouldShowGraphActions =
-    mergeBranch !== null || graphThreadActions.length > 0;
+  const shouldShowGraphActions = mergeBranch !== null || isHeadRow;
   const commitDateText = formatCommitDate(commit.date);
 
   if (isBranchPointerDropTarget) {
@@ -1630,6 +1692,17 @@ const CommitHistoryRow = ({
       >
         {shouldShowGraphActions ? (
           <div className="commit-graph-actions">
+            {isHeadRow ? (
+              <TitleTooltip title="You">
+                <span className="commit-graph-head-icon" aria-label="You">
+                  <User
+                    aria-hidden="true"
+                    size={COMMIT_GRAPH_USER_ICON_SIZE}
+                    strokeWidth={COMMIT_GRAPH_USER_ICON_STROKE_WIDTH}
+                  />
+                </span>
+              </TitleTooltip>
+            ) : null}
             {mergeBranch === null ? null : (
               <TitleTooltip
                 title={
@@ -1656,85 +1729,23 @@ const CommitHistoryRow = ({
                 </span>
               </TitleTooltip>
             )}
-            {graphThreadActions.map((graphThreadAction) => {
-              const branchCreateTarget = graphThreadAction.branchCreateTarget;
-
-              return (
-                <span
-                  className="commit-graph-thread-actions"
-                  key={graphThreadAction.threadGroup.key}
-                >
-                  {graphThreadAction.shouldShowChangeCount ? (
-                    <TitleTooltip title="Show changes">
-                      <Button
-                        className="commit-thread-change-count"
-                        variant="ghost"
-                        size="xs"
-                        type="button"
-                        onMouseDown={(event) => event.stopPropagation()}
-                        onDoubleClick={(event) => event.stopPropagation()}
-                        onClick={(event) =>
-                          openChangeSummaryModal(event, {
-                            path: graphThreadAction.threadGroup.cwd,
-                            title: graphThreadAction.threadGroup.cwd,
-                            changeSummary: graphThreadAction.changeSummary,
-                          })
-                        }
-                      >
-                        <span className="commit-thread-change-added">
-                          +{graphThreadAction.totalChangeSummary.added}
-                        </span>
-                        <span className="commit-thread-change-removed">
-                          -{graphThreadAction.totalChangeSummary.removed}
-                        </span>
-                      </Button>
-                    </TitleTooltip>
-                  ) : null}
-                  {graphThreadAction.shouldShowCommitAction ? (
-                    <TitleTooltip title="Commit">
-                      <Button
-                        className="commit-thread-commit-action"
-                        variant="ghost"
-                        size="icon-xs"
-                        type="button"
-                        onMouseDown={(event) => event.stopPropagation()}
-                        onDoubleClick={(event) => event.stopPropagation()}
-                        onClick={(event) =>
-                          openCommitMessageModal(event, {
-                            path: graphThreadAction.threadGroup.cwd,
-                            title: graphThreadAction.threadGroup.cwd,
-                            branchTarget: graphThreadAction.commitBranchTarget,
-                          })
-                        }
-                      >
-                        <Check size={10} />
-                      </Button>
-                    </TitleTooltip>
-                  ) : branchCreateTarget === null ? null : (
-                    <TitleTooltip title="Add branch here">
-                      <Button
-                        className="commit-branch-create-action"
-                        variant="ghost"
-                        size="icon-xs"
-                        type="button"
-                        onMouseDown={(event) => event.stopPropagation()}
-                        onDoubleClick={(event) => event.stopPropagation()}
-                        onClick={(event) =>
-                          openBranchCreateModal(event, branchCreateTarget)
-                        }
-                      >
-                        <GitBranch size={10} />
-                      </Button>
-                    </TitleTooltip>
-                  )}
-                </span>
-              );
-            })}
           </div>
         ) : null}
       </div>
       <div className="commit-actors-cell">
-        <ChatRobotTags threadGroups={threadGroups} worktrees={worktrees} />
+        <ChatRobotTags
+          threadGroups={threadGroups}
+          gitChangesOfCwd={gitChangesOfCwd}
+          worktrees={worktrees}
+          repoRoot={repoRoot}
+          commitSha={commit.sha}
+          localBranches={commit.localBranches}
+          currentBranch={currentBranch}
+          branchCreateThreadGroupKey={branchCreateThreadGroupKey}
+          openBranchCreateModal={openBranchCreateModal}
+          openCommitMessageModal={openCommitMessageModal}
+          openChangeSummaryModal={openChangeSummaryModal}
+        />
       </div>
       <div className="commit-branch-tags-cell">
         <BranchTags
@@ -2938,7 +2949,7 @@ const CommitHistory = ({
                 <DialogHeader>
                   <DialogTitle>Create Branch</DialogTitle>
                   <DialogDescription>
-                    Create a branch for {branchCreateTarget.title}.
+                    Create a branch tag for this commit.
                   </DialogDescription>
                 </DialogHeader>
                 <Input
@@ -2980,9 +2991,7 @@ const CommitHistory = ({
               <form className="grid gap-4" onSubmit={submitCommitMessage}>
                 <DialogHeader>
                   <DialogTitle>Commit Changes</DialogTitle>
-                  <DialogDescription>
-                    Commit changes for {commitMessageTarget.title}.
-                  </DialogDescription>
+                  <DialogDescription>Enter a commit message.</DialogDescription>
                 </DialogHeader>
                 <Input
                   autoFocus
