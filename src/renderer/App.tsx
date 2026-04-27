@@ -94,15 +94,13 @@ const COMMIT_GRAPH_MIN_WIDTH = 160;
 const COMMIT_GRAPH_DOT_RADIUS = 4;
 // TODO: AI-PICKED-VALUE: This keeps graph lines readable in compact rows while making them less heavy.
 const COMMIT_GRAPH_SEGMENT_STROKE_WIDTH = 2.25;
-// TODO: AI-PICKED-VALUE: The HEAD icon is small enough to sit beside dense graph lanes without taking over the row.
-const COMMIT_GRAPH_USER_ICON_SIZE = 10;
-// TODO: AI-PICKED-VALUE: This stroke weight visually matches the rendered chat icon outline at dense row sizes.
-const COMMIT_GRAPH_USER_ICON_STROKE_WIDTH = 1.35;
-// TODO: AI-PICKED-VALUE: This keeps the HEAD icon aligned with the right edge of the graph column.
-const COMMIT_GRAPH_USER_ICON_RIGHT_PADDING = 6;
+// TODO: AI-PICKED-VALUE: The HEAD icon is large enough to read in compact rows without taking over the graph column.
+const COMMIT_GRAPH_USER_ICON_SIZE = 12;
+// TODO: AI-PICKED-VALUE: This stroke weight keeps the HEAD icon visibly bolder than the graph lines.
+const COMMIT_GRAPH_USER_ICON_STROKE_WIDTH = 2.25;
 const COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO = 0;
 const COMMIT_HISTORY_HEADER_HEIGHT = 22;
-// TODO: AI-PICKED-VALUE: This lets neighboring chat title tooltips hand off as a hover group without changing unrelated tooltip behavior.
+// TODO: AI-PICKED-VALUE: This gives neighboring chat title tooltips a short handoff window after the first tooltip opens.
 const CHAT_TITLE_TOOLTIP_SKIP_DELAY_MS = 350;
 // Dashboard reads touch Codex and Git, so automatic refreshes share the manual refresh path and never overlap.
 // TODO: AI-PICKED-VALUE: Refreshing every second keeps branch/worktree state current while the refresh queue prevents overlapping Git reads.
@@ -1054,6 +1052,25 @@ const BranchTags = ({
     isLocalBranchOfName[localBranch] = true;
   }
 
+  const copyBranchTagName = async (
+    event: MouseEvent<HTMLSpanElement>,
+    refName: string,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    try {
+      await window.molttree.copyText(refName);
+      toast("Copied!");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to copy branch name.";
+      toast.error("Error", {
+        description: message,
+      });
+    }
+  };
+
   if (!hasHead && orderedRefs.length === 0 && worktreesForCommit.length === 0) {
     return null;
   }
@@ -1100,7 +1117,7 @@ const BranchTags = ({
         const isTag = ref.startsWith("tag: ");
         const isOriginBranch = refName.startsWith("origin/");
         let refClassName = "commit-ref commit-ref-local";
-        let refTooltipTitle = `Local branch: ${refName}`;
+        let refTooltipTitle: string | null = null;
         const canDeleteBranch =
           isLocalBranch &&
           refName !== currentBranch &&
@@ -1109,7 +1126,6 @@ const BranchTags = ({
 
         if (isOriginBranch) {
           refClassName = "commit-ref commit-ref-origin";
-          refTooltipTitle = `Remote branch: ${refName}`;
         }
 
         if (isTag) {
@@ -1121,51 +1137,61 @@ const BranchTags = ({
           refTooltipTitle = ref;
         }
 
-        return (
-          <TitleTooltip title={refTooltipTitle} key={ref}>
-            <Badge
-              className={cn(
-                refClassName,
-                isLocalBranch && "commit-ref-draggable",
-              )}
-              variant="secondary"
-              draggable={isLocalBranch}
-              onDoubleClick={(event) => event.stopPropagation()}
-              onDragStart={(event) => {
-                if (!isLocalBranch) {
-                  return;
-                }
+        const refBadge = (
+          <Badge
+            className={cn(
+              refClassName,
+              isLocalBranch && "commit-ref-draggable",
+            )}
+            variant="secondary"
+            draggable={isLocalBranch}
+            key={ref}
+            onDoubleClick={(event) => event.stopPropagation()}
+            onContextMenu={(event) => {
+              void copyBranchTagName(event, refName);
+            }}
+            onDragStart={(event) => {
+              if (!isLocalBranch) {
+                return;
+              }
 
-                startBranchPointerDrag({
-                  event,
-                  branch: refName,
-                  oldSha: commitSha,
-                  oldShortSha: commitShortSha,
-                  oldSubject: commitSubject,
-                });
-              }}
-              onDragEnd={finishBranchPointerDrag}
-            >
-              <span>{refName}</span>
-              {canDeleteBranch ? (
-                <TitleTooltip title={`Delete ${refName}`}>
-                  <Button
-                    className="commit-ref-delete"
-                    variant="ghost"
-                    size="icon-xs"
-                    type="button"
-                    draggable={false}
-                    onMouseDown={(event) => event.stopPropagation()}
-                    onDoubleClick={(event) => event.stopPropagation()}
-                    onClick={(event) =>
-                      openBranchDeleteModal(event, refName, commitSha)
-                    }
-                  >
-                    <Trash2 size={9} />
-                  </Button>
-                </TitleTooltip>
-              ) : null}
-            </Badge>
+              startBranchPointerDrag({
+                event,
+                branch: refName,
+                oldSha: commitSha,
+                oldShortSha: commitShortSha,
+                oldSubject: commitSubject,
+              });
+            }}
+            onDragEnd={finishBranchPointerDrag}
+          >
+            <span>{refName}</span>
+            {canDeleteBranch ? (
+              <TitleTooltip title={`Delete ${refName}`}>
+                <Button
+                  className="commit-ref-delete"
+                  variant="ghost"
+                  size="icon-xs"
+                  type="button"
+                  draggable={false}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onDoubleClick={(event) => event.stopPropagation()}
+                  onClick={(event) =>
+                    openBranchDeleteModal(event, refName, commitSha)
+                  }
+                >
+                  <Trash2 size={9} />
+                </Button>
+              </TitleTooltip>
+            ) : null}
+          </Badge>
+        );
+
+        return refTooltipTitle === null ? (
+          refBadge
+        ) : (
+          <TitleTooltip title={refTooltipTitle} key={ref}>
+            {refBadge}
           </TitleTooltip>
         );
       })}
@@ -1349,7 +1375,7 @@ const ChatRobotTags = ({
               </TitleTooltip>
             ) : null}
             {shouldShowCommitAction ? (
-              <TitleTooltip title="Commit changes">
+              <TitleTooltip title="Commit">
                 <Button
                   className="commit-thread-commit-action"
                   variant="ghost"
@@ -1434,11 +1460,6 @@ const CommitGraphSvg = ({
       {graph.rows.map((row) => {
         const centerX = readCommitGraphX(row.lane);
         const centerY = readCommitGraphY(row.rowIndex);
-        const isHead = row.commit.refs.some((ref) => readIsHeadRef(ref));
-        const userIconX =
-          graphWidth -
-          COMMIT_GRAPH_USER_ICON_RIGHT_PADDING -
-          COMMIT_GRAPH_USER_ICON_SIZE;
 
         return (
           <g key={row.id}>
@@ -1448,18 +1469,6 @@ const CommitGraphSvg = ({
               r={COMMIT_GRAPH_DOT_RADIUS}
               fill={readCommitGraphColor(row.colorIndex)}
             />
-            {isHead ? (
-              <g className="commit-graph-head-icon">
-                <title>HEAD</title>
-                <User
-                  x={userIconX}
-                  y={centerY - COMMIT_GRAPH_USER_ICON_SIZE / 2}
-                  size={COMMIT_GRAPH_USER_ICON_SIZE}
-                  color="#343a43"
-                  strokeWidth={COMMIT_GRAPH_USER_ICON_STROKE_WIDTH}
-                />
-              </g>
-            ) : null}
           </g>
         );
       })}
@@ -1585,6 +1594,9 @@ const CommitHistoryRow = ({
     }
   }
 
+  const shouldShowGraphActions =
+    branchCreateTarget !== null || mergeBranch !== null || isHeadRow;
+
   if (isBranchPointerDropTarget) {
     rowClassName = `${rowClassName} commit-history-row-branch-drop-target`;
   }
@@ -1605,10 +1617,10 @@ const CommitHistoryRow = ({
         className="commit-graph-cell"
         onDoubleClick={openRowAfterDoubleClick}
       >
-        {branchCreateTarget === null && mergeBranch === null ? null : (
+        {shouldShowGraphActions ? (
           <div className="commit-graph-actions">
             {branchCreateTarget !== null ? (
-              <TitleTooltip title="Create branch">
+              <TitleTooltip title="Add branch here">
                 <Button
                   className="commit-branch-create-action"
                   variant="ghost"
@@ -1649,8 +1661,19 @@ const CommitHistoryRow = ({
                 </span>
               </TitleTooltip>
             )}
+            {isHeadRow ? (
+              <TitleTooltip title="You">
+                <span className="commit-graph-head-icon" aria-label="You">
+                  <User
+                    aria-hidden="true"
+                    size={COMMIT_GRAPH_USER_ICON_SIZE}
+                    strokeWidth={COMMIT_GRAPH_USER_ICON_STROKE_WIDTH}
+                  />
+                </span>
+              </TitleTooltip>
+            ) : null}
           </div>
-        )}
+        ) : null}
       </div>
       <div className="commit-actors-cell">
         <ChatRobotTags
@@ -3115,45 +3138,42 @@ const RepoSection = ({
       <div className="repo-header">
         <div className="repo-title">{repoFolderName}</div>
         <div className="repo-actions">
-          <TitleTooltip title="Reset branch tag changes for this repo">
+          <TitleTooltip title="Reset branches">
             <span className="title-tooltip-trigger">
               <Button
-                className="icon-button"
                 variant="outline"
-                size="icon"
+                size="icon-sm"
                 type="button"
                 onClick={() => openBranchTagChangeModal("reset", repo.root)}
                 disabled={repoBranchTagChanges.length === 0}
               >
-                <Undo2 size={18} />
+                <Undo2 size={15} />
               </Button>
             </span>
           </TitleTooltip>
-          <TitleTooltip title="Pull branch tag changes from origin for this repo">
+          <TitleTooltip title="Pull branches">
             <span className="title-tooltip-trigger">
               <Button
-                className="icon-button"
                 variant="outline"
-                size="icon"
+                size="icon-sm"
                 type="button"
                 onClick={() => openBranchTagChangeModal("pull", repo.root)}
                 disabled={repoBranchTagChanges.length === 0}
               >
-                <Download size={18} />
+                <Download size={15} />
               </Button>
             </span>
           </TitleTooltip>
-          <TitleTooltip title="Push branch tag changes for this repo">
+          <TitleTooltip title="Push branches">
             <span className="title-tooltip-trigger">
               <Button
-                className="icon-button"
                 variant="outline"
-                size="icon"
+                size="icon-sm"
                 type="button"
                 onClick={() => openBranchTagChangeModal("push", repo.root)}
                 disabled={repoBranchTagChanges.length === 0}
               >
-                <Upload size={18} />
+                <Upload size={15} />
               </Button>
             </span>
           </TitleTooltip>

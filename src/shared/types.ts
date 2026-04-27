@@ -127,6 +127,7 @@ export type MoltTreeApi = {
   openCodexThread: (threadId: string) => Promise<void>;
   openNewCodexThread: () => Promise<void>;
   openVSCodePath: (path: string) => Promise<void>;
+  copyText: (text: string) => Promise<void>;
   stageGitChanges: (path: string) => Promise<void>;
   unstageGitChanges: (path: string) => Promise<void>;
   commitAllGitChanges: (

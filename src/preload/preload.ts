@@ -27,6 +27,9 @@ const api: MoltTreeApi = {
   openVSCodePath: async (path: string) => {
     await ipcRenderer.invoke("vscode:openPath", path);
   },
+  copyText: async (text: string) => {
+    await ipcRenderer.invoke("clipboard:writeText", text);
+  },
   stageGitChanges: async (path: string) => {
     await ipcRenderer.invoke("git:stageChanges", path);
   },

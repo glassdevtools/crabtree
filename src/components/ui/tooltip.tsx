@@ -7,6 +7,7 @@ function TooltipProvider({
   // TODO: AI-PICKED-VALUE: This delay keeps dense table hover tooltips from opening while the mouse is just passing over rows.
   delayDuration = 900,
   skipDelayDuration = 0,
+  disableHoverableContent = true,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
   return (
@@ -14,6 +15,7 @@ function TooltipProvider({
       data-slot="tooltip-provider"
       delayDuration={delayDuration}
       skipDelayDuration={skipDelayDuration}
+      disableHoverableContent={disableHoverableContent}
       {...props}
     />
   );

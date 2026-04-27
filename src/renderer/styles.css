@@ -208,32 +208,6 @@ button {
   max-width: min(220px, calc(100vw - 16px));
 }
 
-.icon-button {
-  width: 34px;
-  height: 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #cbd2dc;
-  border-radius: 7px;
-  background: #ffffff;
-  color: #262a30;
-  cursor: pointer;
-}
-
-.icon-button:hover {
-  background: #eef2f7;
-}
-
-.icon-button:disabled {
-  color: #9aa3af;
-  cursor: default;
-}
-
-.icon-button:disabled:hover {
-  background: #ffffff;
-}
-
 .content-shell {
   min-height: 0;
   flex: 1;
@@ -428,7 +402,14 @@ button {
 }
 
 .commit-graph-head-icon {
-  pointer-events: auto;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* TODO: AI-PICKED-VALUE: This nudges the HEAD user marker left from the graph edge without moving other graph actions. */
+  margin-right: 4px;
+  color: #343a43;
 }
 
 .change-summary-modal {
@@ -649,6 +630,8 @@ button {
   font-size: 10px;
   line-height: 12px;
   font-weight: 720;
+  cursor: default;
+  user-select: none;
 }
 
 .commit-ref-local {
@@ -737,7 +720,8 @@ button {
   min-height: 16px;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  /* TODO: AI-PICKED-VALUE: This gives neighboring chat items inside a cwd group a little more breathing room without widening group breaks. */
+  gap: 3px;
   flex: 0 0 auto;
 }
 

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { app, BrowserWindow, clipboard, ipcMain, shell } from "electron";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type {
@@ -298,6 +298,14 @@ ipcMain.handle("vscode:openPath", async (_event, path: unknown) => {
   }
 
   await shell.openExternal(`vscode://file${pathToFileURL(path).pathname}`);
+});
+
+ipcMain.handle("clipboard:writeText", async (_event, text: unknown) => {
+  if (typeof text !== "string" || text.length === 0) {
+    throw new Error("text must be a non-empty string.");
+  }
+
+  clipboard.writeText(text);
 });
 
 ipcMain.handle("git:stageChanges", async (_event, path: unknown) => {
