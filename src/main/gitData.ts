@@ -19,6 +19,7 @@ type RepoSeed = {
   root: string;
   originUrl: string | null;
   currentBranch: string | null;
+  defaultBranch: string | null;
   threadIds: string[];
 };
 
@@ -77,6 +78,25 @@ const readIsGitWorkingTree = async ({ cwd }: { cwd: string }) => {
   return isInsideWorkTree === "true";
 };
 
+const readDefaultBranch = async ({ root }: { root: string }) => {
+  const originHead = await readNullableGitText({
+    cwd: root,
+    args: ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
+  });
+
+  if (originHead === null) {
+    return null;
+  }
+
+  const originPrefix = "origin/";
+
+  if (originHead.startsWith(originPrefix)) {
+    return originHead.slice(originPrefix.length);
+  }
+
+  return originHead;
+};
+
 const readRepoSeedForThread = async ({ thread }: { thread: CodexThread }) => {
   if (thread.cwd.length === 0) {
     return null;
@@ -99,12 +119,14 @@ const readRepoSeedForThread = async ({ thread }: { thread: CodexThread }) => {
     cwd: root,
     args: ["branch", "--show-current"],
   });
+  const defaultBranch = await readDefaultBranch({ root });
 
   const repoSeed: RepoSeed = {
     key: originUrl ?? root,
     root,
     originUrl,
     currentBranch,
+    defaultBranch,
     threadIds: [thread.id],
   };
 
@@ -634,6 +656,7 @@ export const readRepoGraphs = async ({
         root: repoSeed.root,
         originUrl: repoSeed.originUrl,
         currentBranch: repoSeed.currentBranch,
+        defaultBranch: repoSeed.defaultBranch,
         branchTagChanges,
         worktrees,
         commits,

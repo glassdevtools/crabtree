@@ -768,6 +768,7 @@ const BranchTags = ({
   refs,
   localBranches,
   currentBranch,
+  defaultBranch,
   commitSha,
   commitShortSha,
   isBranchDeleteSafeOfBranch,
@@ -778,6 +779,7 @@ const BranchTags = ({
   refs: string[];
   localBranches: string[];
   currentBranch: string | null;
+  defaultBranch: string | null;
   commitSha: string;
   commitShortSha: string;
   isBranchDeleteSafeOfBranch: { [branch: string]: boolean };
@@ -838,6 +840,7 @@ const BranchTags = ({
         const canDeleteBranch =
           isLocalBranch &&
           refName !== currentBranch &&
+          refName !== defaultBranch &&
           isBranchDeleteSafeOfBranch[refName] === true;
 
         if (isOriginBranch) {
@@ -1218,6 +1221,7 @@ const CommitHistoryRow = ({
   row,
   repoRoot,
   currentBranch,
+  defaultBranch,
   isHeadClean,
   threadOfId,
   gitChangesOfCwd,
@@ -1239,6 +1243,7 @@ const CommitHistoryRow = ({
   row: CommitGraphRow;
   repoRoot: string;
   currentBranch: string | null;
+  defaultBranch: string | null;
   isHeadClean: boolean;
   threadOfId: { [id: string]: CodexThread };
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
@@ -1343,6 +1348,7 @@ const CommitHistoryRow = ({
           refs={commit.refs}
           localBranches={commit.localBranches}
           currentBranch={currentBranch}
+          defaultBranch={defaultBranch}
           commitSha={commit.sha}
           commitShortSha={commit.shortSha}
           isBranchDeleteSafeOfBranch={isBranchDeleteSafeOfBranch}
@@ -1400,6 +1406,7 @@ const CommitHistory = ({
   threadOfId,
   repoRoot,
   currentBranch,
+  defaultBranch,
   gitChangesOfCwd,
   refreshDashboard,
   showErrorMessage,
@@ -1410,6 +1417,7 @@ const CommitHistory = ({
   threadOfId: { [id: string]: CodexThread };
   repoRoot: string;
   currentBranch: string | null;
+  defaultBranch: string | null;
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   refreshDashboard: () => Promise<void>;
   showErrorMessage: (message: string) => void;
@@ -2190,6 +2198,7 @@ const CommitHistory = ({
               row={row}
               repoRoot={repoRoot}
               currentBranch={currentBranch}
+              defaultBranch={defaultBranch}
               isHeadClean={isHeadClean}
               threadOfId={threadOfId}
               gitChangesOfCwd={gitChangesOfCwd}
@@ -2461,6 +2470,7 @@ const RepoSection = ({
           threadOfId={threadOfId}
           repoRoot={repo.root}
           currentBranch={repo.currentBranch}
+          defaultBranch={repo.defaultBranch}
           gitChangesOfCwd={gitChangesOfCwd}
           refreshDashboard={refreshDashboard}
           showErrorMessage={showErrorMessage}
