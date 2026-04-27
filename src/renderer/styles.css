@@ -193,7 +193,7 @@ textarea,
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 14px;
   margin-left: auto;
 }
 
@@ -370,7 +370,7 @@ textarea,
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
   overflow-anchor: none;
   padding: 12px 0;
 }
@@ -449,10 +449,18 @@ textarea,
   --commit-history-table-width: 1724px;
   min-height: 0;
   flex: 1;
-  overflow: auto;
+  overflow: visible;
   overflow-anchor: none;
   border: 1px solid #d9dee6;
   border-radius: 0;
+  background: #ffffff;
+}
+
+.commit-history-header-scroll {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  overflow: hidden;
   background: #ffffff;
 }
 
@@ -463,9 +471,6 @@ textarea,
 }
 
 .commit-history-header {
-  position: sticky;
-  top: 0;
-  z-index: 5;
   display: grid;
   grid-template-columns: var(--commit-history-grid-template-columns);
   min-width: var(--commit-history-table-width);
@@ -476,6 +481,11 @@ textarea,
   color: #5f6670;
   font-size: 11px;
   font-weight: 700;
+}
+
+.commit-history-body-scroll {
+  overflow-x: auto;
+  overflow-y: visible;
 }
 
 .commit-history-header-cell {
@@ -1033,13 +1043,19 @@ textarea,
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  padding: 0;
+  margin: 0 2px;
+  padding: 0 2px;
   border: 0;
   background: transparent;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 10px;
   font-weight: 760;
   cursor: pointer;
+}
+
+.commit-thread-group .commit-branch-create-action,
+.commit-thread-group .commit-thread-commit-action {
+  margin: 0 2px;
 }
 
 .commit-thread-change-added {
