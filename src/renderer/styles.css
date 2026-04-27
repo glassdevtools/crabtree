@@ -738,7 +738,7 @@ textarea,
   color: #202124;
 }
 
-.commit-history-row-branch-drop-target {
+.commit-branch-tags-cell-branch-drop-target {
   outline: 2px solid #0a84ff;
   outline-offset: -2px;
   background: #eaf1ff;
@@ -749,10 +749,7 @@ textarea,
 }
 
 /* TODO: AI-PICKED-VALUE: This gray is a subtle hover state that keeps the compact table readable without adding row lines. */
-.commit-history-row:not(
-    .commit-history-row-selected,
-    .commit-history-row-branch-drop-target
-  ):hover {
+.commit-history-row:not(.commit-history-row-selected):hover {
   background: #f3f4f6;
 }
 
@@ -761,10 +758,6 @@ textarea,
 .commit-history-row-selected:nth-child(even) {
   border-radius: 5px;
   background: #dbeafe;
-}
-
-.commit-history-row-branch-drop-target:nth-child(even) {
-  background: #eaf1ff;
 }
 
 .commit-graph-cell {
@@ -961,6 +954,7 @@ textarea,
 }
 
 .commit-thread-group {
+  position: relative;
   min-height: 18px;
   display: inline-flex;
   align-items: center;
@@ -971,8 +965,23 @@ textarea,
   padding: 1px 3px;
   border: 0;
   border-radius: 5px;
-  background: #fff8df;
   box-sizing: border-box;
+}
+
+.commit-thread-group-highlighted {
+  background: #fff8df;
+}
+
+.commit-thread-group-background-tooltip {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+}
+
+.commit-thread-group [data-slot="button"] {
+  position: relative;
+  z-index: 1;
 }
 
 .commit-thread-chat {
@@ -1004,11 +1013,6 @@ textarea,
 
 .commit-thread-chat-bubble {
   stroke: currentColor;
-}
-
-.commit-thread-worktree-mark {
-  color: #4d5562;
-  fill: currentColor;
 }
 
 .commit-thread-chat:focus {
