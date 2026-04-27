@@ -839,7 +839,7 @@ const BranchTags = ({
     isLocalBranchOfName[localBranch] = true;
   }
 
-  if (refs.length === 0 && worktreesForCommit.length === 0) {
+  if (!hasHead && orderedRefs.length === 0 && worktreesForCommit.length === 0) {
     return null;
   }
 
@@ -2637,10 +2637,20 @@ const CommitHistory = ({
               <p className="branch-delete-modal-message">
                 Merge {branchMergeConfirmation.branch} into HEAD?
               </p>
-              <p className="branch-delete-modal-message">
-                +{branchMergeConfirmation.preview.added} -
-                {branchMergeConfirmation.preview.removed} with{" "}
-                {branchMergeConfirmation.preview.conflictCount} conflicts.
+              <p className="branch-delete-modal-message branch-merge-preview-message">
+                <span className="commit-thread-change-added">
+                  +{branchMergeConfirmation.preview.added}
+                </span>
+                <span className="commit-thread-change-removed">
+                  -{branchMergeConfirmation.preview.removed}
+                </span>
+                <span>
+                  with{" "}
+                  <strong className="branch-merge-conflict-count">
+                    {branchMergeConfirmation.preview.conflictCount} conflicts
+                  </strong>
+                  .
+                </span>
               </p>
               <div className="commit-message-modal-actions">
                 <button

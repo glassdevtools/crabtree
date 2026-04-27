@@ -344,6 +344,17 @@ button {
   font-size: 13px;
 }
 
+.branch-merge-preview-message {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.branch-merge-conflict-count {
+  color: #c53a13;
+  font-weight: 820;
+}
+
 .change-summary-breakdown {
   display: flex;
   flex-direction: column;
