@@ -1,12 +1,11 @@
 import {
   Archive,
-  Bot,
   Check,
   Download,
   GitBranch,
   GitCommitHorizontal,
   GitPullRequestArrow,
-  RefreshCw,
+  MessageCircle,
   Trash2,
   Undo2,
   Upload,
@@ -1054,7 +1053,7 @@ const ChatRobotTags = ({
 
               return (
                 <span
-                  className="commit-thread-robot"
+                  className="commit-thread-chat"
                   title={isThreadActive ? `${title} is loading` : title}
                   role="button"
                   tabIndex={0}
@@ -1076,7 +1075,7 @@ const ChatRobotTags = ({
                     void openThread(thread.id);
                   }}
                 >
-                  <Bot size={14} />
+                  <MessageCircle size={14} />
                 </span>
               );
             })}
@@ -2872,13 +2871,6 @@ export const App = () => {
               </select>
             </label>
           )}
-          <button
-            className="icon-button"
-            title="Refresh Git and Codex data"
-            onClick={refreshDashboard}
-          >
-            <RefreshCw size={18} />
-          </button>
         </div>
       </header>
 

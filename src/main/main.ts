@@ -22,6 +22,8 @@ const MAIN_WINDOW_WIDTH = 1320;
 const MAIN_WINDOW_HEIGHT = 860;
 const MAIN_WINDOW_MIN_WIDTH = 980;
 const MAIN_WINDOW_MIN_HEIGHT = 640;
+let dashboardReadPromise: ReturnType<typeof readDashboardData> | null = null;
+let shouldReadDashboardAgain = false;
 
 const createMainWindow = () => {
   const mainWindow = new BrowserWindow({
@@ -65,6 +67,36 @@ const readGitTextForPath = async ({
   args: string[];
 }) => {
   return (await simpleGit({ baseDir: path }).raw(args)).trim();
+};
+
+const readDashboardDataWithoutOverlap = async () => {
+  if (dashboardReadPromise !== null) {
+    shouldReadDashboardAgain = true;
+
+    return await dashboardReadPromise;
+  }
+
+  const currentDashboardReadPromise = (async () => {
+    shouldReadDashboardAgain = false;
+    let dashboardData = await readDashboardData();
+
+    while (shouldReadDashboardAgain) {
+      shouldReadDashboardAgain = false;
+      dashboardData = await readDashboardData();
+    }
+
+    return dashboardData;
+  })();
+
+  dashboardReadPromise = currentDashboardReadPromise;
+
+  try {
+    return await currentDashboardReadPromise;
+  } finally {
+    if (dashboardReadPromise === currentDashboardReadPromise) {
+      dashboardReadPromise = null;
+    }
+  }
 };
 
 const isObject = (value: unknown): value is { [key: string]: unknown } => {
@@ -794,7 +826,7 @@ const resetGitBranchTagChanges = async (
 };
 
 ipcMain.handle("dashboard:read", async () => {
-  return await readDashboardData();
+  return await readDashboardDataWithoutOverlap();
 });
 
 ipcMain.handle("codex:openThread", async (_event, threadId: unknown) => {
