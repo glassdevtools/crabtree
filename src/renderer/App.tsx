@@ -42,9 +42,9 @@ const COMMIT_GRAPH_USER_ICON_SIZE = 14;
 // TODO: AI-PICKED-VALUE: This keeps the HEAD icon aligned with the right edge of the graph column.
 const COMMIT_GRAPH_USER_ICON_RIGHT_PADDING = 10;
 const COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO = 0;
-// Dashboard reads touch Codex and Git, so automatic refreshes are spaced out and share the manual refresh path.
-// TODO: AI-PICKED-VALUE: Refreshing every 5 seconds keeps branch/worktree state current without making Git reads constant.
-const DASHBOARD_REFRESH_INTERVAL_MS = 5000;
+// Dashboard reads touch Codex and Git, so automatic refreshes share the manual refresh path and never overlap.
+// TODO: AI-PICKED-VALUE: Refreshing every second keeps branch/worktree state current while the refresh queue prevents overlapping Git reads.
+const DASHBOARD_REFRESH_INTERVAL_MS = 1000;
 // TODO: AI-PICKED-VALUE: Four seconds is long enough to read a short success toast without requiring manual dismissal.
 const SUCCESS_MESSAGE_TIMEOUT_MS = 4000;
 const COMMIT_GRAPH_COLORS = [
@@ -1968,6 +1968,8 @@ const CommitHistory = ({
       const message =
         error instanceof Error ? error.message : "Failed to preview merge.";
       showErrorMessage(message);
+    } finally {
+      void refreshDashboard();
     }
   };
   const confirmBranchMerge = async () => {
@@ -2436,6 +2438,8 @@ export const App = () => {
   const [branchTagChangeConfirmation, setBranchTagChangeConfirmation] =
     useState<BranchTagChangeConfirmation | null>(null);
   const isDashboardRefreshRunningRef = useRef(false);
+  const shouldRefreshDashboardAgainRef = useRef(false);
+  const dashboardRefreshPromiseRef = useRef<Promise<void> | null>(null);
 
   const threadOfId = useMemo(() => {
     if (dashboardData === null) {
@@ -2447,38 +2451,56 @@ export const App = () => {
 
   const refreshDashboard = useCallback(async () => {
     if (isDashboardRefreshRunningRef.current) {
+      shouldRefreshDashboardAgainRef.current = true;
+
+      if (dashboardRefreshPromiseRef.current !== null) {
+        await dashboardRefreshPromiseRef.current;
+      }
+
       return;
     }
 
-    isDashboardRefreshRunningRef.current = true;
-    setIsLoading(true);
-    setErrorMessage(null);
+    const dashboardRefreshPromise = (async () => {
+      isDashboardRefreshRunningRef.current = true;
+      setIsLoading(true);
 
-    try {
-      const nextDashboardData = await window.molttree.readDashboard();
-      setDashboardData(nextDashboardData);
-      setBranchTagChanges((currentBranchTagChanges) =>
-        syncBranchTagChangesWithDashboardData({
-          branchTagChanges: currentBranchTagChanges,
-          dashboardData: nextDashboardData,
-        }),
-      );
+      try {
+        do {
+          shouldRefreshDashboardAgainRef.current = false;
+          setErrorMessage(null);
 
-      if (nextDashboardData.gitErrors.length > 0) {
-        setSuccessMessage(null);
-        setErrorMessage(nextDashboardData.gitErrors.join("\n"));
+          try {
+            const nextDashboardData = await window.molttree.readDashboard();
+            setDashboardData(nextDashboardData);
+            setBranchTagChanges((currentBranchTagChanges) =>
+              syncBranchTagChangesWithDashboardData({
+                branchTagChanges: currentBranchTagChanges,
+                dashboardData: nextDashboardData,
+              }),
+            );
+
+            if (nextDashboardData.gitErrors.length > 0) {
+              setSuccessMessage(null);
+              setErrorMessage(nextDashboardData.gitErrors.join("\n"));
+            }
+          } catch (error) {
+            const message =
+              error instanceof Error
+                ? error.message
+                : "Failed to read dashboard data.";
+            setSuccessMessage(null);
+            setErrorMessage(message);
+          }
+        } while (shouldRefreshDashboardAgainRef.current);
+      } finally {
+        isDashboardRefreshRunningRef.current = false;
+        dashboardRefreshPromiseRef.current = null;
+        setIsLoading(false);
       }
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Failed to read dashboard data.";
-      setSuccessMessage(null);
-      setErrorMessage(message);
-    } finally {
-      isDashboardRefreshRunningRef.current = false;
-      setIsLoading(false);
-    }
+    })();
+
+    dashboardRefreshPromiseRef.current = dashboardRefreshPromise;
+    await dashboardRefreshPromise;
   }, []);
   const showErrorMessage = useCallback((message: string) => {
     setSuccessMessage(null);
