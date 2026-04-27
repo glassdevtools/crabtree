@@ -30,6 +30,7 @@ import type {
   GitWorktree,
   RepoGraph,
 } from "../shared/types";
+import { setFdLimit } from "node:process";
 
 // The history view is a SourceTree-style row table. Git owns the commits; the renderer only assigns lanes.
 // TODO: AI-PICKED-VALUE: These graph sizes and colors are initial SourceTree-like choices for dense commit rows.
@@ -642,6 +643,10 @@ const createCommitGraph = (commits: GitCommit[]) => {
     nextLanes.splice(lane, 1);
     const parentLanes: CommitGraphLane[] = [];
 
+
+    // dsf
+    // setFdLimitdsf
+    // sdf
     for (
       let parentIndex = 0;
       parentIndex < graphItem.parents.length;
