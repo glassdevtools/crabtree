@@ -437,6 +437,11 @@ button {
   border-bottom: 0;
 }
 
+.change-summary-row-empty .commit-thread-change-added,
+.change-summary-row-empty .commit-thread-change-removed {
+  color: #8b929c;
+}
+
 .change-summary-modal-link {
   align-self: flex-start;
   padding: 0;
@@ -676,6 +681,11 @@ button {
 
 .commit-thread-change-removed {
   color: #c53a13;
+}
+
+.commit-thread-change-count-empty .commit-thread-change-added,
+.commit-thread-change-count-empty .commit-thread-change-removed {
+  color: #8b929c;
 }
 
 .commit-ref svg,

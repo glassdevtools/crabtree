@@ -917,6 +917,9 @@ const ChatRobotTags = ({
         const shouldShowChangeCount = storedChangeSummary !== undefined;
         const isChangeSummaryEmpty =
           totalChangeSummary.added === 0 && totalChangeSummary.removed === 0;
+        const changeCountClassName = isChangeSummaryEmpty
+          ? "commit-thread-change-count commit-thread-change-count-empty"
+          : "commit-thread-change-count";
         const shouldShowBranchCreateAction =
           shouldShowBranchCreateActions &&
           threadGroup.cwd.length > 0 &&
@@ -963,7 +966,7 @@ const ChatRobotTags = ({
             })}
             {shouldShowChangeCount ? (
               <button
-                className="commit-thread-change-count"
+                className={changeCountClassName}
                 title={threadGroup.cwd}
                 type="button"
                 onMouseDown={(event) => event.stopPropagation()}
@@ -2126,7 +2129,14 @@ const CommitHistory = ({
                 {changeSummaryTarget.title}
               </p>
               <div className="change-summary-breakdown">
-                <div className="change-summary-row">
+                <div
+                  className={
+                    changeSummaryTarget.changeSummary.staged.added === 0 &&
+                    changeSummaryTarget.changeSummary.staged.removed === 0
+                      ? "change-summary-row change-summary-row-empty"
+                      : "change-summary-row"
+                  }
+                >
                   <span>Staged</span>
                   <span className="commit-thread-change-added">
                     +{changeSummaryTarget.changeSummary.staged.added}
@@ -2135,7 +2145,14 @@ const CommitHistory = ({
                     -{changeSummaryTarget.changeSummary.staged.removed}
                   </span>
                 </div>
-                <div className="change-summary-row">
+                <div
+                  className={
+                    changeSummaryTarget.changeSummary.unstaged.added === 0 &&
+                    changeSummaryTarget.changeSummary.unstaged.removed === 0
+                      ? "change-summary-row change-summary-row-empty"
+                      : "change-summary-row"
+                  }
+                >
                   <span>Unstaged</span>
                   <span className="commit-thread-change-added">
                     +{changeSummaryTarget.changeSummary.unstaged.added}
