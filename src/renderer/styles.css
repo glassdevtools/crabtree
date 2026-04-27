@@ -291,6 +291,10 @@ button {
   width: 520px;
 }
 
+.branch-pointer-move-modal {
+  width: 560px;
+}
+
 .commit-message-modal h3 {
   margin: 0;
   color: #262a30;
@@ -540,7 +544,6 @@ button {
 
 /* TODO: AI-PICKED-VALUE: This keeps the delete affordance small enough to fit inside compact branch tags. */
 .commit-branch-create-action,
-.commit-thread-archive-action,
 .commit-thread-commit-action,
 .commit-graph-merge-action,
 .commit-ref-delete {
@@ -566,7 +569,6 @@ button {
 }
 
 .commit-branch-create-action:hover,
-.commit-thread-archive-action:hover,
 .commit-thread-commit-action:hover,
 .commit-graph-merge-action:hover {
   color: #0a64c9;
@@ -677,6 +679,9 @@ button {
   bottom: 18px;
   z-index: 30;
   max-width: 440px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
   padding: 10px 12px;
   border: 1px solid #f0b6aa;
   border-radius: 7px;
@@ -684,7 +689,23 @@ button {
   box-shadow: 0 12px 28px rgba(26, 33, 44, 0.18);
   color: #7c2d1e;
   font-size: 13px;
+}
+
+.error-banner span {
+  min-width: 0;
+  flex: 1 1 auto;
   white-space: pre-wrap;
+}
+
+.error-banner button {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #7c2d1e;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
 }
 
 .success-banner {

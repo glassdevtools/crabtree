@@ -9,7 +9,6 @@ import {
   Upload,
   User,
 } from "lucide-react";
-import { GoArchive } from "react-icons/go";
 import { IoChatbubbleOutline } from "react-icons/io5";
 import { MdOutlineCallSplit } from "react-icons/md";
 import {
@@ -247,6 +246,7 @@ type BranchPointerDrag = {
   branch: string;
   oldSha: string;
   oldShortSha: string;
+  oldSubject: string;
 };
 
 type BranchPointerMove = {
@@ -254,8 +254,11 @@ type BranchPointerMove = {
   branch: string;
   oldSha: string;
   oldShortSha: string;
+  oldSubject: string;
   newSha: string;
   newShortSha: string;
+  newSubject: string;
+  willMoveCheckedOutWorktree: boolean;
 };
 
 type BranchDeleteTarget = {
@@ -283,11 +286,6 @@ type ChangeSummaryTarget = {
   path: string;
   title: string;
   changeSummary: GitChangeSummary;
-};
-
-type ThreadArchiveTarget = {
-  title: string;
-  threadIds: string[];
 };
 
 type BranchMergeConfirmation = {
@@ -781,6 +779,7 @@ const BranchTags = ({
   defaultBranch,
   commitSha,
   commitShortSha,
+  commitSubject,
   isBranchDeleteSafeOfBranch,
   openBranchDeleteModal,
   startBranchPointerDrag,
@@ -792,6 +791,7 @@ const BranchTags = ({
   defaultBranch: string | null;
   commitSha: string;
   commitShortSha: string;
+  commitSubject: string;
   isBranchDeleteSafeOfBranch: { [branch: string]: boolean };
   openBranchDeleteModal: (
     event: MouseEvent<HTMLButtonElement>,
@@ -803,11 +803,13 @@ const BranchTags = ({
     branch,
     oldSha,
     oldShortSha,
+    oldSubject,
   }: {
     event: DragEvent<HTMLElement>;
     branch: string;
     oldSha: string;
     oldShortSha: string;
+    oldSubject: string;
   }) => void;
   finishBranchPointerDrag: () => void;
 }) => {
@@ -882,6 +884,7 @@ const BranchTags = ({
                 branch: refName,
                 oldSha: commitSha,
                 oldShortSha: commitShortSha,
+                oldSubject: commitSubject,
               });
             }}
             onDragEnd={finishBranchPointerDrag}
@@ -920,8 +923,6 @@ const ChatRobotTags = ({
   openBranchCreateModal,
   openCommitMessageModal,
   openChangeSummaryModal,
-  archiveThreadGroup,
-  isThreadArchiveSafe,
 }: {
   threads: CodexThread[];
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
@@ -942,11 +943,6 @@ const ChatRobotTags = ({
     event: MouseEvent<HTMLButtonElement>,
     changeSummaryTarget: ChangeSummaryTarget,
   ) => void;
-  archiveThreadGroup: (
-    event: MouseEvent<HTMLButtonElement>,
-    threads: CodexThread[],
-  ) => void;
-  isThreadArchiveSafe: boolean;
 }) => {
   if (threads.length === 0) {
     return null;
@@ -959,12 +955,9 @@ const ChatRobotTags = ({
     [];
   const groupIndexOfKey: { [key: string]: number } = {};
   const isLocalBranchOfBranch: { [branch: string]: boolean } = {};
-  const readIsWorktreeThread = (thread: CodexThread) => {
+  const readIsWorktreeCwd = (cwd: string) => {
     for (const worktree of worktrees) {
-      if (
-        thread.cwd === worktree.path ||
-        thread.cwd.startsWith(`${worktree.path}/`)
-      ) {
+      if (cwd === worktree.path || cwd.startsWith(`${worktree.path}/`)) {
         return true;
       }
     }
@@ -1037,9 +1030,16 @@ const ChatRobotTags = ({
     threadGroups.push({ key: groupKey, cwd: thread.cwd, threads: [thread] });
   }
 
+  const displayedThreadGroups = [
+    ...threadGroups.filter(
+      (threadGroup) => !readIsWorktreeCwd(threadGroup.cwd),
+    ),
+    ...threadGroups.filter((threadGroup) => readIsWorktreeCwd(threadGroup.cwd)),
+  ];
+
   return (
     <div className="commit-label-list commit-thread-group-list">
-      {threadGroups.map((threadGroup) => {
+      {displayedThreadGroups.map((threadGroup) => {
         const storedChangeSummary = gitChangesOfCwd[threadGroup.cwd];
         const changeSummary = storedChangeSummary ?? EMPTY_GIT_CHANGE_SUMMARY;
         const totalChangeSummary = readTotalGitChangeSummary(changeSummary);
@@ -1059,12 +1059,6 @@ const ChatRobotTags = ({
           threadGroup.cwd.length > 0 &&
           shouldShowChangeCount &&
           !shouldShowBranchCreateAction;
-        const shouldShowThreadArchiveAction =
-          threadGroup.cwd.length > 0 &&
-          storedChangeSummary !== undefined &&
-          isChangeSummaryEmpty &&
-          (isThreadArchiveSafe || threadGroups.length > 1);
-
         return (
           <span className="commit-thread-group" key={threadGroup.key}>
             {threadGroup.threads.map((thread) => {
@@ -1096,7 +1090,7 @@ const ChatRobotTags = ({
                   }}
                 >
                   <IoChatbubbleOutline size={17} />
-                  {readIsWorktreeThread(thread) ? (
+                  {readIsWorktreeCwd(thread.cwd) ? (
                     <MdOutlineCallSplit
                       aria-hidden="true"
                       className="commit-thread-worktree-mark"
@@ -1162,20 +1156,6 @@ const ChatRobotTags = ({
                 }
               >
                 <Check size={13} />
-              </button>
-            ) : null}
-            {shouldShowThreadArchiveAction ? (
-              <button
-                className="commit-thread-archive-action"
-                title={`Archive chats for ${threadGroup.cwd}`}
-                type="button"
-                onMouseDown={(event) => event.stopPropagation()}
-                onDoubleClick={(event) => event.stopPropagation()}
-                onClick={(event) =>
-                  archiveThreadGroup(event, threadGroup.threads)
-                }
-              >
-                <GoArchive size={13} />
               </button>
             ) : null}
           </span>
@@ -1284,7 +1264,7 @@ const CommitHistoryRow = ({
   gitChangesOfCwd,
   isBranchPointerDropTarget,
   isHeadAncestor,
-  isThreadArchiveSafe,
+  isAfterHead,
   isBranchDeleteSafeOfBranch,
   updateBranchPointerDropTarget,
   clearBranchPointerDropTarget,
@@ -1295,7 +1275,6 @@ const CommitHistoryRow = ({
   openCommitMessageModal,
   openChangeSummaryModal,
   openBranchMergeModal,
-  archiveThreadGroup,
   startBranchPointerDrag,
   finishBranchPointerDrag,
 }: {
@@ -1309,7 +1288,7 @@ const CommitHistoryRow = ({
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   isBranchPointerDropTarget: boolean;
   isHeadAncestor: boolean;
-  isThreadArchiveSafe: boolean;
+  isAfterHead: boolean;
   isBranchDeleteSafeOfBranch: { [branch: string]: boolean };
   updateBranchPointerDropTarget: (event: DragEvent<HTMLDivElement>) => void;
   clearBranchPointerDropTarget: () => void;
@@ -1336,20 +1315,18 @@ const CommitHistoryRow = ({
     event: MouseEvent<HTMLButtonElement>,
     branch: string,
   ) => void;
-  archiveThreadGroup: (
-    event: MouseEvent<HTMLButtonElement>,
-    threads: CodexThread[],
-  ) => void;
   startBranchPointerDrag: ({
     event,
     branch,
     oldSha,
     oldShortSha,
+    oldSubject,
   }: {
     event: DragEvent<HTMLElement>;
     branch: string;
     oldSha: string;
     oldShortSha: string;
+    oldSubject: string;
   }) => void;
   finishBranchPointerDrag: () => void;
 }) => {
@@ -1359,7 +1336,7 @@ const CommitHistoryRow = ({
     .filter((rowThread): rowThread is CodexThread => rowThread !== undefined);
   const isHeadRow = commit.refs.some((ref) => readIsHeadRef(ref));
   const mergeableBranches =
-    isHeadRow || isHeadAncestor || isHeadClean === false
+    isHeadRow || isHeadAncestor || isAfterHead || isHeadClean === false
       ? []
       : commit.localBranches.filter(
           (localBranch) => localBranch !== currentBranch,
@@ -1409,8 +1386,6 @@ const CommitHistoryRow = ({
           openBranchCreateModal={openBranchCreateModal}
           openCommitMessageModal={openCommitMessageModal}
           openChangeSummaryModal={openChangeSummaryModal}
-          archiveThreadGroup={archiveThreadGroup}
-          isThreadArchiveSafe={isThreadArchiveSafe}
         />
       </div>
       <div className="commit-branch-tags-cell">
@@ -1421,6 +1396,7 @@ const CommitHistoryRow = ({
           defaultBranch={defaultBranch}
           commitSha={commit.sha}
           commitShortSha={commit.shortSha}
+          commitSubject={commit.subject}
           isBranchDeleteSafeOfBranch={isBranchDeleteSafeOfBranch}
           openBranchDeleteModal={openBranchDeleteModal}
           startBranchPointerDrag={startBranchPointerDrag}
@@ -1508,8 +1484,6 @@ const CommitHistory = ({
   const [commitMessage, setCommitMessage] = useState("");
   const [changeSummaryTarget, setChangeSummaryTarget] =
     useState<ChangeSummaryTarget | null>(null);
-  const [threadArchiveTarget, setThreadArchiveTarget] =
-    useState<ThreadArchiveTarget | null>(null);
   const [branchToDelete, setBranchToDelete] =
     useState<BranchDeleteTarget | null>(null);
   const [branchMergeConfirmation, setBranchMergeConfirmation] =
@@ -1571,22 +1545,46 @@ const CommitHistory = ({
 
     return nextIsHeadAncestorOfSha;
   }, [commits]);
-  const isThreadArchiveSafeOfSha = useMemo(() => {
-    const childCountOfSha: { [sha: string]: number } = {};
-    const nextIsThreadArchiveSafeOfSha: { [sha: string]: boolean } = {};
+  const isAfterHeadOfSha = useMemo(() => {
+    const childShasOfSha: { [sha: string]: string[] } = {};
+    const nextIsAfterHeadOfSha: { [sha: string]: boolean } = {};
+    let headSha: string | null = null;
 
     for (const commit of commits) {
+      if (commit.refs.some((ref) => readIsHeadRef(ref))) {
+        headSha = commit.sha;
+      }
+
       for (const parent of commit.parents) {
-        childCountOfSha[parent] = (childCountOfSha[parent] ?? 0) + 1;
+        if (childShasOfSha[parent] === undefined) {
+          childShasOfSha[parent] = [];
+        }
+
+        childShasOfSha[parent].push(commit.sha);
       }
     }
 
-    for (const commit of commits) {
-      nextIsThreadArchiveSafeOfSha[commit.sha] =
-        commit.refs.length > 0 || (childCountOfSha[commit.sha] ?? 0) > 0;
+    if (headSha === null) {
+      return nextIsAfterHeadOfSha;
     }
 
-    return nextIsThreadArchiveSafeOfSha;
+    const shasToRead = [...(childShasOfSha[headSha] ?? [])];
+
+    while (shasToRead.length > 0) {
+      const sha = shasToRead.pop();
+
+      if (sha === undefined || nextIsAfterHeadOfSha[sha] === true) {
+        continue;
+      }
+
+      nextIsAfterHeadOfSha[sha] = true;
+
+      for (const childSha of childShasOfSha[sha] ?? []) {
+        shasToRead.push(childSha);
+      }
+    }
+
+    return nextIsAfterHeadOfSha;
   }, [commits]);
   // Branch delete is safe only when local refs or fixed refs keep the branch tip visible.
   const isBranchDeleteSafeOfBranch = useMemo(() => {
@@ -1734,6 +1732,122 @@ const CommitHistory = ({
 
     return nextIsBranchDeleteSafeOfBranch;
   }, [commits, currentBranch, worktrees]);
+  const commitOfSha = useMemo(() => {
+    const nextCommitOfSha: { [sha: string]: GitCommit } = {};
+
+    for (const commit of commits) {
+      nextCommitOfSha[commit.sha] = commit;
+    }
+
+    return nextCommitOfSha;
+  }, [commits]);
+  const readIsAncestorInVisibleGraph = ({
+    ancestorSha,
+    descendantSha,
+  }: {
+    ancestorSha: string;
+    descendantSha: string;
+  }) => {
+    const shasToRead = [descendantSha];
+    const isReadSha: { [sha: string]: boolean } = {};
+
+    while (shasToRead.length > 0) {
+      const sha = shasToRead.pop();
+
+      if (sha === undefined || isReadSha[sha] === true) {
+        continue;
+      }
+
+      if (sha === ancestorSha) {
+        return true;
+      }
+
+      isReadSha[sha] = true;
+      const commit = commitOfSha[sha];
+
+      if (commit === undefined) {
+        continue;
+      }
+
+      for (const parent of commit.parents) {
+        shasToRead.push(parent);
+      }
+    }
+
+    return false;
+  };
+  const readIsBranchMoveSafe = ({
+    branch,
+    oldSha,
+    newSha,
+  }: {
+    branch: string;
+    oldSha: string;
+    newSha: string;
+  }) => {
+    if (
+      readIsAncestorInVisibleGraph({
+        ancestorSha: oldSha,
+        descendantSha: newSha,
+      })
+    ) {
+      return true;
+    }
+
+    for (const commit of commits) {
+      for (const localBranch of commit.localBranches) {
+        if (
+          localBranch !== branch &&
+          readIsAncestorInVisibleGraph({
+            ancestorSha: oldSha,
+            descendantSha: commit.sha,
+          })
+        ) {
+          return true;
+        }
+      }
+
+      for (const ref of commit.refs) {
+        if (
+          (ref === "HEAD" || ref.startsWith("tag: ")) &&
+          readIsAncestorInVisibleGraph({
+            ancestorSha: oldSha,
+            descendantSha: commit.sha,
+          })
+        ) {
+          return true;
+        }
+      }
+    }
+
+    for (const worktree of worktrees) {
+      if (
+        worktree.branch !== branch &&
+        worktree.head !== null &&
+        readIsAncestorInVisibleGraph({
+          ancestorSha: oldSha,
+          descendantSha: worktree.head,
+        })
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+  const readIsBranchCheckedOut = (branch: string) => {
+    if (currentBranch === branch) {
+      return true;
+    }
+
+    for (const worktree of worktrees) {
+      if (worktree.branch === branch) {
+        return true;
+      }
+    }
+
+    return false;
+  };
   const visibleGraph = useMemo(() => {
     if (!shouldShowChatOnly) {
       return graph;
@@ -1870,17 +1984,20 @@ const CommitHistory = ({
     branch,
     oldSha,
     oldShortSha,
+    oldSubject,
   }: {
     event: DragEvent<HTMLElement>;
     branch: string;
     oldSha: string;
     oldShortSha: string;
+    oldSubject: string;
   }) => {
     const nextBranchPointerDrag = {
       repoRoot,
       branch,
       oldSha,
       oldShortSha,
+      oldSubject,
     };
 
     event.stopPropagation();
@@ -1915,8 +2032,20 @@ const CommitHistory = ({
     }
 
     event.preventDefault();
-    event.dataTransfer.dropEffect = "move";
-    setBranchPointerDropTargetRowId(row.id);
+    if (
+      readIsBranchMoveSafe({
+        branch: activeBranchPointerDrag.branch,
+        oldSha: activeBranchPointerDrag.oldSha,
+        newSha: row.commit.sha,
+      })
+    ) {
+      event.dataTransfer.dropEffect = "move";
+      setBranchPointerDropTargetRowId(row.id);
+      return;
+    }
+
+    event.dataTransfer.dropEffect = "none";
+    setBranchPointerDropTargetRowId(null);
   };
   const clearBranchPointerDropTarget = () => {
     setBranchPointerDropTargetRowId(null);
@@ -1944,13 +2073,32 @@ const CommitHistory = ({
       return;
     }
 
+    if (
+      !readIsBranchMoveSafe({
+        branch: activeBranchPointerDrag.branch,
+        oldSha: activeBranchPointerDrag.oldSha,
+        newSha: row.commit.sha,
+      })
+    ) {
+      showErrorMessage(
+        `Moving ${activeBranchPointerDrag.branch} would make ${activeBranchPointerDrag.oldShortSha} unreachable from local branches, tags, or detached worktrees. Create another branch first.`,
+      );
+      finishBranchPointerDrag();
+      return;
+    }
+
     setBranchPointerMove({
       repoRoot,
       branch: activeBranchPointerDrag.branch,
       oldSha: activeBranchPointerDrag.oldSha,
       oldShortSha: activeBranchPointerDrag.oldShortSha,
+      oldSubject: activeBranchPointerDrag.oldSubject,
       newSha: row.commit.sha,
       newShortSha: row.commit.shortSha,
+      newSubject: row.commit.subject,
+      willMoveCheckedOutWorktree: readIsBranchCheckedOut(
+        activeBranchPointerDrag.branch,
+      ),
     });
     finishBranchPointerDrag();
   };
@@ -2011,45 +2159,6 @@ const CommitHistory = ({
   };
   const closeChangeSummaryModal = () => {
     setChangeSummaryTarget(null);
-  };
-  const openThreadArchiveModal = (
-    event: MouseEvent<HTMLButtonElement>,
-    threads: CodexThread[],
-  ) => {
-    event.preventDefault();
-    event.stopPropagation();
-
-    const firstThread = threads[0];
-
-    setThreadArchiveTarget({
-      title: firstThread?.cwd ?? "this cwd group",
-      threadIds: threads.map((thread) => thread.id),
-    });
-  };
-  const closeThreadArchiveModal = () => {
-    setThreadArchiveTarget(null);
-  };
-  const archiveThreadGroup = async () => {
-    if (threadArchiveTarget === null) {
-      return;
-    }
-
-    const threadIds = threadArchiveTarget.threadIds;
-    closeThreadArchiveModal();
-    let codexErrorMessage: string | null = null;
-
-    try {
-      await window.molttree.archiveCodexThreads(threadIds);
-    } catch (error) {
-      codexErrorMessage =
-        error instanceof Error ? error.message : "Failed to archive chats.";
-    } finally {
-      await refreshDashboard();
-
-      if (codexErrorMessage !== null) {
-        showErrorMessage(codexErrorMessage);
-      }
-    }
   };
   const closeBranchMergeConfirmationModal = () => {
     setBranchMergeConfirmation(null);
@@ -2335,9 +2444,7 @@ const CommitHistory = ({
                 branchPointerDropTargetRowId === row.id
               }
               isHeadAncestor={isHeadAncestorOfSha[row.commit.sha] === true}
-              isThreadArchiveSafe={
-                isThreadArchiveSafeOfSha[row.commit.sha] === true
-              }
+              isAfterHead={isAfterHeadOfSha[row.commit.sha] === true}
               isBranchDeleteSafeOfBranch={isBranchDeleteSafeOfBranch}
               updateBranchPointerDropTarget={(event) =>
                 updateBranchPointerDropTarget({ event, row })
@@ -2352,7 +2459,6 @@ const CommitHistory = ({
               openCommitMessageModal={openCommitMessageModal}
               openChangeSummaryModal={openChangeSummaryModal}
               openBranchMergeModal={openBranchMergeModal}
-              archiveThreadGroup={openThreadArchiveModal}
               startBranchPointerDrag={startBranchPointerDrag}
               finishBranchPointerDrag={finishBranchPointerDrag}
             />
@@ -2489,30 +2595,6 @@ const CommitHistory = ({
             </div>
           </div>
         )}
-        {threadArchiveTarget === null ? null : (
-          <div className="commit-message-modal-backdrop">
-            <div className="commit-message-modal">
-              <h3>Archive Chats</h3>
-              <p className="branch-delete-modal-message">
-                Archive {threadArchiveTarget.threadIds.length}{" "}
-                {threadArchiveTarget.threadIds.length === 1 ? "chat" : "chats"}{" "}
-                for {threadArchiveTarget.title}?
-              </p>
-              <p className="branch-delete-modal-message">
-                The chats will be archived in Codex and removed from this graph
-                after the dashboard refreshes.
-              </p>
-              <div className="commit-message-modal-actions">
-                <button type="button" onClick={closeThreadArchiveModal}>
-                  Cancel
-                </button>
-                <button type="button" onClick={archiveThreadGroup}>
-                  Archive
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
         {branchMergeConfirmation === null ? null : (
           <div className="commit-message-modal-backdrop">
             <div className="commit-message-modal">
@@ -2541,12 +2623,31 @@ const CommitHistory = ({
         )}
         {branchPointerMove === null ? null : (
           <div className="commit-message-modal-backdrop">
-            <div className="commit-message-modal">
+            <div className="commit-message-modal branch-pointer-move-modal">
               <h3>Move Branch Pointer</h3>
               <p className="branch-delete-modal-message">
-                Are you sure you want to make the {branchPointerMove.branch}{" "}
-                branch point to {branchPointerMove.newShortSha} instead of{" "}
-                {branchPointerMove.oldShortSha}?
+                Move the {branchPointerMove.branch} branch pointer?
+              </p>
+              <ul className="branch-tag-change-list">
+                <li>
+                  <strong>From</strong>
+                  <span>
+                    <code>{branchPointerMove.oldShortSha}</code>{" "}
+                    {branchPointerMove.oldSubject}
+                  </span>
+                </li>
+                <li>
+                  <strong>To</strong>
+                  <span>
+                    <code>{branchPointerMove.newShortSha}</code>{" "}
+                    {branchPointerMove.newSubject}
+                  </span>
+                </li>
+              </ul>
+              <p className="branch-delete-modal-message">
+                {branchPointerMove.willMoveCheckedOutWorktree
+                  ? "This branch is checked out in a clean worktree, so Git will reset that worktree to the target commit."
+                  : "No worktree files will be changed."}
               </p>
               <div className="commit-message-modal-actions">
                 <button type="button" onClick={closeBranchPointerMoveModal}>
@@ -2644,7 +2745,12 @@ export const App = () => {
   );
   const [selectedRepoRoot, setSelectedRepoRoot] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [actionErrorMessage, setActionErrorMessage] = useState<string | null>(
+    null,
+  );
+  const [dashboardErrorMessage, setDashboardErrorMessage] = useState<
+    string | null
+  >(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [branchTagChanges, setBranchTagChanges] = useState<
     GitBranchTagChange[]
@@ -2679,6 +2785,7 @@ export const App = () => {
 
     return dashboardData.repos[0] ?? null;
   }, [dashboardData, selectedRepoRoot]);
+  const visibleErrorMessage = actionErrorMessage ?? dashboardErrorMessage;
 
   const refreshDashboard = useCallback(async () => {
     if (isDashboardRefreshRunningRef.current) {
@@ -2698,7 +2805,6 @@ export const App = () => {
       try {
         do {
           shouldRefreshDashboardAgainRef.current = false;
-          setErrorMessage(null);
 
           try {
             const nextDashboardData = await window.molttree.readDashboard();
@@ -2712,7 +2818,9 @@ export const App = () => {
 
             if (nextDashboardData.gitErrors.length > 0) {
               setSuccessMessage(null);
-              setErrorMessage(nextDashboardData.gitErrors.join("\n"));
+              setDashboardErrorMessage(nextDashboardData.gitErrors.join("\n"));
+            } else {
+              setDashboardErrorMessage(null);
             }
           } catch (error) {
             const message =
@@ -2720,7 +2828,7 @@ export const App = () => {
                 ? error.message
                 : "Failed to read dashboard data.";
             setSuccessMessage(null);
-            setErrorMessage(message);
+            setDashboardErrorMessage(message);
           }
         } while (shouldRefreshDashboardAgainRef.current);
       } finally {
@@ -2735,7 +2843,11 @@ export const App = () => {
   }, []);
   const showErrorMessage = useCallback((message: string) => {
     setSuccessMessage(null);
-    setErrorMessage(message);
+    setActionErrorMessage(message);
+  }, []);
+  const clearErrorMessage = useCallback(() => {
+    setActionErrorMessage(null);
+    setDashboardErrorMessage(null);
   }, []);
   const rememberBranchTagChange = useCallback(
     (nextBranchTagChange: GitBranchTagChange) => {
@@ -2894,6 +3006,7 @@ export const App = () => {
           (branchTagChange) => branchTagChange.repoRoot !== repoRoot,
         ),
       );
+      setActionErrorMessage(null);
       setSuccessMessage(branchTagChangeActionText.successMessage);
     } catch (error) {
       gitErrorMessage =
@@ -2982,8 +3095,13 @@ export const App = () => {
         </div>
       )}
 
-      {errorMessage !== null && (
-        <div className="error-banner">{errorMessage}</div>
+      {visibleErrorMessage !== null && (
+        <div className="error-banner">
+          <span>{visibleErrorMessage}</span>
+          <button type="button" onClick={clearErrorMessage}>
+            Dismiss
+          </button>
+        </div>
       )}
 
       {successMessage !== null && (

@@ -21,9 +21,6 @@ const api: MoltTreeApi = {
   openCodexThread: async (threadId: string) => {
     await ipcRenderer.invoke("codex:openThread", threadId);
   },
-  archiveCodexThreads: async (threadIds: string[]) => {
-    await ipcRenderer.invoke("codex:archiveThreads", threadIds);
-  },
   openNewCodexThread: async () => {
     await ipcRenderer.invoke("codex:openNewThread");
   },

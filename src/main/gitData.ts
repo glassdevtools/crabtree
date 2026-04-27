@@ -188,13 +188,15 @@ const readWorktrees = async ({
   let head: string | null = null;
   let branch: string | null = null;
   let isDetached = false;
+  let didReadMainWorktree = false;
 
   const pushWorktree = () => {
     if (path === null) {
       return;
     }
 
-    if (path === repoSeed.root) {
+    if (!didReadMainWorktree) {
+      didReadMainWorktree = true;
       return;
     }
 

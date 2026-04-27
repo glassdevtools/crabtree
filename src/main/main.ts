@@ -12,8 +12,6 @@ import type {
   GitMergePreview,
   GitMoveBranchRequest,
 } from "../shared/types";
-import { createAppServerClient } from "./appServerClient";
-import { archiveCodexThreads } from "./codexThreads";
 import { readDashboardData } from "./dashboard";
 
 // The main process owns local system access. The renderer only receives narrow, typed IPC methods through preload.
@@ -241,24 +239,6 @@ const readGitMergeBranchRequest = (value: unknown) => {
   };
 
   return gitMergeBranchRequest;
-};
-
-const readCodexThreadIds = (value: unknown) => {
-  if (!Array.isArray(value)) {
-    throw new Error("threadIds must be an array.");
-  }
-
-  const threadIds: string[] = [];
-
-  for (const threadId of value) {
-    if (typeof threadId !== "string" || threadId.length === 0) {
-      throw new Error("threadIds must only contain non-empty strings.");
-    }
-
-    threadIds.push(threadId);
-  }
-
-  return threadIds;
 };
 
 const readGitBranchTagChanges = (value: unknown) => {
@@ -545,6 +525,128 @@ const readGitWorktreePathForBranch = async ({
   return branchWorktreePath;
 };
 
+const readIsCommitAncestor = async ({
+  repoRoot,
+  ancestorSha,
+  descendantSha,
+}: {
+  repoRoot: string;
+  ancestorSha: string;
+  descendantSha: string;
+}) => {
+  try {
+    await runGitCommandForPath({
+      path: repoRoot,
+      args: ["merge-base", "--is-ancestor", ancestorSha, descendantSha],
+    });
+
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const assertBranchMoveKeepsOldCommitVisible = async ({
+  repoRoot,
+  branch,
+  branchRef,
+  oldSha,
+  targetSha,
+}: {
+  repoRoot: string;
+  branch: string;
+  branchRef: string;
+  oldSha: string;
+  targetSha: string;
+}) => {
+  if (
+    await readIsCommitAncestor({
+      repoRoot,
+      ancestorSha: oldSha,
+      descendantSha: targetSha,
+    })
+  ) {
+    return;
+  }
+
+  const visibleRefText = await readGitTextForPath({
+    path: repoRoot,
+    args: [
+      "for-each-ref",
+      "--contains",
+      oldSha,
+      "--format=%(refname)",
+      "refs/heads",
+      "refs/tags",
+    ],
+  });
+
+  for (const ref of visibleRefText.split("\n")) {
+    if (ref.length > 0 && ref !== branchRef) {
+      return;
+    }
+  }
+
+  const worktreeText = await readGitTextForPath({
+    path: repoRoot,
+    args: ["worktree", "list", "--porcelain"],
+  });
+  const branchReferencePrefix = "refs/heads/";
+  let worktreeHead: string | null = null;
+  let worktreeBranch: string | null = null;
+
+  const readDoesWorktreeKeepOldCommitVisible = async () => {
+    if (worktreeHead === null || worktreeBranch === branch) {
+      return false;
+    }
+
+    return await readIsCommitAncestor({
+      repoRoot,
+      ancestorSha: oldSha,
+      descendantSha: worktreeHead,
+    });
+  };
+
+  for (const line of worktreeText.split("\n")) {
+    if (line.length === 0) {
+      if (await readDoesWorktreeKeepOldCommitVisible()) {
+        return;
+      }
+
+      worktreeHead = null;
+      worktreeBranch = null;
+      continue;
+    }
+
+    const [key, ...rest] = line.split(" ");
+    const value = rest.join(" ");
+
+    if (key === "HEAD") {
+      worktreeHead = value;
+      continue;
+    }
+
+    if (key !== "branch") {
+      continue;
+    }
+
+    if (value.startsWith(branchReferencePrefix)) {
+      worktreeBranch = value.slice(branchReferencePrefix.length);
+      continue;
+    }
+
+    worktreeBranch = value;
+  }
+
+  if (await readDoesWorktreeKeepOldCommitVisible()) {
+    return;
+  }
+
+  throw new Error(
+    `Moving ${branch} would make ${oldSha.slice(0, 7)} unreachable from local branches, tags, or detached worktrees. Create another branch first.`,
+  );
+};
+
 const moveGitBranch = async ({
   repoRoot,
   branch,
@@ -572,6 +674,14 @@ const moveGitBranch = async ({
   if (branchHead !== oldSha) {
     throw new Error("Branch moved. Refresh and try again.");
   }
+
+  await assertBranchMoveKeepsOldCommitVisible({
+    repoRoot,
+    branch,
+    branchRef,
+    oldSha,
+    targetSha,
+  });
 
   const worktreePath = await readGitWorktreePathForBranch({
     repoRoot,
@@ -835,17 +945,6 @@ ipcMain.handle("codex:openThread", async (_event, threadId: unknown) => {
   }
 
   await shell.openExternal(`codex://threads/${threadId}`);
-});
-
-ipcMain.handle("codex:archiveThreads", async (_event, value: unknown) => {
-  const threadIds = readCodexThreadIds(value);
-  const appServerClient = await createAppServerClient();
-
-  try {
-    await archiveCodexThreads({ appServerClient, threadIds });
-  } finally {
-    appServerClient.close();
-  }
 });
 
 ipcMain.handle("codex:openNewThread", async () => {
