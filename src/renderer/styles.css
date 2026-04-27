@@ -1,4 +1,89 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "react-resizable/css/styles.css";
+
+@source "../components";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
 :root {
+  /* TODO: AI-PICKED-VALUE: These shadcn theme tokens keep the existing light graph UI while giving Tailwind primitives shared color variables. */
+  --radius: 0.5rem;
+  --background: oklch(0.984 0.003 247.858);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
   color: #202124;
   background: #f4f6f8;
   font-family:
@@ -20,13 +105,35 @@
 
 body {
   margin: 0;
-  min-width: 1100px;
+  min-width: 0;
   min-height: 100vh;
   background: #f4f6f8;
+  user-select: none;
 }
 
 button {
   font: inherit;
+}
+
+input,
+textarea,
+[contenteditable="true"] {
+  user-select: text;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
 }
 
 .app-shell {
@@ -35,85 +142,220 @@ button {
   flex-direction: column;
 }
 
-.top-bar {
-  height: 60px;
+.initial-loading-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: #f4f6f8;
+}
+
+.initial-loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+/* TODO: AI-PICKED-VALUE: This keeps the first-load image present but restrained so the spinner and status text feel like the main loading state. */
+.initial-loading-image {
+  width: min(42vmin, 300px);
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 120px);
+  object-fit: contain;
+}
+
+.initial-loading-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #5f6670;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.initial-loading-spinner {
+  color: #68717d;
+  animation: initial-loading-spin 900ms linear infinite;
+}
+
+@keyframes initial-loading-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.repo-header-controls {
+  min-width: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 18px;
-  border-bottom: 1px solid #d9dee6;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-left: auto;
+}
+
+.path-launcher-control {
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--input);
+  border-radius: min(var(--radius-md), 10px);
+  background: #ffffff;
+  color: #343a43;
+}
+
+.path-launcher-open {
+  width: 34px;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-right: 1px solid var(--border);
   background: #ffffff;
 }
 
-.top-bar h1 {
-  margin: 0;
-  font-size: 19px;
-  line-height: 1.1;
-  font-weight: 720;
+.path-launcher-open:not(:disabled):hover {
+  background: #ffffff;
 }
 
-.top-bar p {
-  margin: 4px 0 0;
+.path-launcher-open:disabled {
+  cursor: default;
+  opacity: 0.46;
+}
+
+.path-launcher-open .path-launcher-icon,
+.path-launcher-open .path-launcher-icon-image,
+.path-launcher-open .path-launcher-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.path-launcher-select {
+  width: 26px;
+  height: 100%;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.path-launcher-select:hover,
+.path-launcher-select[aria-expanded="true"] {
+  background: #ffffff;
+}
+
+.path-launcher-select [data-slot="select-value"] {
+  display: none;
+}
+
+.path-launcher-select > svg {
+  width: 14px;
+  height: 14px;
   color: #5f6670;
-  font-size: 12px;
 }
 
-.toolbar {
+.path-launcher-select-content {
+  width: 160px;
+}
+
+.path-launcher-option {
+  min-height: 24px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.path-launcher-icon {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #343a43;
+  line-height: 0;
+}
+
+.path-launcher-icon-vscode {
+  color: #0078d4;
+}
+
+.path-launcher-icon-image {
+  width: 20px;
+  height: 20px;
+  display: block;
+  object-fit: contain;
+  vertical-align: middle;
+}
+
+.copy-toast {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  user-select: text;
+}
+
+.copy-toast-value {
+  min-width: 0;
+  /* TODO: AI-PICKED-VALUE: This width keeps copied paths and SHAs readable without making the toast too wide. */
+  max-width: min(340px, calc(100vw - 96px));
+  overflow: hidden;
+  color: #5f6670;
+  font-size: 12px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .repo-picker {
-  min-width: 260px;
-  height: 34px;
+  min-width: 0;
+  width: auto;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 0 8px;
-  border: 1px solid #cbd2dc;
-  border-radius: 7px;
-  background: #ffffff;
   color: #5f6670;
   font-size: 12px;
   font-weight: 700;
 }
 
-.repo-picker select {
+.repo-picker-select {
   min-width: 0;
-  flex: 1 1 auto;
-  border: 0;
-  background: transparent;
-  color: #262a30;
-  font: inherit;
-  font-size: 13px;
-  outline: none;
-}
-
-.icon-button {
-  width: 34px;
-  height: 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #cbd2dc;
-  border-radius: 7px;
+  /* TODO: AI-PICKED-VALUE: Fixed at 176px so the shadcn repo select stays compact in the page control row. */
+  width: 176px;
+  max-width: calc(100vw - 92px);
   background: #ffffff;
-  color: #262a30;
-  cursor: pointer;
+  flex: 0 0 auto;
 }
 
-.icon-button:hover {
-  background: #eef2f7;
-}
-
-.icon-button:disabled {
-  color: #9aa3af;
-  cursor: default;
-}
-
-.icon-button:disabled:hover {
+.repo-picker-select:hover,
+.repo-picker-select[aria-expanded="true"] {
   background: #ffffff;
+}
+
+.repo-picker-select > svg {
+  color: #5f6670;
+}
+
+.repo-picker-select [data-slot="select-value"] {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.repo-picker-select-content {
+  width: var(--radix-select-trigger-width);
+  max-width: min(220px, calc(100vw - 16px));
 }
 
 .content-shell {
@@ -127,46 +369,102 @@ button {
   min-width: 0;
   min-height: 0;
   flex: 1;
-  overflow: auto;
-  padding: 18px 20px 30px;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+  overflow-anchor: none;
+  padding: 12px 0;
 }
 
 .repo-section {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   margin-bottom: 26px;
 }
 
-.repo-header {
+.repo-panel {
+  min-height: 0;
+  flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  padding: 0 0 10px;
 }
 
-.repo-title {
-  overflow-wrap: anywhere;
-  color: #202124;
-  font-size: 17px;
-  font-weight: 760;
+.repo-header {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 10px;
+  padding-inline: 12px;
 }
 
 .repo-actions {
+  flex: 0 0 auto;
   display: flex;
-  gap: 6px;
-  margin-left: auto;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.repo-action-control {
+  min-width: 26px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #5f6670;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 650;
+}
+
+.repo-action-control svg {
+  color: #343a43;
+}
+
+.repo-action-control svg circle {
+  fill: #ffffff;
+}
+
+.repo-action-control:hover:not(:disabled),
+.repo-action-control:hover:not(:disabled) svg {
+  color: #0a64c9;
+}
+
+.repo-action-control:disabled {
+  cursor: default;
+  opacity: 0.38;
+}
+
+.title-tooltip-trigger {
+  min-width: 0;
+  display: inline-flex;
 }
 
 .commit-history {
   --commit-history-grid-template-columns: 300px 260px 340px 420px 84px 150px
     170px;
   --commit-history-table-width: 1724px;
-  overflow: auto;
-  border: 1px solid #cfd6df;
-  border-radius: 7px;
+  min-height: 0;
+  flex: 1;
+  overflow: visible;
+  overflow-anchor: none;
+  border: 1px solid #d9dee6;
+  border-radius: 0;
   background: #ffffff;
 }
 
-.commit-history-header,
+.commit-history-header-scroll {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  overflow: hidden;
+  background: #ffffff;
+}
+
 .commit-history-row {
   display: grid;
   min-width: var(--commit-history-table-width);
@@ -174,16 +472,21 @@ button {
 }
 
 .commit-history-header {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  height: 30px;
+  display: grid;
+  grid-template-columns: var(--commit-history-grid-template-columns);
+  min-width: var(--commit-history-table-width);
+  height: 22px;
   align-items: center;
-  border-bottom: 1px solid #cfd6df;
-  background: #edf1f6;
+  border-bottom: 1px solid #e1e5ec;
+  background: #ffffff;
   color: #5f6670;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
+}
+
+.commit-history-body-scroll {
+  overflow-x: auto;
+  overflow-y: visible;
 }
 
 .commit-history-header-cell {
@@ -192,7 +495,8 @@ button {
   display: flex;
   align-items: center;
   overflow: hidden;
-  padding: 0 10px;
+  height: 100%;
+  padding: 0 6px;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -203,32 +507,35 @@ button {
   text-overflow: ellipsis;
 }
 
+.commit-history-header-toggle {
+  min-width: 0;
+  height: 18px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+}
+
+.commit-history-header-toggle[aria-pressed="true"] {
+  background: #eaf1ff;
+  color: #0a64c9;
+}
+
 .commit-history-graph-title {
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 6px;
-}
-
-.commit-history-filter {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin: -2px 0 8px;
-  color: #5d6571;
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.commit-history-filter input {
-  margin: 0;
+  overflow: visible;
 }
 
 .commit-history-column-resize {
   position: absolute;
   top: 0;
   right: 0;
-  width: 7px;
+  width: 6px;
   height: 100%;
   padding: 0;
   border: 0;
@@ -238,7 +545,62 @@ button {
   user-select: none;
 }
 
+.commit-history-column-resize::before,
+.commit-history-panel-resize::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: #e1e5ec;
+}
+
 .commit-history-column-resize:hover {
+  background: rgba(63, 140, 255, 0.18);
+}
+
+.commit-history-panel-resize {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  z-index: 2;
+  width: 8px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+.commit-history-graph-resize-surface {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  pointer-events: none;
+}
+
+.commit-history-panel-resize.react-resizable-handle {
+  margin-top: 0;
+  background-image: none;
+  transform: none;
+}
+
+.commit-history-panel-resize.react-resizable-handle-e {
+  top: 0;
+  right: -4px;
+}
+
+.commit-history-panel-resize.react-resizable-handle,
+.commit-history-graph-resize-surface .commit-history-panel-resize {
+  pointer-events: auto;
+}
+
+.commit-history-panel-resize:hover,
+.commit-history-panel-resize:active {
   background: rgba(63, 140, 255, 0.18);
 }
 
@@ -255,35 +617,17 @@ button {
   pointer-events: none;
 }
 
-/* TODO: AI-PICKED-VALUE: The modal sizing and shadow match the compact graph UI without adding a new design system. */
-.commit-message-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 20;
-  display: flex;
+.commit-graph-head-icon {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(32, 33, 36, 0.18);
-}
-
-.commit-message-modal {
-  width: 360px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid #c7d0dc;
-  border-radius: 7px;
-  background: #ffffff;
-  box-shadow: 0 12px 32px rgba(26, 33, 44, 0.18);
+  color: #343a43;
 }
 
 .change-summary-modal {
-  width: min(720px, calc(100vw - 32px));
-}
-
-.change-summary-modal .branch-delete-modal-message {
-  overflow-wrap: anywhere;
+  width: min(360px, calc(100vw - 32px));
 }
 
 /* TODO: AI-PICKED-VALUE: The modal width leaves room for branch names and hash changes while matching the existing modal style. */
@@ -293,55 +637,6 @@ button {
 
 .branch-pointer-move-modal {
   width: 560px;
-}
-
-.commit-message-modal h3 {
-  margin: 0;
-  color: #262a30;
-  font-size: 14px;
-}
-
-.commit-message-modal input {
-  min-height: 34px;
-  padding: 6px 8px;
-  border: 1px solid #c7d0dc;
-  border-radius: 5px;
-  font: inherit;
-}
-
-.commit-message-modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.commit-message-modal-actions button {
-  min-height: 30px;
-  padding: 4px 10px;
-  border: 1px solid #c7d0dc;
-  border-radius: 5px;
-  background: #ffffff;
-  color: #262a30;
-  cursor: pointer;
-}
-
-.commit-message-modal-actions button:hover {
-  background: #eef2f7;
-}
-
-.commit-message-modal-actions button:disabled {
-  color: #9aa3af;
-  cursor: default;
-}
-
-.commit-message-modal-actions button:disabled:hover {
-  background: #ffffff;
-}
-
-.branch-delete-modal-message {
-  margin: 0;
-  color: #343a43;
-  font-size: 13px;
 }
 
 .branch-merge-preview-message {
@@ -388,7 +683,11 @@ button {
 }
 
 .change-summary-modal-link {
+  width: auto;
+  height: auto;
   align-self: flex-start;
+  justify-self: start;
+  justify-content: flex-start;
   padding: 0;
   border: 0;
   background: transparent;
@@ -397,6 +696,8 @@ button {
   font: inherit;
   font-size: 13px;
   font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .branch-tag-change-list {
@@ -440,25 +741,34 @@ button {
 .commit-history-row {
   position: relative;
   z-index: 2;
-  height: 32px;
+  height: 20px;
   align-items: stretch;
-  border-bottom: 1px solid #edf0f4;
-  background: transparent;
+  border-bottom: 0;
+  border-radius: 0;
+  background: #ffffff;
   color: #202124;
 }
 
-.commit-history-row-branch-drop-target {
+.commit-branch-tags-cell-branch-drop-target {
   outline: 2px solid #0a84ff;
   outline-offset: -2px;
   background: #eaf1ff;
 }
 
 .commit-history-row:nth-child(even) {
-  background: rgba(248, 250, 252, 0.76);
+  background: #ffffff;
 }
 
-.commit-history-row-branch-drop-target:nth-child(even) {
-  background: #eaf1ff;
+/* TODO: AI-PICKED-VALUE: This gray is a subtle hover state that keeps the compact table readable without adding row lines. */
+.commit-history-row:not(.commit-history-row-selected):hover {
+  background: #f3f4f6;
+}
+
+/* TODO: AI-PICKED-VALUE: This blue is intentionally brighter than the branch tag blue so the selected row is obvious without adding a line. */
+.commit-history-row-selected,
+.commit-history-row-selected:nth-child(even) {
+  border-radius: 5px;
+  background: #dbeafe;
 }
 
 .commit-graph-cell {
@@ -469,11 +779,19 @@ button {
 .commit-graph-actions {
   position: absolute;
   top: 50%;
-  right: 7px;
+  z-index: 5;
+  /* TODO: AI-PICKED-VALUE: This keeps every graph action as far from the right edge as the HEAD marker was. */
+  right: 8px;
   transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+}
+
+.commit-graph-thread-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .commit-branch-tags-cell,
@@ -485,8 +803,7 @@ button {
   min-width: 0;
   display: flex;
   align-items: center;
-  padding: 0 10px;
-  border-left: 1px solid #edf0f4;
+  padding: 0 6px;
 }
 
 .commit-branch-tags-cell,
@@ -495,15 +812,42 @@ button {
   overflow: hidden;
 }
 
+.commit-branch-tags-cell,
+.commit-actors-cell {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.commit-branch-tags-cell::-webkit-scrollbar,
+.commit-actors-cell::-webkit-scrollbar {
+  display: none;
+}
+
+.commit-branch-tags-cell .commit-label-list,
+.commit-actors-cell .commit-label-list {
+  min-width: max-content;
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
 .commit-description-cell {
   justify-content: flex-start;
+}
+
+.commit-description-cell,
+.commit-hash-cell,
+.commit-author-cell,
+.commit-date-cell {
+  cursor: default;
+  user-select: none;
 }
 
 .commit-label-list {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 3px;
   flex: 0 1 auto;
   overflow: hidden;
 }
@@ -514,24 +858,28 @@ button {
 }
 
 .commit-thread-group + .commit-thread-group {
-  margin-left: 12px;
-  padding-left: 12px;
-  border-left: 1px solid #d8dee8;
+  margin-left: 8px;
+  padding-left: 0;
+  border-left: 0;
 }
 
 .commit-ref {
-  min-height: 24px;
+  height: 16px;
+  min-height: 16px;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 1px 7px;
+  gap: 3px;
+  padding: 0 4px;
   border: 1px solid #aeb9c7;
-  border-radius: 5px;
+  border-radius: 4px;
   background: #e9f8f1;
   color: #102f22;
   flex: 0 0 auto;
-  font-size: 13px;
+  font-size: 10px;
+  line-height: 12px;
   font-weight: 720;
+  cursor: default;
+  user-select: none;
 }
 
 .commit-ref-local {
@@ -580,8 +928,8 @@ button {
 .commit-thread-commit-action,
 .commit-graph-merge-action,
 .commit-ref-delete {
-  width: 20px;
-  height: 20px;
+  width: 14px;
+  height: 14px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -593,8 +941,8 @@ button {
 }
 
 .commit-ref-delete {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
 }
 
 .commit-ref-delete:hover {
@@ -617,52 +965,98 @@ button {
 }
 
 .commit-thread-group {
-  min-height: 24px;
+  position: relative;
+  min-height: 18px;
   display: inline-flex;
   align-items: center;
+  /* TODO: AI-PICKED-VALUE: This gives neighboring chat items inside a cwd group a little more breathing room without widening group breaks. */
   gap: 3px;
+  min-width: max-content;
   flex: 0 0 auto;
+  padding: 1px 3px;
+  border: 0;
+  border-radius: 5px;
+  box-sizing: border-box;
+}
+
+.commit-thread-group-highlighted {
+  background: #fff8df;
+}
+
+.commit-thread-group-background-tooltip {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+}
+
+.commit-thread-group [data-slot="button"] {
+  position: relative;
+  z-index: 1;
 }
 
 .commit-thread-chat {
-  width: 18px;
-  height: 24px;
+  height: 16px;
+  min-width: max-content;
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
+  gap: 3px;
+  padding: 0 4px;
+  border: 1px solid #d5b55f;
+  border-radius: 4px;
+  background: #fff4cf;
   color: #202124;
   cursor: pointer;
+  flex: 0 0 auto;
+  font-size: 10px;
+  line-height: 12px;
+  font-weight: 720;
 }
 
-.commit-thread-worktree-mark {
-  position: absolute;
-  right: -2px;
-  bottom: 1px;
-  z-index: 1;
-  padding: 1px;
-  border-radius: 50%;
-  background: #ffffff;
-  color: #4d5562;
-  transform: rotate(90deg);
+.commit-thread-chat-icon {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+.commit-thread-chat-bubble {
+  stroke: currentColor;
 }
 
 .commit-thread-chat:focus {
   outline: none;
 }
 
+.commit-thread-chat:hover {
+  background: #f6e8aa;
+}
+
+.commit-thread-chat-title {
+  min-width: max-content;
+  white-space: nowrap;
+}
+
 .commit-thread-change-count {
+  height: 16px;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 0;
+  gap: 2px;
+  margin: 0 2px;
+  padding: 0 2px;
   border: 0;
   background: transparent;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 760;
   cursor: pointer;
+}
+
+.commit-thread-group .commit-branch-create-action,
+.commit-thread-group .commit-thread-commit-action {
+  margin: 0 2px;
 }
 
 .commit-thread-change-added {
@@ -691,18 +1085,18 @@ button {
 .commit-subject {
   min-width: 80px;
   flex: 1 1 auto;
-  font-size: 14px;
+  font-size: 11px;
 }
 
 .commit-hash-cell {
   color: #2f3339;
-  font-size: 13px;
+  font-size: 11px;
 }
 
 .commit-author-cell,
 .commit-date-cell {
   color: #343a43;
-  font-size: 13px;
+  font-size: 11px;
 }
 
 .warning-band {
@@ -711,57 +1105,6 @@ button {
   gap: 8px;
   padding: 9px 18px;
   border-bottom: 1px solid #d9dee6;
-  font-size: 13px;
-}
-
-/* TODO: AI-PICKED-VALUE: This toast size keeps errors visible while leaving the graph usable underneath. */
-.error-banner {
-  position: fixed;
-  right: 18px;
-  bottom: 18px;
-  z-index: 30;
-  max-width: 440px;
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid #f0b6aa;
-  border-radius: 7px;
-  background: #fbe8e3;
-  box-shadow: 0 12px 28px rgba(26, 33, 44, 0.18);
-  color: #7c2d1e;
-  font-size: 13px;
-}
-
-.error-banner span {
-  min-width: 0;
-  flex: 1 1 auto;
-  white-space: pre-wrap;
-}
-
-.error-banner button {
-  flex: 0 0 auto;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: #7c2d1e;
-  cursor: pointer;
-  font: inherit;
-  font-weight: 700;
-}
-
-.success-banner {
-  position: fixed;
-  right: 18px;
-  bottom: 18px;
-  z-index: 30;
-  max-width: 440px;
-  padding: 10px 12px;
-  border: 1px solid #a9d7b7;
-  border-radius: 7px;
-  background: #e5f6ea;
-  box-shadow: 0 12px 28px rgba(26, 33, 44, 0.18);
-  color: #245b36;
   font-size: 13px;
 }
 

@@ -1,11 +1,8 @@
 # MoltTree
 
-
-<<<<<<< HEAD
 Small README change for testing local edits.
-=======
+
 MoltTree is a local tool for browsing Codex threads alongside their Git history and opening the right context back in Codex Desktop.
->>>>>>> refs/heads/main
 
 ## Features by Interface
 
@@ -45,6 +42,5 @@ MoltTree is a local tool for browsing Codex threads alongside their Git history 
 
 - Not used in v1.
 - TODO: document the read-only tables and lookup queries if we add a debug-only reader.
-
 
 Test change.
