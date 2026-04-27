@@ -1,3 +1,5 @@
 node_modules/
 out/
 .test-out/
+dist/
+packaging/macos/generated-icons/
