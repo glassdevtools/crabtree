@@ -517,14 +517,15 @@ button {
 }
 
 .commit-graph-cell {
+  position: relative;
   min-width: 0;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding-right: 34px;
 }
 
 .commit-graph-actions {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   gap: 4px;

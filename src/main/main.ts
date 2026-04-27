@@ -254,6 +254,8 @@ const commitAllGitChanges = async ({
 }: GitCommitChangesRequest) => {
   await runGitCommandForPath({ path, args: ["add", "--all", "--", "."] });
   await runGitCommandForPath({ path, args: ["commit", "-m", message] });
+
+  return await readGitTextForPath({ path, args: ["rev-parse", "HEAD"] });
 };
 
 const createGitBranch = async ({ path, branch }: GitCreateBranchRequest) => {
@@ -442,15 +444,19 @@ const moveGitBranch = async ({
     path: repoRoot,
     args: ["rev-parse", "--verify", branchRef],
   });
+  const targetSha = await readGitTextForPath({
+    path: repoRoot,
+    args: ["rev-parse", "--verify", `${newSha}^{commit}`],
+  });
+
+  if (branchHead === targetSha) {
+    return;
+  }
 
   if (branchHead !== oldSha) {
     throw new Error("Branch moved. Refresh and try again.");
   }
 
-  const targetSha = await readGitTextForPath({
-    path: repoRoot,
-    args: ["rev-parse", "--verify", `${newSha}^{commit}`],
-  });
   const worktreePath = await readGitWorktreePathForBranch({
     repoRoot,
     branch,
@@ -730,7 +736,7 @@ ipcMain.handle("git:unstageChanges", async (_event, path: unknown) => {
 ipcMain.handle("git:commitAllChanges", async (_event, value: unknown) => {
   const gitCommitChangesRequest = readGitCommitChangesRequest(value);
 
-  await commitAllGitChanges(gitCommitChangesRequest);
+  return await commitAllGitChanges(gitCommitChangesRequest);
 });
 
 ipcMain.handle("git:createBranch", async (_event, value: unknown) => {

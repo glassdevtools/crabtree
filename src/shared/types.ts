@@ -129,7 +129,7 @@ export type MoltTreeApi = {
   unstageGitChanges: (path: string) => Promise<void>;
   commitAllGitChanges: (
     gitCommitChangesRequest: GitCommitChangesRequest,
-  ) => Promise<void>;
+  ) => Promise<string>;
   createGitBranch: (
     gitCreateBranchRequest: GitCreateBranchRequest,
   ) => Promise<void>;

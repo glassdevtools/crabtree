@@ -4,7 +4,7 @@ import {
   GitBranch,
   GitBranchPlus,
   GitCommitHorizontal,
-  GitMerge,
+  GitPullRequestArrow,
   RefreshCw,
   Trash2,
   Undo2,
@@ -231,9 +231,15 @@ type BranchCreateTarget = {
   title: string;
 };
 
+type CommitBranchTarget = {
+  branch: string;
+  oldSha: string;
+};
+
 type CommitMessageTarget = {
   path: string;
   title: string;
+  branchTarget: CommitBranchTarget | null;
 };
 
 type ChangeSummaryTarget = {
@@ -862,6 +868,10 @@ const BranchTags = ({
 const ChatRobotTags = ({
   threads,
   gitChangesOfCwd,
+  repoRoot,
+  commitSha,
+  localBranches,
+  currentBranch,
   shouldShowBranchCreateActions,
   openBranchCreateModal,
   openCommitMessageModal,
@@ -869,6 +879,10 @@ const ChatRobotTags = ({
 }: {
   threads: CodexThread[];
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
+  repoRoot: string;
+  commitSha: string;
+  localBranches: string[];
+  currentBranch: string | null;
   shouldShowBranchCreateActions: boolean;
   openBranchCreateModal: (
     event: MouseEvent<HTMLButtonElement>,
@@ -893,6 +907,58 @@ const ChatRobotTags = ({
   const threadGroups: { key: string; cwd: string; threads: CodexThread[] }[] =
     [];
   const groupIndexOfKey: { [key: string]: number } = {};
+  const isLocalBranchOfBranch: { [branch: string]: boolean } = {};
+
+  for (const localBranch of localBranches) {
+    isLocalBranchOfBranch[localBranch] = true;
+  }
+  const readCommitBranchTarget = (cwd: string, groupThreads: CodexThread[]) => {
+    for (const thread of groupThreads) {
+      const threadBranch = thread.gitInfo?.branch ?? null;
+
+      if (
+        threadBranch !== null &&
+        isLocalBranchOfBranch[threadBranch] === true
+      ) {
+        const commitBranchTarget: CommitBranchTarget = {
+          branch: threadBranch,
+          oldSha: commitSha,
+        };
+
+        return commitBranchTarget;
+      }
+    }
+
+    if (
+      cwd === repoRoot &&
+      currentBranch !== null &&
+      isLocalBranchOfBranch[currentBranch] === true
+    ) {
+      const commitBranchTarget: CommitBranchTarget = {
+        branch: currentBranch,
+        oldSha: commitSha,
+      };
+
+      return commitBranchTarget;
+    }
+
+    if (localBranches.length !== 1) {
+      return null;
+    }
+
+    const localBranch = localBranches[0];
+
+    if (localBranch === undefined) {
+      return null;
+    }
+
+    const commitBranchTarget: CommitBranchTarget = {
+      branch: localBranch,
+      oldSha: commitSha,
+    };
+
+    return commitBranchTarget;
+  };
 
   for (const thread of threads) {
     const groupKey =
@@ -917,6 +983,10 @@ const ChatRobotTags = ({
         const shouldShowChangeCount = storedChangeSummary !== undefined;
         const isChangeSummaryEmpty =
           totalChangeSummary.added === 0 && totalChangeSummary.removed === 0;
+        const commitBranchTarget = readCommitBranchTarget(
+          threadGroup.cwd,
+          threadGroup.threads,
+        );
         const changeCountClassName = isChangeSummaryEmpty
           ? "commit-thread-change-count commit-thread-change-count-empty"
           : "commit-thread-change-count";
@@ -998,6 +1068,7 @@ const ChatRobotTags = ({
                   openCommitMessageModal(event, {
                     path: threadGroup.cwd,
                     title: threadGroup.cwd,
+                    branchTarget: commitBranchTarget,
                   })
                 }
               >
@@ -1118,6 +1189,7 @@ const CommitGraphSvg = ({
 
 const CommitHistoryRow = ({
   row,
+  repoRoot,
   currentBranch,
   isHeadClean,
   threadOfId,
@@ -1137,6 +1209,7 @@ const CommitHistoryRow = ({
   finishBranchPointerDrag,
 }: {
   row: CommitGraphRow;
+  repoRoot: string;
   currentBranch: string | null;
   isHeadClean: boolean;
   threadOfId: { [id: string]: CodexThread };
@@ -1221,7 +1294,7 @@ const CommitHistoryRow = ({
                 onDoubleClick={(event) => event.stopPropagation()}
                 onClick={(event) => openBranchMergeModal(event, branch)}
               >
-                <GitMerge size={13} />
+                <GitPullRequestArrow size={14} />
               </button>
             ))}
           </div>
@@ -1231,6 +1304,10 @@ const CommitHistoryRow = ({
         <ChatRobotTags
           threads={threads}
           gitChangesOfCwd={gitChangesOfCwd}
+          repoRoot={repoRoot}
+          commitSha={commit.sha}
+          localBranches={commit.localBranches}
+          currentBranch={currentBranch}
           shouldShowBranchCreateActions={!hasBranchRef}
           openBranchCreateModal={openBranchCreateModal}
           openCommitMessageModal={openCommitMessageModal}
@@ -1446,11 +1523,6 @@ const CommitHistory = ({
 
       for (const ref of commit.refs) {
         if (ref.startsWith("HEAD -> ")) {
-          continue;
-        }
-
-        if (readIsHeadRef(ref)) {
-          pushRootSha({ sha: commit.sha, ignoredBranch: null });
           continue;
         }
 
@@ -1819,10 +1891,26 @@ const CommitHistory = ({
     let gitErrorMessage: string | null = null;
 
     try {
-      await window.molttree.commitAllGitChanges({
+      const newSha = await window.molttree.commitAllGitChanges({
         path: request.path,
         message: commitMessage.trim(),
       });
+
+      if (request.branchTarget !== null) {
+        await window.molttree.moveGitBranch({
+          repoRoot,
+          branch: request.branchTarget.branch,
+          oldSha: request.branchTarget.oldSha,
+          newSha,
+        });
+        rememberBranchTagChange({
+          repoRoot,
+          branch: request.branchTarget.branch,
+          oldSha: request.branchTarget.oldSha,
+          newSha,
+        });
+      }
+
       closeCommitMessageModal();
     } catch (error) {
       gitErrorMessage =
@@ -2035,6 +2123,7 @@ const CommitHistory = ({
             <CommitHistoryRow
               key={row.id}
               row={row}
+              repoRoot={repoRoot}
               currentBranch={currentBranch}
               isHeadClean={isHeadClean}
               threadOfId={threadOfId}

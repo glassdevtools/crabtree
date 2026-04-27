@@ -36,7 +36,10 @@ const api: MoltTreeApi = {
   commitAllGitChanges: async (
     gitCommitChangesRequest: GitCommitChangesRequest,
   ) => {
-    await ipcRenderer.invoke("git:commitAllChanges", gitCommitChangesRequest);
+    return await ipcRenderer.invoke(
+      "git:commitAllChanges",
+      gitCommitChangesRequest,
+    );
   },
   createGitBranch: async (gitCreateBranchRequest: GitCreateBranchRequest) => {
     await ipcRenderer.invoke("git:createBranch", gitCreateBranchRequest);
