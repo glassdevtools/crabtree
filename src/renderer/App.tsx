@@ -1,6 +1,7 @@
 import {
   Bot,
   Check,
+  Download,
   GitBranchPlus,
   GitCommitHorizontal,
   GitPullRequestArrow,
@@ -157,6 +158,41 @@ const syncBranchTagChangesWithDashboardData = ({
   return nextBranchTagChanges;
 };
 
+const readBranchTagChangeActionText = (
+  action: BranchTagChangeAction,
+): BranchTagChangeActionText => {
+  switch (action) {
+    case "push":
+      return {
+        title: "Push Branch Tag Changes",
+        message:
+          "Are you sure you want to push branch tag changes for this repo?",
+        buttonText: "Push",
+        successMessage: "Branch tag changes pushed.",
+      };
+    case "pull":
+      return {
+        title: "Pull Branch Tag Changes",
+        message:
+          "Are you sure you want to pull branch tag changes from origin for this repo?",
+        buttonText: "Pull",
+        successMessage: "Branch tag changes pulled.",
+      };
+    case "reset":
+      return {
+        title: "Reset Branch Tag Changes",
+        message:
+          "Are you sure you want to reset branch tag changes for this repo to match origin?",
+        buttonText: "Reset",
+        successMessage: "Branch tag changes reset.",
+      };
+  }
+};
+
+const readRepoFolderName = (repo: RepoGraph) => {
+  return repo.root.split("/").pop() ?? repo.root;
+};
+
 // TODO: AI-PICKED-VALUE: These column widths match the current table layout closely enough while making drag resizing concrete.
 const COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS = {
   graph: 300,
@@ -252,7 +288,14 @@ type BranchMergeConfirmation = {
   preview: GitMergePreview;
 };
 
-type BranchTagChangeAction = "push" | "reset";
+type BranchTagChangeAction = "push" | "pull" | "reset";
+
+type BranchTagChangeActionText = {
+  title: string;
+  message: string;
+  buttonText: string;
+  successMessage: string;
+};
 
 type BranchTagChangeConfirmation = {
   action: BranchTagChangeAction;
@@ -294,17 +337,6 @@ type CommitGraph = {
   rows: CommitGraphRow[];
   segments: CommitGraphSegment[];
   laneCount: number;
-};
-
-const formatDate = (timestamp: number) => {
-  if (timestamp === 0) {
-    return "";
-  }
-
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(timestamp * 1000));
 };
 
 const formatCommitDate = (date: string) => {
@@ -992,8 +1024,7 @@ const ChatRobotTags = ({
         const shouldShowBranchCreateAction =
           shouldShowBranchCreateActions &&
           threadGroup.cwd.length > 0 &&
-          storedChangeSummary !== undefined &&
-          !isChangeSummaryEmpty;
+          storedChangeSummary !== undefined;
         const shouldShowCommitAction =
           threadGroup.cwd.length > 0 &&
           storedChangeSummary !== undefined &&
@@ -1195,6 +1226,7 @@ const CommitHistoryRow = ({
   threadOfId,
   gitChangesOfCwd,
   isBranchPointerDropTarget,
+  isHeadAncestor,
   isBranchDeleteSafeOfBranch,
   updateBranchPointerDropTarget,
   clearBranchPointerDropTarget,
@@ -1215,6 +1247,7 @@ const CommitHistoryRow = ({
   threadOfId: { [id: string]: CodexThread };
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   isBranchPointerDropTarget: boolean;
+  isHeadAncestor: boolean;
   isBranchDeleteSafeOfBranch: { [branch: string]: boolean };
   updateBranchPointerDropTarget: (event: DragEvent<HTMLDivElement>) => void;
   clearBranchPointerDropTarget: () => void;
@@ -1260,7 +1293,7 @@ const CommitHistoryRow = ({
     .filter((rowThread): rowThread is CodexThread => rowThread !== undefined);
   const isHeadRow = commit.refs.some((ref) => readIsHeadRef(ref));
   const mergeableBranches =
-    isHeadRow || isHeadClean === false
+    isHeadRow || isHeadAncestor || isHeadClean === false
       ? []
       : commit.localBranches.filter(
           (localBranch) => localBranch !== currentBranch,
@@ -2351,7 +2384,7 @@ const RepoSection = ({
     repoRoot: string,
   ) => void;
 }) => {
-  const repoFolderName = repo.root.split("/").pop() ?? repo.root;
+  const repoFolderName = readRepoFolderName(repo);
 
   return (
     <section className="repo-section">
@@ -2360,11 +2393,19 @@ const RepoSection = ({
         <div className="repo-actions">
           <button
             className="icon-button"
-            title="Undo branch tag changes for this repo"
+            title="Reset branch tag changes for this repo"
             onClick={() => openBranchTagChangeModal("reset", repo.root)}
             disabled={repoBranchTagChanges.length === 0}
           >
             <Undo2 size={18} />
+          </button>
+          <button
+            className="icon-button"
+            title="Pull branch tag changes from origin for this repo"
+            onClick={() => openBranchTagChangeModal("pull", repo.root)}
+            disabled={repoBranchTagChanges.length === 0}
+          >
+            <Download size={18} />
           </button>
           <button
             className="icon-button"
@@ -2394,41 +2435,11 @@ const RepoSection = ({
   );
 };
 
-const ThreadList = ({ threads }: { threads: CodexThread[] }) => {
-  return (
-    <aside className="sidebar">
-      <h2>Codex threads</h2>
-      <div className="sidebar-list">
-        {threads.slice(0, 80).map((thread) => {
-          const title = threadTitle(thread);
-          const isThreadActive = readIsThreadActive(thread);
-
-          return (
-            <button
-              className="sidebar-thread"
-              key={thread.id}
-              onClick={() => window.molttree.openCodexThread(thread.id)}
-            >
-              <div className="sidebar-thread-title">
-                <span>{title}</span>
-                {isThreadActive ? (
-                  <RefreshCw className="thread-loading-icon" size={13} />
-                ) : null}
-              </div>
-              <small>{thread.gitInfo?.branch ?? thread.cwd}</small>
-              <small>{formatDate(thread.updatedAt)}</small>
-            </button>
-          );
-        })}
-      </div>
-    </aside>
-  );
-};
-
 export const App = () => {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(
     null,
   );
+  const [selectedRepoRoot, setSelectedRepoRoot] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -2448,6 +2459,23 @@ export const App = () => {
 
     return createThreadOfId(dashboardData.threads);
   }, [dashboardData]);
+  const selectedRepo = useMemo(() => {
+    if (dashboardData === null || dashboardData.repos.length === 0) {
+      return null;
+    }
+
+    if (selectedRepoRoot !== null) {
+      const repo = dashboardData.repos.find(
+        (dashboardRepo) => dashboardRepo.root === selectedRepoRoot,
+      );
+
+      if (repo !== undefined) {
+        return repo;
+      }
+    }
+
+    return dashboardData.repos[0] ?? null;
+  }, [dashboardData, selectedRepoRoot]);
 
   const refreshDashboard = useCallback(async () => {
     if (isDashboardRefreshRunningRef.current) {
@@ -2557,6 +2585,33 @@ export const App = () => {
   }, [refreshDashboard]);
 
   useEffect(() => {
+    if (dashboardData === null) {
+      return;
+    }
+
+    if (dashboardData.repos.length === 0) {
+      if (selectedRepoRoot !== null) {
+        setSelectedRepoRoot(null);
+      }
+
+      return;
+    }
+
+    if (
+      selectedRepoRoot !== null &&
+      dashboardData.repos.some((repo) => repo.root === selectedRepoRoot)
+    ) {
+      return;
+    }
+
+    const firstRepo = dashboardData.repos[0];
+
+    if (firstRepo !== undefined) {
+      setSelectedRepoRoot(firstRepo.root);
+    }
+  }, [dashboardData, selectedRepoRoot]);
+
+  useEffect(() => {
     if (successMessage === null) {
       return;
     }
@@ -2607,6 +2662,7 @@ export const App = () => {
     }
 
     const { action, repoRoot } = branchTagChangeConfirmation;
+    const branchTagChangeActionText = readBranchTagChangeActionText(action);
     const changes = readVisibleBranchTagChangesForRepo(repoRoot);
 
     if (changes.length === 0) {
@@ -2618,10 +2674,16 @@ export const App = () => {
     let gitErrorMessage: string | null = null;
 
     try {
-      if (action === "push") {
-        await window.molttree.pushGitBranchTagChanges(changes);
-      } else {
-        await window.molttree.resetGitBranchTagChanges(changes);
+      switch (action) {
+        case "push":
+          await window.molttree.pushGitBranchTagChanges(changes);
+          break;
+        case "pull":
+          await window.molttree.resetGitBranchTagChanges(changes);
+          break;
+        case "reset":
+          await window.molttree.resetGitBranchTagChanges(changes);
+          break;
       }
 
       setBranchTagChanges((currentBranchTagChanges) =>
@@ -2629,11 +2691,7 @@ export const App = () => {
           (branchTagChange) => branchTagChange.repoRoot !== repoRoot,
         ),
       );
-      setSuccessMessage(
-        action === "push"
-          ? "Branch tag changes pushed."
-          : "Branch tag changes reset.",
-      );
+      setSuccessMessage(branchTagChangeActionText.successMessage);
     } catch (error) {
       gitErrorMessage =
         error instanceof Error
@@ -2653,6 +2711,10 @@ export const App = () => {
       : readVisibleBranchTagChangesForRepo(
           branchTagChangeConfirmation.repoRoot,
         );
+  const branchTagChangeActionText =
+    branchTagChangeConfirmation === null
+      ? null
+      : readBranchTagChangeActionText(branchTagChangeConfirmation.action);
 
   return (
     <main className="app-shell">
@@ -2662,10 +2724,25 @@ export const App = () => {
           <p>
             {dashboardData === null
               ? "Loading"
-              : `${dashboardData.repos.length} repos · ${dashboardData.threads.length} threads`}
+              : `${dashboardData.repos.length} repos`}
           </p>
         </div>
         <div className="toolbar">
+          {dashboardData === null || dashboardData.repos.length === 0 ? null : (
+            <label className="repo-picker">
+              <span>Repo</span>
+              <select
+                value={selectedRepo?.root ?? ""}
+                onChange={(event) => setSelectedRepoRoot(event.target.value)}
+              >
+                {dashboardData.repos.map((repo) => (
+                  <option value={repo.root} key={repo.root}>
+                    {readRepoFolderName(repo)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <button
             className="icon-button"
             title="Refresh Git and Codex data"
@@ -2679,15 +2756,9 @@ export const App = () => {
       {branchTagChangeConfirmation === null ? null : (
         <div className="commit-message-modal-backdrop">
           <div className="commit-message-modal branch-tag-change-modal">
-            <h3>
-              {branchTagChangeConfirmation.action === "push"
-                ? "Push Branch Tag Changes"
-                : "Reset Branch Tag Changes"}
-            </h3>
+            <h3>{branchTagChangeActionText?.title}</h3>
             <p className="branch-delete-modal-message">
-              {branchTagChangeConfirmation.action === "push"
-                ? "Are you sure you want to push branch tag changes for this repo?"
-                : "Are you sure you want to reset branch tag changes for this repo to match origin?"}
+              {branchTagChangeActionText?.message}
             </p>
             <ul className="branch-tag-change-list">
               {branchTagChangesInConfirmation.map((branchTagChange) => (
@@ -2708,9 +2779,7 @@ export const App = () => {
                 Cancel
               </button>
               <button type="button" onClick={confirmBranchTagChanges}>
-                {branchTagChangeConfirmation.action === "push"
-                  ? "Push"
-                  : "Reset"}
+                {branchTagChangeActionText?.buttonText}
               </button>
             </div>
           </div>
@@ -2734,23 +2803,22 @@ export const App = () => {
       )}
 
       <div className="content-shell">
-        <ThreadList threads={dashboardData?.threads ?? []} />
         <div className="repo-list">
-          {dashboardData?.repos.map((repo) => (
+          {selectedRepo === null ? null : (
             <RepoSection
-              key={repo.key}
-              repo={repo}
+              key={selectedRepo.key}
+              repo={selectedRepo}
               threadOfId={threadOfId}
-              gitChangesOfCwd={dashboardData.gitChangesOfCwd}
+              gitChangesOfCwd={dashboardData?.gitChangesOfCwd ?? {}}
               repoBranchTagChanges={readVisibleBranchTagChangesForRepo(
-                repo.root,
+                selectedRepo.root,
               )}
               refreshDashboard={refreshDashboard}
               showErrorMessage={showErrorMessage}
               rememberBranchTagChange={rememberBranchTagChange}
               openBranchTagChangeModal={openBranchTagChangeModal}
             />
-          ))}
+          )}
           {dashboardData !== null &&
             dashboardData.repos.length === 0 &&
             !isLoading && (
