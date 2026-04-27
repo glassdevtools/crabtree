@@ -489,6 +489,11 @@ button {
   overflow: hidden;
 }
 
+/* TODO: AI-PICKED-VALUE: This separates cwd groups enough that each robot group reads as its own unit. */
+.commit-thread-group-list {
+  gap: 12px;
+}
+
 .commit-ref {
   min-height: 24px;
   display: inline-flex;
@@ -607,11 +612,6 @@ button {
 
 .commit-thread-change-removed {
   color: #c53a13;
-}
-
-.commit-thread-change-count-empty .commit-thread-change-added,
-.commit-thread-change-count-empty .commit-thread-change-removed {
-  color: #8b929c;
 }
 
 .commit-ref svg,

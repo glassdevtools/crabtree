@@ -2,7 +2,7 @@ import {
   Bot,
   Check,
   Download,
-  GitBranchPlus,
+  GitBranch,
   GitCommitHorizontal,
   GitPullRequestArrow,
   RefreshCw,
@@ -643,7 +643,6 @@ const createCommitGraph = (commits: GitCommit[]) => {
     nextLanes.splice(lane, 1);
     const parentLanes: CommitGraphLane[] = [];
 
-
     // dsf
     // setFdLimitdsf
     // sdf
@@ -1012,27 +1011,26 @@ const ChatRobotTags = ({
   }
 
   return (
-    <div className="commit-label-list">
+    <div className="commit-label-list commit-thread-group-list">
       {threadGroups.map((threadGroup) => {
         const storedChangeSummary = gitChangesOfCwd[threadGroup.cwd];
         const changeSummary = storedChangeSummary ?? EMPTY_GIT_CHANGE_SUMMARY;
         const totalChangeSummary = readTotalGitChangeSummary(changeSummary);
-        const shouldShowChangeCount = storedChangeSummary !== undefined;
         const isChangeSummaryEmpty =
           totalChangeSummary.added === 0 && totalChangeSummary.removed === 0;
+        const shouldShowChangeCount =
+          storedChangeSummary !== undefined && !isChangeSummaryEmpty;
         const commitBranchTarget = readCommitBranchTarget(
           threadGroup.cwd,
           threadGroup.threads,
         );
-        const changeCountClassName = isChangeSummaryEmpty
-          ? "commit-thread-change-count commit-thread-change-count-empty"
-          : "commit-thread-change-count";
         const shouldShowBranchCreateAction =
-          threadGroup.cwd.length > 0 && commitBranchTarget === null;
+          threadGroup.cwd.length > 0 &&
+          shouldShowChangeCount &&
+          commitBranchTarget === null;
         const shouldShowCommitAction =
           threadGroup.cwd.length > 0 &&
-          storedChangeSummary !== undefined &&
-          !isChangeSummaryEmpty &&
+          shouldShowChangeCount &&
           !shouldShowBranchCreateAction;
 
         return (
@@ -1071,7 +1069,7 @@ const ChatRobotTags = ({
             })}
             {shouldShowChangeCount ? (
               <button
-                className={changeCountClassName}
+                className="commit-thread-change-count"
                 title={threadGroup.cwd}
                 type="button"
                 onMouseDown={(event) => event.stopPropagation()}
@@ -1106,7 +1104,7 @@ const ChatRobotTags = ({
                   })
                 }
               >
-                <GitBranchPlus size={13} />
+                <GitBranch size={13} />
               </button>
             ) : null}
             {shouldShowCommitAction ? (
