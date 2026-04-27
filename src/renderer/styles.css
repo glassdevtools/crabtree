@@ -356,6 +356,10 @@ button {
   box-shadow: 0 12px 32px rgba(26, 33, 44, 0.18);
 }
 
+.change-summary-modal {
+  width: 320px;
+}
+
 /* TODO: AI-PICKED-VALUE: The wider modal and list columns leave room for repo paths while matching the existing modal style. */
 .branch-tag-change-modal {
   width: 520px;
@@ -408,6 +412,41 @@ button {
   margin: 0;
   color: #343a43;
   font-size: 13px;
+}
+
+.change-summary-breakdown {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #e0e5ec;
+  border-radius: 6px;
+}
+
+.change-summary-row {
+  display: grid;
+  grid-template-columns: 1fr 58px 58px;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border-bottom: 1px solid #edf0f4;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.change-summary-row:last-child {
+  border-bottom: 0;
+}
+
+.change-summary-modal-link {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #0a64c9;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .branch-tag-change-list {
@@ -474,6 +513,16 @@ button {
 
 .commit-graph-cell {
   min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 34px;
+}
+
+.commit-graph-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .commit-branch-tags-cell,
@@ -556,7 +605,7 @@ button {
 /* TODO: AI-PICKED-VALUE: This keeps the delete affordance small enough to fit inside compact branch tags. */
 .commit-branch-create-action,
 .commit-thread-commit-action,
-.commit-ref-action,
+.commit-graph-merge-action,
 .commit-ref-delete {
   width: 20px;
   height: 20px;
@@ -570,7 +619,6 @@ button {
   cursor: pointer;
 }
 
-.commit-ref-action,
 .commit-ref-delete {
   width: 14px;
   height: 14px;
@@ -582,16 +630,8 @@ button {
 
 .commit-branch-create-action:hover,
 .commit-thread-commit-action:hover,
-.commit-ref-action:hover {
+.commit-graph-merge-action:hover {
   color: #0a64c9;
-}
-
-.commit-ref-action[aria-disabled="true"],
-.commit-ref-delete[aria-disabled="true"],
-.commit-ref-action[aria-disabled="true"]:hover,
-.commit-ref-delete[aria-disabled="true"]:hover {
-  color: #c2c8d0;
-  cursor: not-allowed;
 }
 
 .commit-thread-group {
@@ -636,11 +676,6 @@ button {
 
 .commit-thread-change-removed {
   color: #c53a13;
-}
-
-.commit-thread-change-count-empty .commit-thread-change-added,
-.commit-thread-change-count-empty .commit-thread-change-removed {
-  color: #8b929c;
 }
 
 .commit-ref svg,
