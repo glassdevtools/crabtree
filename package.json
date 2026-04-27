@@ -2,7 +2,7 @@
   "name": "molttree",
   "version": "0.1.0",
   "private": true,
-  "description": "A Codex worktree and thread graph.",
+  "description": "A Codex thread and Git graph.",
   "main": "out/main/main.js",
   "scripts": {
     "dev": "electron-vite dev",

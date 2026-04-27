@@ -4,9 +4,9 @@ import type {
   GitBranchTagChange,
   GitCheckoutCommitRequest,
   GitCommitChangesRequest,
+  GitCreateBranchRequest,
   GitDeleteBranchRequest,
-  GitDeleteWorktreeRequest,
-  GitMergeRequest,
+  GitMergeBranchRequest,
   GitMoveBranchRequest,
   MoltTreeApi,
 } from "../shared/types";
@@ -38,10 +38,8 @@ const api: MoltTreeApi = {
   ) => {
     await ipcRenderer.invoke("git:commitAllChanges", gitCommitChangesRequest);
   },
-  deleteGitWorktree: async (
-    gitDeleteWorktreeRequest: GitDeleteWorktreeRequest,
-  ) => {
-    await ipcRenderer.invoke("git:deleteWorktree", gitDeleteWorktreeRequest);
+  createGitBranch: async (gitCreateBranchRequest: GitCreateBranchRequest) => {
+    await ipcRenderer.invoke("git:createBranch", gitCreateBranchRequest);
   },
   deleteGitBranch: async (gitDeleteBranchRequest: GitDeleteBranchRequest) => {
     await ipcRenderer.invoke("git:deleteBranch", gitDeleteBranchRequest);
@@ -64,8 +62,11 @@ const api: MoltTreeApi = {
   ) => {
     await ipcRenderer.invoke("git:resetBranchTagChanges", gitBranchTagChanges);
   },
-  startGitMerge: async (gitMergeRequest: GitMergeRequest) => {
-    await ipcRenderer.invoke("git:startMerge", gitMergeRequest);
+  previewGitMerge: async (gitMergeBranchRequest: GitMergeBranchRequest) => {
+    return await ipcRenderer.invoke("git:previewMerge", gitMergeBranchRequest);
+  },
+  mergeGitBranch: async (gitMergeBranchRequest: GitMergeBranchRequest) => {
+    await ipcRenderer.invoke("git:mergeBranch", gitMergeBranchRequest);
   },
 };
 

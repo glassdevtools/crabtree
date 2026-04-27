@@ -43,22 +43,14 @@ export type GitChangeSummary = {
   unstaged: GitChangeLineCounts;
 };
 
-export type GitMergeRequest = {
-  repoRoot: string;
-  fromSha: string;
-  toSha: string;
-  targetBranch: string | null;
-  targetWorktreePath: string | null;
-};
-
 export type GitCommitChangesRequest = {
   path: string;
   message: string;
 };
 
-export type GitDeleteWorktreeRequest = {
-  repoRoot: string;
+export type GitCreateBranchRequest = {
   path: string;
+  branch: string;
 };
 
 export type GitDeleteBranchRequest = {
@@ -76,6 +68,17 @@ export type GitMoveBranchRequest = {
 export type GitCheckoutCommitRequest = {
   repoRoot: string;
   sha: string;
+};
+
+export type GitMergeBranchRequest = {
+  repoRoot: string;
+  branch: string;
+};
+
+export type GitMergePreview = {
+  added: number;
+  removed: number;
+  conflictCount: number;
 };
 
 export type GitBranchTagChange = {
@@ -127,8 +130,8 @@ export type MoltTreeApi = {
   commitAllGitChanges: (
     gitCommitChangesRequest: GitCommitChangesRequest,
   ) => Promise<void>;
-  deleteGitWorktree: (
-    gitDeleteWorktreeRequest: GitDeleteWorktreeRequest,
+  createGitBranch: (
+    gitCreateBranchRequest: GitCreateBranchRequest,
   ) => Promise<void>;
   deleteGitBranch: (
     gitDeleteBranchRequest: GitDeleteBranchRequest,
@@ -143,5 +146,10 @@ export type MoltTreeApi = {
   resetGitBranchTagChanges: (
     gitBranchTagChanges: GitBranchTagChange[],
   ) => Promise<void>;
-  startGitMerge: (gitMergeRequest: GitMergeRequest) => Promise<void>;
+  previewGitMerge: (
+    gitMergeBranchRequest: GitMergeBranchRequest,
+  ) => Promise<GitMergePreview>;
+  mergeGitBranch: (
+    gitMergeBranchRequest: GitMergeBranchRequest,
+  ) => Promise<void>;
 };

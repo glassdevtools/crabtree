@@ -1,5 +1,4 @@
 import { app, BrowserWindow, ipcMain, shell } from "electron";
-import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { simpleGit } from "simple-git";
@@ -7,9 +6,10 @@ import type {
   GitBranchTagChange,
   GitCheckoutCommitRequest,
   GitCommitChangesRequest,
+  GitCreateBranchRequest,
   GitDeleteBranchRequest,
-  GitDeleteWorktreeRequest,
-  GitMergeRequest,
+  GitMergeBranchRequest,
+  GitMergePreview,
   GitMoveBranchRequest,
 } from "../shared/types";
 import { readDashboardData } from "./dashboard";
@@ -20,8 +20,6 @@ const MAIN_WINDOW_WIDTH = 1320;
 const MAIN_WINDOW_HEIGHT = 860;
 const MAIN_WINDOW_MIN_WIDTH = 980;
 const MAIN_WINDOW_MIN_HEIGHT = 640;
-// TODO: AI-PICKED-VALUE: Four random bytes make short readable worktree/temp branch ids while keeping collisions unlikely for local use.
-const GIT_MERGE_HASH_BYTE_LENGTH = 4;
 
 const createMainWindow = () => {
   const mainWindow = new BrowserWindow({
@@ -71,48 +69,6 @@ const isObject = (value: unknown): value is { [key: string]: unknown } => {
   return typeof value === "object" && value !== null;
 };
 
-const readGitMergeRequest = (value: unknown) => {
-  if (!isObject(value)) {
-    throw new Error("gitMergeRequest must be an object.");
-  }
-
-  if (
-    typeof value.repoRoot !== "string" ||
-    value.repoRoot.length === 0 ||
-    typeof value.fromSha !== "string" ||
-    value.fromSha.length === 0 ||
-    typeof value.toSha !== "string" ||
-    value.toSha.length === 0 ||
-    (value.targetBranch !== null &&
-      (typeof value.targetBranch !== "string" ||
-        value.targetBranch.length === 0)) ||
-    (value.targetWorktreePath !== null &&
-      (typeof value.targetWorktreePath !== "string" ||
-        value.targetWorktreePath.length === 0))
-  ) {
-    throw new Error(
-      "gitMergeRequest is missing a repo root, commit sha, or target.",
-    );
-  }
-
-  const hasTargetBranch = value.targetBranch !== null;
-  const hasTargetWorktreePath = value.targetWorktreePath !== null;
-
-  if (hasTargetBranch === hasTargetWorktreePath) {
-    throw new Error("gitMergeRequest needs exactly one merge target.");
-  }
-
-  const gitMergeRequest: GitMergeRequest = {
-    repoRoot: value.repoRoot,
-    fromSha: value.fromSha,
-    toSha: value.toSha,
-    targetBranch: value.targetBranch,
-    targetWorktreePath: value.targetWorktreePath,
-  };
-
-  return gitMergeRequest;
-};
-
 const readGitCommitChangesRequest = (value: unknown) => {
   if (!isObject(value)) {
     throw new Error("gitCommitChangesRequest must be an object.");
@@ -135,30 +91,26 @@ const readGitCommitChangesRequest = (value: unknown) => {
   return gitCommitChangesRequest;
 };
 
-const readGitDeleteWorktreeRequest = (value: unknown) => {
+const readGitCreateBranchRequest = (value: unknown) => {
   if (!isObject(value)) {
-    throw new Error("gitDeleteWorktreeRequest must be an object.");
+    throw new Error("gitCreateBranchRequest must be an object.");
   }
 
   if (
-    typeof value.repoRoot !== "string" ||
-    value.repoRoot.length === 0 ||
     typeof value.path !== "string" ||
-    value.path.length === 0
+    value.path.length === 0 ||
+    typeof value.branch !== "string" ||
+    value.branch.trim().length === 0
   ) {
-    throw new Error("gitDeleteWorktreeRequest needs a repo root and path.");
+    throw new Error("gitCreateBranchRequest needs a path and branch.");
   }
 
-  if (value.repoRoot === value.path) {
-    throw new Error("Cannot delete the main repository worktree.");
-  }
-
-  const gitDeleteWorktreeRequest: GitDeleteWorktreeRequest = {
-    repoRoot: value.repoRoot,
+  const gitCreateBranchRequest: GitCreateBranchRequest = {
     path: value.path,
+    branch: value.branch.trim(),
   };
 
-  return gitDeleteWorktreeRequest;
+  return gitCreateBranchRequest;
 };
 
 const readGitDeleteBranchRequest = (value: unknown) => {
@@ -235,6 +187,28 @@ const readGitCheckoutCommitRequest = (value: unknown) => {
   return gitCheckoutCommitRequest;
 };
 
+const readGitMergeBranchRequest = (value: unknown) => {
+  if (!isObject(value)) {
+    throw new Error("gitMergeBranchRequest must be an object.");
+  }
+
+  if (
+    typeof value.repoRoot !== "string" ||
+    value.repoRoot.length === 0 ||
+    typeof value.branch !== "string" ||
+    value.branch.trim().length === 0
+  ) {
+    throw new Error("gitMergeBranchRequest needs a repo root and branch.");
+  }
+
+  const gitMergeBranchRequest: GitMergeBranchRequest = {
+    repoRoot: value.repoRoot,
+    branch: value.branch.trim(),
+  };
+
+  return gitMergeBranchRequest;
+};
+
 const readGitBranchTagChanges = (value: unknown) => {
   if (!Array.isArray(value)) {
     throw new Error("gitBranchTagChanges must be an array.");
@@ -274,85 +248,6 @@ const readGitBranchTagChanges = (value: unknown) => {
   return gitBranchTagChanges;
 };
 
-const startGitMerge = async ({
-  repoRoot,
-  fromSha,
-  toSha,
-  targetBranch,
-  targetWorktreePath,
-}: GitMergeRequest) => {
-  const hash = randomBytes(GIT_MERGE_HASH_BYTE_LENGTH).toString("hex");
-  const tempBranchName = `temp-${hash}`;
-  let isTempBranchCreated = false;
-  let targetPath = repoRoot;
-
-  if (targetBranch !== null) {
-    const statusText = await readGitTextForPath({
-      path: repoRoot,
-      args: ["status", "--porcelain"],
-    });
-
-    if (statusText.length > 0) {
-      throw new Error("Working tree must be clean before switching branches.");
-    }
-
-    const branchHead = await readGitTextForPath({
-      path: repoRoot,
-      args: ["rev-parse", targetBranch],
-    });
-
-    if (branchHead !== toSha) {
-      throw new Error("Target branch moved. Refresh and try again.");
-    }
-
-    await runGitCommandForPath({
-      path: repoRoot,
-      args: ["switch", targetBranch],
-    });
-  }
-
-  if (targetWorktreePath !== null) {
-    targetPath = targetWorktreePath;
-    const worktreeHead = await readGitTextForPath({
-      path: targetPath,
-      args: ["rev-parse", "HEAD"],
-    });
-
-    if (worktreeHead !== toSha) {
-      throw new Error("Target worktree moved. Refresh and try again.");
-    }
-  }
-
-  const targetStatusText = await readGitTextForPath({
-    path: targetPath,
-    args: ["status", "--porcelain"],
-  });
-
-  if (targetStatusText.length > 0) {
-    throw new Error("Merge target must be clean before starting a merge.");
-  }
-
-  try {
-    await runGitCommandForPath({
-      path: targetPath,
-      args: ["branch", tempBranchName, fromSha],
-    });
-    isTempBranchCreated = true;
-
-    await runGitCommandForPath({
-      path: targetPath,
-      args: ["merge", "--no-edit", tempBranchName],
-    });
-  } finally {
-    if (isTempBranchCreated) {
-      await runGitCommandForPath({
-        path: targetPath,
-        args: ["branch", "-D", tempBranchName],
-      });
-    }
-  }
-};
-
 const commitAllGitChanges = async ({
   path,
   message,
@@ -361,14 +256,12 @@ const commitAllGitChanges = async ({
   await runGitCommandForPath({ path, args: ["commit", "-m", message] });
 };
 
-const deleteGitWorktree = async ({
-  repoRoot,
-  path,
-}: GitDeleteWorktreeRequest) => {
+const createGitBranch = async ({ path, branch }: GitCreateBranchRequest) => {
   await runGitCommandForPath({
-    path: repoRoot,
-    args: ["worktree", "remove", path],
+    path,
+    args: ["check-ref-format", "--branch", branch],
   });
+  await runGitCommandForPath({ path, args: ["branch", branch] });
 };
 
 const deleteGitBranch = async ({
@@ -378,6 +271,102 @@ const deleteGitBranch = async ({
   await runGitCommandForPath({
     path: repoRoot,
     args: ["branch", "-D", branch],
+  });
+};
+
+const parseGitChangeLineCounts = (stdout: string) => {
+  const lineCounts = {
+    added: 0,
+    removed: 0,
+  };
+
+  for (const line of stdout.split("\n")) {
+    if (line.length === 0) {
+      continue;
+    }
+
+    const [addedText, removedText] = line.split("\t");
+    const added = Number(addedText);
+    const removed = Number(removedText);
+
+    if (Number.isFinite(added)) {
+      lineCounts.added += added;
+    }
+
+    if (Number.isFinite(removed)) {
+      lineCounts.removed += removed;
+    }
+  }
+
+  return lineCounts;
+};
+
+const readGitMergeBranchRef = async ({
+  repoRoot,
+  branch,
+}: GitMergeBranchRequest) => {
+  await runGitCommandForPath({
+    path: repoRoot,
+    args: ["check-ref-format", "--branch", branch],
+  });
+
+  const branchRef = `refs/heads/${branch}`;
+
+  await readGitTextForPath({
+    path: repoRoot,
+    args: ["rev-parse", "--verify", `${branchRef}^{commit}`],
+  });
+
+  return branchRef;
+};
+
+const previewGitMerge = async (
+  gitMergeBranchRequest: GitMergeBranchRequest,
+) => {
+  const branchRef = await readGitMergeBranchRef(gitMergeBranchRequest);
+  const diffText = await readGitTextForPath({
+    path: gitMergeBranchRequest.repoRoot,
+    args: ["diff", "--numstat", `HEAD...${branchRef}`, "--", "."],
+  });
+  const lineCounts = parseGitChangeLineCounts(diffText);
+  const mergeTreeText = await readGitTextForPath({
+    path: gitMergeBranchRequest.repoRoot,
+    args: [
+      "merge-tree",
+      "--write-tree",
+      "--name-only",
+      "--no-messages",
+      "HEAD",
+      branchRef,
+    ],
+  });
+  const mergeTreeLines = mergeTreeText
+    .split("\n")
+    .filter((line) => line.length > 0);
+  const conflictCount = Math.max(0, mergeTreeLines.length - 1);
+  const gitMergePreview: GitMergePreview = {
+    added: lineCounts.added,
+    removed: lineCounts.removed,
+    conflictCount,
+  };
+
+  return gitMergePreview;
+};
+
+const mergeGitBranch = async (gitMergeBranchRequest: GitMergeBranchRequest) => {
+  const branchRef = await readGitMergeBranchRef(gitMergeBranchRequest);
+  const statusText = await readGitTextForPath({
+    path: gitMergeBranchRequest.repoRoot,
+    args: ["status", "--porcelain"],
+  });
+
+  if (statusText.length > 0) {
+    throw new Error("Working tree must be clean before starting a merge.");
+  }
+
+  await runGitCommandForPath({
+    path: gitMergeBranchRequest.repoRoot,
+    args: ["merge", "--no-edit", branchRef],
   });
 };
 
@@ -744,10 +733,10 @@ ipcMain.handle("git:commitAllChanges", async (_event, value: unknown) => {
   await commitAllGitChanges(gitCommitChangesRequest);
 });
 
-ipcMain.handle("git:deleteWorktree", async (_event, value: unknown) => {
-  const gitDeleteWorktreeRequest = readGitDeleteWorktreeRequest(value);
+ipcMain.handle("git:createBranch", async (_event, value: unknown) => {
+  const gitCreateBranchRequest = readGitCreateBranchRequest(value);
 
-  await deleteGitWorktree(gitDeleteWorktreeRequest);
+  await createGitBranch(gitCreateBranchRequest);
 });
 
 ipcMain.handle("git:deleteBranch", async (_event, value: unknown) => {
@@ -780,10 +769,16 @@ ipcMain.handle("git:resetBranchTagChanges", async (_event, value: unknown) => {
   await resetGitBranchTagChanges(gitBranchTagChanges);
 });
 
-ipcMain.handle("git:startMerge", async (_event, value: unknown) => {
-  const gitMergeRequest = readGitMergeRequest(value);
+ipcMain.handle("git:previewMerge", async (_event, value: unknown) => {
+  const gitMergeBranchRequest = readGitMergeBranchRequest(value);
 
-  await startGitMerge(gitMergeRequest);
+  return await previewGitMerge(gitMergeBranchRequest);
+});
+
+ipcMain.handle("git:mergeBranch", async (_event, value: unknown) => {
+  const gitMergeBranchRequest = readGitMergeBranchRequest(value);
+
+  await mergeGitBranch(gitMergeBranchRequest);
 });
 
 app.whenReady().then(() => {

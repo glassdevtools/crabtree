@@ -235,9 +235,9 @@ button {
 }
 
 .commit-history {
-  --commit-history-grid-template-columns: 300px 320px 220px 420px 84px 150px
+  --commit-history-grid-template-columns: 300px 340px 260px 420px 84px 150px
     170px;
-  --commit-history-table-width: 1664px;
+  --commit-history-table-width: 1724px;
   overflow: auto;
   border: 1px solid #cfd6df;
   border-radius: 7px;
@@ -331,33 +331,6 @@ button {
   left: 0;
   z-index: 4;
   pointer-events: none;
-}
-
-.commit-graph-action-link {
-  cursor: pointer;
-  pointer-events: all;
-}
-
-.commit-graph-action-hit-area {
-  fill: transparent;
-}
-
-.commit-graph-action-muted {
-  opacity: 0.48;
-}
-
-.commit-graph-change-count {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 10px;
-  font-weight: 760;
-}
-
-.commit-graph-change-added {
-  fill: #1f7a4d;
-}
-
-.commit-graph-change-removed {
-  fill: #c53a13;
 }
 
 /* TODO: AI-PICKED-VALUE: The modal sizing and shadow match the compact graph UI without adding a new design system. */
@@ -485,15 +458,7 @@ button {
   color: #202124;
 }
 
-.commit-history-row[draggable="true"] {
-  cursor: grab;
-}
-
-.commit-history-row-merge-drag-source {
-  opacity: 0.58;
-}
-
-.commit-history-row-merge-drop-target {
+.commit-history-row-branch-drop-target {
   outline: 2px solid #0a84ff;
   outline-offset: -2px;
   background: #eaf1ff;
@@ -503,13 +468,8 @@ button {
   background: rgba(248, 250, 252, 0.76);
 }
 
-.commit-history-row-merge-drop-target:nth-child(even) {
+.commit-history-row-branch-drop-target:nth-child(even) {
   background: #eaf1ff;
-}
-
-.commit-history-row-worktree,
-.commit-history-row-chat {
-  color: #4f5660;
 }
 
 .commit-graph-cell {
@@ -517,7 +477,7 @@ button {
 }
 
 .commit-branch-tags-cell,
-.commit-chats-cell,
+.commit-actors-cell,
 .commit-description-cell,
 .commit-hash-cell,
 .commit-author-cell,
@@ -530,7 +490,7 @@ button {
 }
 
 .commit-branch-tags-cell,
-.commit-chats-cell,
+.commit-actors-cell,
 .commit-description-cell {
   overflow: hidden;
 }
@@ -580,21 +540,9 @@ button {
   color: #43236f;
 }
 
-.commit-head {
-  max-width: 142px;
-  min-height: 24px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 1px 7px;
-  border: 1px solid #b9c0c9;
-  border-radius: 5px;
+.commit-ref-head {
   background: #eef0f3;
   color: #343a43;
-  flex: 0 0 auto;
-  font-size: 13px;
-  font-weight: 720;
-  cursor: pointer;
 }
 
 .commit-ref-draggable {
@@ -606,9 +554,11 @@ button {
 }
 
 /* TODO: AI-PICKED-VALUE: This keeps the delete affordance small enough to fit inside compact branch tags. */
+.commit-branch-create-action,
+.commit-ref-action,
 .commit-ref-delete {
-  width: 14px;
-  height: 14px;
+  width: 20px;
+  height: 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -619,55 +569,71 @@ button {
   cursor: pointer;
 }
 
+.commit-ref-action,
+.commit-ref-delete {
+  width: 14px;
+  height: 14px;
+}
+
 .commit-ref-delete:hover {
   color: #c53a13;
 }
 
-.commit-worktree {
-  max-width: 142px;
+.commit-branch-create-action:hover,
+.commit-ref-action:hover {
+  color: #0a64c9;
+}
+
+.commit-thread-group {
   min-height: 24px;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 1px 7px;
-  border: 1px solid #b9c0c9;
-  border-radius: 5px;
-  background: #eef0f3;
-  color: #343a43;
+  gap: 3px;
   flex: 0 0 auto;
-  font-size: 13px;
-  font-weight: 720;
+}
+
+.commit-thread-robot {
+  width: 18px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: #202124;
   cursor: pointer;
 }
 
-.commit-thread {
-  max-width: 142px;
-  min-height: 24px;
+.commit-thread-robot:focus {
+  outline: none;
+}
+
+.commit-thread-change-count {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 1px 7px;
-  border: 1px solid #aeb9c7;
-  border-radius: 5px;
-  background: #fff4df;
-  color: #4f3200;
-  flex: 0 0 auto;
-  font-size: 13px;
-  font-weight: 720;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 760;
   cursor: pointer;
+}
+
+.commit-thread-change-added {
+  color: #1f7a4d;
+}
+
+.commit-thread-change-removed {
+  color: #c53a13;
 }
 
 .commit-ref svg,
-.commit-head svg,
-.commit-worktree svg,
-.commit-thread svg {
+.commit-thread-group svg {
   flex: 0 0 auto;
 }
 
 .commit-ref span,
-.commit-head span,
-.commit-worktree span,
-.commit-thread span,
 .commit-subject,
 .commit-author-cell,
 .commit-date-cell {

@@ -1,17 +1,17 @@
-# Codex Worktree Graph
+# MoltTree
 
 Small README change for testing.
 
 ## Features by Interface
 
-- Git graph, branches, commits, worktrees, and file change actions: `simple-git`.
+- Git graph, branches, commits, thread markers, and file change actions: `simple-git`.
 - Non-archived thread list, thread history, new threads, and sending messages: Codex app-server.
 - Simple start/resume/run flows: Codex app-server in v1; Codex SDK is only a possible future wrapper.
 - Open a thread in Codex Desktop: deep link, using `codex://threads/<thread-id>`.
 - Open a new Codex thread: deep link, using `codex://new`.
-- Lookup thread id by worktree path, branch, or commit: Codex app-server thread data.
+- Lookup thread id by working directory, branch, or commit: Codex app-server thread data.
 - Update stored Codex thread Git metadata: Codex app-server.
-- Checkout a branch or commit in a worktree: `simple-git`, then Codex app-server `thread/metadata/update` if needed.
+- Checkout commits, create branches, preview merges, and merge branches: `simple-git`.
 - Draft messages before sending: our own app storage.
 
 ## Interface Notes
