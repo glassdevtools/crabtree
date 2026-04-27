@@ -9,7 +9,6 @@ import {
   Upload,
   User,
 } from "lucide-react";
-import { IoChatbubbleOutline } from "react-icons/io5";
 import { MdOutlineCallSplit } from "react-icons/md";
 import { Resizable } from "react-resizable";
 import { toast } from "sonner";
@@ -85,7 +84,7 @@ import { cn } from "@/lib/utils";
 
 // The history view is a SourceTree-style row table. Git owns the commits; the renderer only assigns lanes.
 // TODO: AI-PICKED-VALUE: These graph sizes and colors are initial SourceTree-like choices for dense commit rows.
-const COMMIT_GRAPH_ROW_HEIGHT = 16;
+const COMMIT_GRAPH_ROW_HEIGHT = 20;
 const COMMIT_GRAPH_LANE_WIDTH = 14;
 const COMMIT_GRAPH_PADDING_LEFT = 10;
 const COMMIT_GRAPH_MIN_WIDTH = 160;
@@ -1235,6 +1234,11 @@ const ChatRobotTags = ({
                   ? "Open chat"
                   : title;
               const isThreadActive = readIsThreadActive(thread);
+              const isWorktreeThread = readIsWorktreeCwd({
+                cwd: thread.cwd,
+                worktrees,
+              });
+              const chatIconMaskId = `commit-thread-chat-mask-${thread.id.replace(/[^A-Za-z0-9_-]/g, "-")}`;
 
               return (
                 <TitleTooltip
@@ -1258,14 +1262,51 @@ const ChatRobotTags = ({
                       void openThread(thread.id);
                     }}
                   >
-                    <IoChatbubbleOutline size={12} />
-                    {readIsWorktreeCwd({ cwd: thread.cwd, worktrees }) ? (
-                      <MdOutlineCallSplit
-                        aria-hidden="true"
-                        className="commit-thread-worktree-mark"
-                        size={8}
+                    <svg
+                      aria-hidden="true"
+                      className="commit-thread-chat-icon"
+                      focusable="false"
+                      viewBox="0 0 512 512"
+                    >
+                      {isWorktreeThread ? (
+                        <defs>
+                          <mask id={chatIconMaskId}>
+                            <rect width="512" height="512" fill="#ffffff" />
+                            {/* TODO: AI-PICKED-VALUE: This cutout gives the composed remix mark a little extra room above the chat outline at dense row sizes. */}
+                            <ellipse
+                              cx="390"
+                              cy="376"
+                              rx="154"
+                              ry="166"
+                              fill="#000000"
+                            />
+                          </mask>
+                        </defs>
+                      ) : null}
+                      <path
+                        className="commit-thread-chat-bubble"
+                        d="M87.49 380c1.19-4.38-1.44-10.47-3.95-14.86a44.86 44.86 0 0 0-2.54-3.8 199.81 199.81 0 0 1-33-110C47.65 139.09 140.73 48 255.83 48 356.21 48 440 117.54 459.58 209.85a199 199 0 0 1 4.42 41.64c0 112.41-89.49 204.93-204.59 204.93-18.3 0-43-4.6-56.47-8.37s-26.92-8.77-30.39-10.11a31.09 31.09 0 0 0-11.12-2.07 30.71 30.71 0 0 0-12.09 2.43l-67.83 24.48a16 16 0 0 1-4.67 1.22 9.6 9.6 0 0 1-9.57-9.74 15.85 15.85 0 0 1 .6-3.29z"
+                        fill="none"
+                        mask={
+                          isWorktreeThread
+                            ? `url(#${chatIconMaskId})`
+                            : undefined
+                        }
+                        strokeLinecap="round"
+                        strokeMiterlimit={10}
+                        strokeWidth={32}
                       />
-                    ) : null}
+                      {isWorktreeThread ? (
+                        // TODO: AI-PICKED-VALUE: This transform preserves the old 90-degree rotation while placing the original Material icon in the chat corner.
+                        <g
+                          className="commit-thread-worktree-mark"
+                          transform="translate(390 390) rotate(90) scale(12) translate(-12 -12)"
+                        >
+                          <path fill="none" d="M0 0h24v24H0V0z" />
+                          <path d="m14 4 2.29 2.29-2.88 2.88 1.42 1.42 2.88-2.88L20 10V4h-6zm-4 0H4v6l2.29-2.29 4.71 4.7V20h2v-8.41l-5.29-5.3L10 4z" />
+                        </g>
+                      ) : null}
+                    </svg>
                   </Button>
                 </TitleTooltip>
               );
