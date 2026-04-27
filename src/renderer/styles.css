@@ -596,19 +596,8 @@ textarea,
   pointer-events: none;
 }
 
-.commit-graph-head-icon {
-  width: 28px;
-  height: 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1px;
-  margin-right: 0;
-  color: #343a43;
-}
-
 .change-summary-modal {
-  width: min(720px, calc(100vw - 32px));
+  width: min(360px, calc(100vw - 32px));
 }
 
 /* TODO: AI-PICKED-VALUE: The modal width leaves room for branch names and hash changes while matching the existing modal style. */
@@ -664,6 +653,8 @@ textarea,
 }
 
 .change-summary-modal-link {
+  width: auto;
+  height: auto;
   align-self: flex-start;
   padding: 0;
   border: 0;
@@ -673,6 +664,8 @@ textarea,
   font: inherit;
   font-size: 13px;
   font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .branch-tag-change-list {
@@ -761,9 +754,16 @@ textarea,
 .commit-graph-actions {
   position: absolute;
   top: 50%;
+  z-index: 5;
   /* TODO: AI-PICKED-VALUE: This keeps every graph action as far from the right edge as the HEAD marker was. */
   right: 8px;
   transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.commit-graph-thread-actions {
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -785,6 +785,25 @@ textarea,
 .commit-actors-cell,
 .commit-description-cell {
   overflow: hidden;
+}
+
+.commit-branch-tags-cell,
+.commit-actors-cell {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.commit-branch-tags-cell::-webkit-scrollbar,
+.commit-actors-cell::-webkit-scrollbar {
+  display: none;
+}
+
+.commit-branch-tags-cell .commit-label-list,
+.commit-actors-cell .commit-label-list {
+  min-width: max-content;
+  flex: 0 0 auto;
+  overflow: visible;
 }
 
 .commit-description-cell {
@@ -926,24 +945,34 @@ textarea,
   align-items: center;
   /* TODO: AI-PICKED-VALUE: This gives neighboring chat items inside a cwd group a little more breathing room without widening group breaks. */
   gap: 3px;
+  min-width: max-content;
   flex: 0 0 auto;
 }
 
 .commit-thread-chat {
-  width: 16px;
   height: 16px;
+  min-width: max-content;
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
+  gap: 3px;
+  padding: 0 4px;
+  border: 1px solid #d5b55f;
+  border-radius: 4px;
+  background: #fff4cf;
   color: #202124;
   cursor: pointer;
+  flex: 0 0 auto;
+  font-size: 10px;
+  line-height: 12px;
+  font-weight: 720;
 }
 
 .commit-thread-chat-icon {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
   overflow: visible;
 }
 
@@ -958,6 +987,15 @@ textarea,
 
 .commit-thread-chat:focus {
   outline: none;
+}
+
+.commit-thread-chat:hover {
+  background: #f6e8aa;
+}
+
+.commit-thread-chat-title {
+  min-width: max-content;
+  white-space: nowrap;
 }
 
 .commit-thread-change-count {

@@ -1,5 +1,4 @@
 import {
-  ArrowLeft,
   Check,
   CircleArrowDown,
   CircleArrowLeft,
@@ -9,7 +8,6 @@ import {
   GitPullRequestArrow,
   LoaderCircle,
   Trash2,
-  User,
 } from "lucide-react";
 import { MdOutlineCallSplit } from "react-icons/md";
 import { VscVscode } from "react-icons/vsc";
@@ -97,16 +95,13 @@ const COMMIT_GRAPH_LANE_WIDTH = 14;
 const COMMIT_GRAPH_PADDING_LEFT = 16;
 const COMMIT_GRAPH_MIN_WIDTH = 96;
 const COMMIT_GRAPH_DOT_RADIUS = 4;
+// TODO: AI-PICKED-VALUE: This makes HEAD read as part of the graph dot instead of as a separate row action.
+const COMMIT_GRAPH_HEAD_RING_RADIUS = 5.5;
+const COMMIT_GRAPH_HEAD_RING_STROKE_WIDTH = 2;
 // TODO: AI-PICKED-VALUE: This keeps graph lines readable in compact rows while making them less heavy.
 const COMMIT_GRAPH_SEGMENT_STROKE_WIDTH = 2.25;
-// TODO: AI-PICKED-VALUE: The HEAD icon is large enough to read in compact rows without taking over the graph column.
-const COMMIT_GRAPH_USER_ICON_SIZE = 12;
-// TODO: AI-PICKED-VALUE: This stroke weight keeps the HEAD icon visibly bolder than the graph lines.
-const COMMIT_GRAPH_USER_ICON_STROKE_WIDTH = 2.25;
 const COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO = 0;
 const COMMIT_HISTORY_HEADER_HEIGHT = 22;
-// TODO: AI-PICKED-VALUE: This gives neighboring chat title tooltips a short handoff window after the first tooltip opens.
-const CHAT_TITLE_TOOLTIP_SKIP_DELAY_MS = 350;
 // Dashboard reads touch Codex and Git, so automatic refreshes share the manual refresh path and never overlap.
 // TODO: AI-PICKED-VALUE: Refreshing every second keeps branch/worktree state current while the refresh queue prevents overlapping Git reads.
 const DASHBOARD_REFRESH_INTERVAL_MS = 1000;
@@ -1255,35 +1250,10 @@ const BranchTags = ({
 
 const ChatRobotTags = ({
   threadGroups,
-  gitChangesOfCwd,
   worktrees,
-  repoRoot,
-  commitSha,
-  localBranches,
-  currentBranch,
-  openBranchCreateModal,
-  openCommitMessageModal,
-  openChangeSummaryModal,
 }: {
   threadGroups: ThreadGroup[];
-  gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   worktrees: GitWorktree[];
-  repoRoot: string;
-  commitSha: string;
-  localBranches: string[];
-  currentBranch: string | null;
-  openBranchCreateModal: (
-    event: MouseEvent<HTMLButtonElement>,
-    branchCreateTarget: BranchCreateTarget,
-  ) => void;
-  openCommitMessageModal: (
-    event: MouseEvent<HTMLButtonElement>,
-    commitMessageTarget: CommitMessageTarget,
-  ) => void;
-  openChangeSummaryModal: (
-    event: MouseEvent<HTMLButtonElement>,
-    changeSummaryTarget: ChangeSummaryTarget,
-  ) => void;
 }) => {
   if (threadGroups.length === 0) {
     return null;
@@ -1292,203 +1262,86 @@ const ChatRobotTags = ({
   const openThread = async (threadId: string) => {
     await window.molttree.openCodexThread(threadId);
   };
-  let branchCreateThreadGroupKey: string | null = null;
-
-  if (localBranches.length === 0) {
-    for (const threadGroup of threadGroups) {
-      if (threadGroup.cwd.length > 0) {
-        branchCreateThreadGroupKey = threadGroup.key;
-        break;
-      }
-    }
-  }
 
   return (
     <div className="commit-label-list commit-thread-group-list">
       {threadGroups.map((threadGroup) => {
-        let branchCreateTarget: BranchCreateTarget | null = null;
-        const storedChangeSummary = gitChangesOfCwd[threadGroup.cwd];
-        const changeSummary = storedChangeSummary ?? EMPTY_GIT_CHANGE_SUMMARY;
-        const totalChangeSummary = readTotalGitChangeSummary(changeSummary);
-        const isChangeSummaryEmpty =
-          totalChangeSummary.added === 0 && totalChangeSummary.removed === 0;
-        const shouldShowChangeCount =
-          storedChangeSummary !== undefined && !isChangeSummaryEmpty;
-        const commitBranchTarget = readCommitBranchTarget({
-          cwd: threadGroup.cwd,
-          groupThreads: threadGroup.threads,
-          repoRoot,
-          currentBranch,
-          localBranches,
-          commitSha,
-        });
-        const shouldShowCommitAction =
-          threadGroup.cwd.length > 0 &&
-          shouldShowChangeCount &&
-          commitBranchTarget !== null;
-
-        if (threadGroup.key === branchCreateThreadGroupKey) {
-          branchCreateTarget = {
-            path: threadGroup.cwd,
-            title: threadGroup.cwd,
-          };
-        }
-
         return (
           <span className="commit-thread-group" key={threadGroup.key}>
-            <TooltipProvider
-              skipDelayDuration={CHAT_TITLE_TOOLTIP_SKIP_DELAY_MS}
-            >
-              {threadGroup.threads.map((thread) => {
-                const title = threadTitle(thread);
-                const chatTooltipTitle =
-                  title.startsWith("/") ||
-                  title.startsWith("~") ||
-                  title.includes("/Users/")
-                    ? "Open chat"
-                    : title;
-                const isThreadActive = readIsThreadActive(thread);
-                const isWorktreeThread = readIsWorktreeCwd({
-                  cwd: thread.cwd,
-                  worktrees,
-                });
-                const chatIconMaskId = `commit-thread-chat-mask-${thread.id.replace(/[^A-Za-z0-9_-]/g, "-")}`;
+            {threadGroup.threads.map((thread) => {
+              const title = threadTitle(thread);
+              const isThreadActive = readIsThreadActive(thread);
+              const isWorktreeThread = readIsWorktreeCwd({
+                cwd: thread.cwd,
+                worktrees,
+              });
+              const chatIconMaskId = `commit-thread-chat-mask-${thread.id.replace(/[^A-Za-z0-9_-]/g, "-")}`;
 
-                return (
-                  <TitleTooltip
-                    title={
-                      isThreadActive
-                        ? `${chatTooltipTitle} is loading`
-                        : chatTooltipTitle
-                    }
-                    key={thread.id}
-                  >
-                    <Button
-                      className="commit-thread-chat"
-                      variant="ghost"
-                      size="icon-xs"
-                      type="button"
-                      onMouseDown={(event) => event.stopPropagation()}
-                      onDoubleClick={(event) => event.stopPropagation()}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        void openThread(thread.id);
-                      }}
-                    >
-                      <svg
-                        aria-hidden="true"
-                        className="commit-thread-chat-icon"
-                        focusable="false"
-                        viewBox="0 0 512 512"
-                      >
-                        {isWorktreeThread ? (
-                          <defs>
-                            <mask id={chatIconMaskId}>
-                              <rect width="512" height="512" fill="#ffffff" />
-                              {/* TODO: AI-PICKED-VALUE: This cutout gives the composed remix mark a little extra room above the chat outline at dense row sizes. */}
-                              <ellipse
-                                cx="390"
-                                cy="376"
-                                rx="154"
-                                ry="166"
-                                fill="#000000"
-                              />
-                            </mask>
-                          </defs>
-                        ) : null}
-                        <path
-                          className="commit-thread-chat-bubble"
-                          d="M87.49 380c1.19-4.38-1.44-10.47-3.95-14.86a44.86 44.86 0 0 0-2.54-3.8 199.81 199.81 0 0 1-33-110C47.65 139.09 140.73 48 255.83 48 356.21 48 440 117.54 459.58 209.85a199 199 0 0 1 4.42 41.64c0 112.41-89.49 204.93-204.59 204.93-18.3 0-43-4.6-56.47-8.37s-26.92-8.77-30.39-10.11a31.09 31.09 0 0 0-11.12-2.07 30.71 30.71 0 0 0-12.09 2.43l-67.83 24.48a16 16 0 0 1-4.67 1.22 9.6 9.6 0 0 1-9.57-9.74 15.85 15.85 0 0 1 .6-3.29z"
-                          fill="none"
-                          mask={
-                            isWorktreeThread
-                              ? `url(#${chatIconMaskId})`
-                              : undefined
-                          }
-                          strokeLinecap="round"
-                          strokeMiterlimit={10}
-                          strokeWidth={32}
-                        />
-                        {isWorktreeThread ? (
-                          // TODO: AI-PICKED-VALUE: This transform preserves the old 90-degree rotation while placing the original Material icon in the chat corner.
-                          <g
-                            className="commit-thread-worktree-mark"
-                            transform="translate(390 390) rotate(90) scale(12) translate(-12 -12)"
-                          >
-                            <path fill="none" d="M0 0h24v24H0V0z" />
-                            <path d="m14 4 2.29 2.29-2.88 2.88 1.42 1.42 2.88-2.88L20 10V4h-6zm-4 0H4v6l2.29-2.29 4.71 4.7V20h2v-8.41l-5.29-5.3L10 4z" />
-                          </g>
-                        ) : null}
-                      </svg>
-                    </Button>
-                  </TitleTooltip>
-                );
-              })}
-            </TooltipProvider>
-            {shouldShowChangeCount ? (
-              <TitleTooltip title="Show changes">
+              return (
                 <Button
-                  className="commit-thread-change-count"
+                  aria-label={
+                    isThreadActive ? `${title} is loading` : `Open ${title}`
+                  }
+                  className="commit-thread-chat"
                   variant="ghost"
                   size="xs"
                   type="button"
+                  key={thread.id}
                   onMouseDown={(event) => event.stopPropagation()}
                   onDoubleClick={(event) => event.stopPropagation()}
-                  onClick={(event) =>
-                    openChangeSummaryModal(event, {
-                      path: threadGroup.cwd,
-                      title: threadGroup.cwd,
-                      changeSummary,
-                    })
-                  }
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    void openThread(thread.id);
+                  }}
                 >
-                  <span className="commit-thread-change-added">
-                    +{totalChangeSummary.added}
-                  </span>
-                  <span className="commit-thread-change-removed">
-                    -{totalChangeSummary.removed}
-                  </span>
+                  <svg
+                    aria-hidden="true"
+                    className="commit-thread-chat-icon"
+                    focusable="false"
+                    viewBox="0 0 512 512"
+                  >
+                    {isWorktreeThread ? (
+                      <defs>
+                        <mask id={chatIconMaskId}>
+                          <rect width="512" height="512" fill="#ffffff" />
+                          {/* TODO: AI-PICKED-VALUE: This cutout gives the composed remix mark a little extra room above the chat outline at dense row sizes. */}
+                          <ellipse
+                            cx="390"
+                            cy="376"
+                            rx="154"
+                            ry="166"
+                            fill="#000000"
+                          />
+                        </mask>
+                      </defs>
+                    ) : null}
+                    <path
+                      className="commit-thread-chat-bubble"
+                      d="M87.49 380c1.19-4.38-1.44-10.47-3.95-14.86a44.86 44.86 0 0 0-2.54-3.8 199.81 199.81 0 0 1-33-110C47.65 139.09 140.73 48 255.83 48 356.21 48 440 117.54 459.58 209.85a199 199 0 0 1 4.42 41.64c0 112.41-89.49 204.93-204.59 204.93-18.3 0-43-4.6-56.47-8.37s-26.92-8.77-30.39-10.11a31.09 31.09 0 0 0-11.12-2.07 30.71 30.71 0 0 0-12.09 2.43l-67.83 24.48a16 16 0 0 1-4.67 1.22 9.6 9.6 0 0 1-9.57-9.74 15.85 15.85 0 0 1 .6-3.29z"
+                      fill="none"
+                      mask={
+                        isWorktreeThread ? `url(#${chatIconMaskId})` : undefined
+                      }
+                      strokeLinecap="round"
+                      strokeMiterlimit={10}
+                      strokeWidth={32}
+                    />
+                    {isWorktreeThread ? (
+                      // TODO: AI-PICKED-VALUE: This transform preserves the old 90-degree rotation while placing the original Material icon in the chat corner.
+                      <g
+                        className="commit-thread-worktree-mark"
+                        transform="translate(390 390) rotate(90) scale(12) translate(-12 -12)"
+                      >
+                        <path fill="none" d="M0 0h24v24H0V0z" />
+                        <path d="m14 4 2.29 2.29-2.88 2.88 1.42 1.42 2.88-2.88L20 10V4h-6zm-4 0H4v6l2.29-2.29 4.71 4.7V20h2v-8.41l-5.29-5.3L10 4z" />
+                      </g>
+                    ) : null}
+                  </svg>
+                  <span className="commit-thread-chat-title">{title}</span>
                 </Button>
-              </TitleTooltip>
-            ) : null}
-            {shouldShowCommitAction ? (
-              <TitleTooltip title="Commit">
-                <Button
-                  className="commit-thread-commit-action"
-                  variant="ghost"
-                  size="icon-xs"
-                  type="button"
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onDoubleClick={(event) => event.stopPropagation()}
-                  onClick={(event) =>
-                    openCommitMessageModal(event, {
-                      path: threadGroup.cwd,
-                      title: threadGroup.cwd,
-                      branchTarget: commitBranchTarget,
-                    })
-                  }
-                >
-                  <Check size={10} />
-                </Button>
-              </TitleTooltip>
-            ) : branchCreateTarget === null ? null : (
-              <TitleTooltip title="Add branch here">
-                <Button
-                  className="commit-branch-create-action"
-                  variant="ghost"
-                  size="icon-xs"
-                  type="button"
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onDoubleClick={(event) => event.stopPropagation()}
-                  onClick={(event) =>
-                    openBranchCreateModal(event, branchCreateTarget)
-                  }
-                >
-                  <GitBranch size={10} />
-                </Button>
-              </TitleTooltip>
-            )}
+              );
+            })}
           </span>
         );
       })}
@@ -1554,6 +1407,7 @@ const CommitGraphSvg = ({
       {graph.rows.map((row) => {
         const centerX = readCommitGraphX(row.lane);
         const centerY = readCommitGraphY(row.rowIndex);
+        const isHeadRow = row.commit.refs.some((ref) => readIsHeadRef(ref));
 
         return (
           <g key={row.id}>
@@ -1563,6 +1417,16 @@ const CommitGraphSvg = ({
               r={COMMIT_GRAPH_DOT_RADIUS}
               fill={readCommitGraphColor(row.colorIndex)}
             />
+            {isHeadRow ? (
+              <circle
+                cx={centerX}
+                cy={centerY}
+                r={COMMIT_GRAPH_HEAD_RING_RADIUS}
+                fill="none"
+                stroke="#ffffff"
+                strokeWidth={COMMIT_GRAPH_HEAD_RING_STROKE_WIDTH}
+              />
+            ) : null}
           </g>
         );
       })}
@@ -1673,7 +1537,75 @@ const CommitHistoryRow = ({
       "Current HEAD working tree must be clean before merging.";
   }
 
-  const shouldShowGraphActions = mergeBranch !== null || isHeadRow;
+  let branchCreateThreadGroupKey: string | null = null;
+
+  if (commit.localBranches.length === 0) {
+    for (const threadGroup of threadGroups) {
+      if (threadGroup.cwd.length > 0) {
+        branchCreateThreadGroupKey = threadGroup.key;
+        break;
+      }
+    }
+  }
+
+  const graphThreadActions: {
+    threadGroup: ThreadGroup;
+    changeSummary: GitChangeSummary;
+    totalChangeSummary: { added: number; removed: number };
+    shouldShowChangeCount: boolean;
+    shouldShowCommitAction: boolean;
+    commitBranchTarget: CommitBranchTarget | null;
+    branchCreateTarget: BranchCreateTarget | null;
+  }[] = [];
+
+  for (const threadGroup of threadGroups) {
+    let branchCreateTarget: BranchCreateTarget | null = null;
+    const storedChangeSummary = gitChangesOfCwd[threadGroup.cwd];
+    const changeSummary = storedChangeSummary ?? EMPTY_GIT_CHANGE_SUMMARY;
+    const totalChangeSummary = readTotalGitChangeSummary(changeSummary);
+    const isChangeSummaryEmpty =
+      totalChangeSummary.added === 0 && totalChangeSummary.removed === 0;
+    const shouldShowChangeCount =
+      storedChangeSummary !== undefined && !isChangeSummaryEmpty;
+    const commitBranchTarget = readCommitBranchTarget({
+      cwd: threadGroup.cwd,
+      groupThreads: threadGroup.threads,
+      repoRoot,
+      currentBranch,
+      localBranches: commit.localBranches,
+      commitSha: commit.sha,
+    });
+    const shouldShowCommitAction =
+      threadGroup.cwd.length > 0 &&
+      shouldShowChangeCount &&
+      commitBranchTarget !== null;
+
+    if (threadGroup.key === branchCreateThreadGroupKey) {
+      branchCreateTarget = {
+        path: threadGroup.cwd,
+        title: threadGroup.cwd,
+      };
+    }
+
+    if (
+      shouldShowChangeCount ||
+      shouldShowCommitAction ||
+      branchCreateTarget !== null
+    ) {
+      graphThreadActions.push({
+        threadGroup,
+        changeSummary,
+        totalChangeSummary,
+        shouldShowChangeCount,
+        shouldShowCommitAction,
+        commitBranchTarget,
+        branchCreateTarget,
+      });
+    }
+  }
+
+  const shouldShowGraphActions =
+    mergeBranch !== null || graphThreadActions.length > 0;
   const commitDateText = formatCommitDate(commit.date);
 
   if (isBranchPointerDropTarget) {
@@ -1698,22 +1630,6 @@ const CommitHistoryRow = ({
       >
         {shouldShowGraphActions ? (
           <div className="commit-graph-actions">
-            {isHeadRow ? (
-              <TitleTooltip title="You">
-                <span className="commit-graph-head-icon" aria-label="You">
-                  <ArrowLeft
-                    aria-hidden="true"
-                    size={10}
-                    strokeWidth={COMMIT_GRAPH_USER_ICON_STROKE_WIDTH}
-                  />
-                  <User
-                    aria-hidden="true"
-                    size={COMMIT_GRAPH_USER_ICON_SIZE}
-                    strokeWidth={COMMIT_GRAPH_USER_ICON_STROKE_WIDTH}
-                  />
-                </span>
-              </TitleTooltip>
-            ) : null}
             {mergeBranch === null ? null : (
               <TitleTooltip
                 title={
@@ -1740,22 +1656,85 @@ const CommitHistoryRow = ({
                 </span>
               </TitleTooltip>
             )}
+            {graphThreadActions.map((graphThreadAction) => {
+              const branchCreateTarget = graphThreadAction.branchCreateTarget;
+
+              return (
+                <span
+                  className="commit-graph-thread-actions"
+                  key={graphThreadAction.threadGroup.key}
+                >
+                  {graphThreadAction.shouldShowChangeCount ? (
+                    <TitleTooltip title="Show changes">
+                      <Button
+                        className="commit-thread-change-count"
+                        variant="ghost"
+                        size="xs"
+                        type="button"
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onDoubleClick={(event) => event.stopPropagation()}
+                        onClick={(event) =>
+                          openChangeSummaryModal(event, {
+                            path: graphThreadAction.threadGroup.cwd,
+                            title: graphThreadAction.threadGroup.cwd,
+                            changeSummary: graphThreadAction.changeSummary,
+                          })
+                        }
+                      >
+                        <span className="commit-thread-change-added">
+                          +{graphThreadAction.totalChangeSummary.added}
+                        </span>
+                        <span className="commit-thread-change-removed">
+                          -{graphThreadAction.totalChangeSummary.removed}
+                        </span>
+                      </Button>
+                    </TitleTooltip>
+                  ) : null}
+                  {graphThreadAction.shouldShowCommitAction ? (
+                    <TitleTooltip title="Commit">
+                      <Button
+                        className="commit-thread-commit-action"
+                        variant="ghost"
+                        size="icon-xs"
+                        type="button"
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onDoubleClick={(event) => event.stopPropagation()}
+                        onClick={(event) =>
+                          openCommitMessageModal(event, {
+                            path: graphThreadAction.threadGroup.cwd,
+                            title: graphThreadAction.threadGroup.cwd,
+                            branchTarget: graphThreadAction.commitBranchTarget,
+                          })
+                        }
+                      >
+                        <Check size={10} />
+                      </Button>
+                    </TitleTooltip>
+                  ) : branchCreateTarget === null ? null : (
+                    <TitleTooltip title="Add branch here">
+                      <Button
+                        className="commit-branch-create-action"
+                        variant="ghost"
+                        size="icon-xs"
+                        type="button"
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onDoubleClick={(event) => event.stopPropagation()}
+                        onClick={(event) =>
+                          openBranchCreateModal(event, branchCreateTarget)
+                        }
+                      >
+                        <GitBranch size={10} />
+                      </Button>
+                    </TitleTooltip>
+                  )}
+                </span>
+              );
+            })}
           </div>
         ) : null}
       </div>
       <div className="commit-actors-cell">
-        <ChatRobotTags
-          threadGroups={threadGroups}
-          gitChangesOfCwd={gitChangesOfCwd}
-          worktrees={worktrees}
-          repoRoot={repoRoot}
-          commitSha={commit.sha}
-          localBranches={commit.localBranches}
-          currentBranch={currentBranch}
-          openBranchCreateModal={openBranchCreateModal}
-          openCommitMessageModal={openCommitMessageModal}
-          openChangeSummaryModal={openChangeSummaryModal}
-        />
+        <ChatRobotTags threadGroups={threadGroups} worktrees={worktrees} />
       </div>
       <div className="commit-branch-tags-cell">
         <BranchTags
@@ -3040,12 +3019,9 @@ const CommitHistory = ({
           }}
         >
           {changeSummaryTarget === null ? null : (
-            <DialogContent className="change-summary-modal sm:max-w-[720px]">
+            <DialogContent className="change-summary-modal">
               <DialogHeader>
                 <DialogTitle>Change Summary</DialogTitle>
-                <DialogDescription className="[overflow-wrap:anywhere]">
-                  {changeSummaryTarget.title}
-                </DialogDescription>
               </DialogHeader>
               <div className="change-summary-breakdown">
                 <div
