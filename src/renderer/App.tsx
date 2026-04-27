@@ -1,11 +1,8 @@
 import {
-  Box,
   Check,
   CircleArrowDown,
   CircleArrowLeft,
   CircleArrowUp,
-  ExternalLink,
-  FolderOpen,
   GitBranch,
   GitCommitHorizontal,
   GitPullRequestArrow,
@@ -89,6 +86,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import cursorAppIconUrl from "./assets/cursor-app-icon.png";
+import finderAppIconUrl from "./assets/finder-app-icon.png";
 import initialLoadingImageUrl from "./assets/initial-loading.png";
 
 // The history view is a SourceTree-style row table. Git owns the commits; the renderer only assigns lanes.
@@ -295,13 +294,25 @@ const PathLauncherIcon = ({ pathLauncher }: { pathLauncher: PathLauncher }) => {
     case "cursor":
       return (
         <span className="path-launcher-icon path-launcher-icon-cursor">
-          <Box aria-hidden="true" size={15} />
+          <img
+            alt=""
+            aria-hidden="true"
+            className="path-launcher-icon-image"
+            draggable={false}
+            src={cursorAppIconUrl}
+          />
         </span>
       );
     case "finder":
       return (
         <span className="path-launcher-icon path-launcher-icon-finder">
-          <FolderOpen aria-hidden="true" size={15} />
+          <img
+            alt=""
+            aria-hidden="true"
+            className="path-launcher-icon-image"
+            draggable={false}
+            src={finderAppIconUrl}
+          />
         </span>
       );
   }
@@ -3207,6 +3218,7 @@ const RepoSection = ({
   threadOfId,
   gitChangesOfCwd,
   repoBranchTagChanges,
+  repoHeaderControls,
   pathLauncher,
   refreshDashboard,
   showErrorMessage,
@@ -3217,6 +3229,7 @@ const RepoSection = ({
   threadOfId: { [id: string]: CodexThread };
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   repoBranchTagChanges: GitBranchTagChange[];
+  repoHeaderControls: ReactElement;
   pathLauncher: PathLauncher;
   refreshDashboard: () => Promise<void>;
   showErrorMessage: (message: string) => void;
@@ -3227,19 +3240,6 @@ const RepoSection = ({
   ) => void;
 }) => {
   const repoFolderName = readRepoFolderName(repo);
-
-  const openRepoPath = async () => {
-    try {
-      await window.molttree.openPath({
-        path: repo.root,
-        launcher: pathLauncher,
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to open repo.";
-      showErrorMessage(message);
-    }
-  };
 
   return (
     <section className="repo-section">
@@ -3276,18 +3276,8 @@ const RepoSection = ({
             <CircleArrowUp aria-hidden="true" size={18} />
             <span>Push</span>
           </button>
-          <button
-            className="repo-action-control"
-            type="button"
-            aria-label="Open repo"
-            onClick={() => {
-              void openRepoPath();
-            }}
-          >
-            <ExternalLink aria-hidden="true" size={18} />
-            <span>Repo</span>
-          </button>
         </div>
+        {repoHeaderControls}
       </div>
 
       <div className="repo-panel">
@@ -3652,95 +3642,90 @@ export const App = () => {
       showErrorMessage(message);
     }
   };
+  const repoHeaderControls = (
+    <div className="repo-header-controls">
+      <div className="path-launcher-control">
+        <button
+          aria-label="Open selected repo"
+          className="path-launcher-open"
+          type="button"
+          disabled={selectedRepo === null}
+          onClick={() => {
+            void openSelectedRepoPath();
+          }}
+        >
+          <PathLauncherIcon pathLauncher={pathLauncher} />
+        </button>
+        <Select
+          value={pathLauncher}
+          onValueChange={(value) => {
+            const nextPathLauncher = readPathLauncher(value);
+
+            if (nextPathLauncher !== null) {
+              setPathLauncher(nextPathLauncher);
+            }
+          }}
+        >
+          <SelectTrigger
+            aria-label="Choose app for opening paths"
+            className="path-launcher-select"
+            size="sm"
+          />
+          <SelectContent align="end" className="path-launcher-select-content">
+            <SelectItem value="vscode">
+              <span className="path-launcher-option">
+                <PathLauncherIcon pathLauncher="vscode" />
+                <span>VS Code</span>
+              </span>
+            </SelectItem>
+            <SelectItem value="cursor">
+              <span className="path-launcher-option">
+                <PathLauncherIcon pathLauncher="cursor" />
+                <span>Cursor</span>
+              </span>
+            </SelectItem>
+            <SelectItem value="finder">
+              <span className="path-launcher-option">
+                <PathLauncherIcon pathLauncher="finder" />
+                <span>Finder</span>
+              </span>
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {dashboardData.repos.length === 0 ? null : (
+        <div className="repo-picker">
+          <Label className="repo-picker-label" htmlFor="repo-picker-select">
+            Repo
+          </Label>
+          <Select
+            value={selectedRepo?.root ?? ""}
+            onValueChange={setSelectedRepoRoot}
+          >
+            <SelectTrigger
+              className="repo-picker-select"
+              id="repo-picker-select"
+              size="sm"
+            >
+              <SelectValue placeholder="Select repo" />
+            </SelectTrigger>
+            <SelectContent align="end" className="repo-picker-select-content">
+              {dashboardData.repos.map((repo) => (
+                <SelectItem value={repo.root} key={repo.root}>
+                  {readRepoFolderName(repo)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <TooltipProvider>
       <main className="app-shell">
-        <div className="top-controls">
-          <div className="path-launcher-control">
-            <button
-              aria-label="Open selected repo"
-              className="path-launcher-open"
-              type="button"
-              disabled={selectedRepo === null}
-              onClick={() => {
-                void openSelectedRepoPath();
-              }}
-            >
-              <PathLauncherIcon pathLauncher={pathLauncher} />
-            </button>
-            <Select
-              value={pathLauncher}
-              onValueChange={(value) => {
-                const nextPathLauncher = readPathLauncher(value);
-
-                if (nextPathLauncher !== null) {
-                  setPathLauncher(nextPathLauncher);
-                }
-              }}
-            >
-              <SelectTrigger
-                aria-label="Choose app for opening paths"
-                className="path-launcher-select"
-                size="sm"
-              />
-              <SelectContent
-                align="end"
-                className="path-launcher-select-content"
-              >
-                <SelectItem value="vscode">
-                  <span className="path-launcher-option">
-                    <PathLauncherIcon pathLauncher="vscode" />
-                    <span>VS Code</span>
-                  </span>
-                </SelectItem>
-                <SelectItem value="cursor">
-                  <span className="path-launcher-option">
-                    <PathLauncherIcon pathLauncher="cursor" />
-                    <span>Cursor</span>
-                  </span>
-                </SelectItem>
-                <SelectItem value="finder">
-                  <span className="path-launcher-option">
-                    <PathLauncherIcon pathLauncher="finder" />
-                    <span>Finder</span>
-                  </span>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {dashboardData.repos.length === 0 ? null : (
-            <div className="repo-picker">
-              <Label className="repo-picker-label" htmlFor="repo-picker-select">
-                Repo
-              </Label>
-              <Select
-                value={selectedRepo?.root ?? ""}
-                onValueChange={setSelectedRepoRoot}
-              >
-                <SelectTrigger
-                  className="repo-picker-select"
-                  id="repo-picker-select"
-                  size="sm"
-                >
-                  <SelectValue placeholder="Select repo" />
-                </SelectTrigger>
-                <SelectContent
-                  align="end"
-                  className="repo-picker-select-content"
-                >
-                  {dashboardData.repos.map((repo) => (
-                    <SelectItem value={repo.root} key={repo.root}>
-                      {readRepoFolderName(repo)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-        </div>
-
         <AlertDialog
           open={branchTagChangeConfirmation !== null}
           onOpenChange={(isOpen) => {
@@ -3806,6 +3791,7 @@ export const App = () => {
                 repoBranchTagChanges={readVisibleBranchTagChangesForRepo(
                   selectedRepo.root,
                 )}
+                repoHeaderControls={repoHeaderControls}
                 pathLauncher={pathLauncher}
                 refreshDashboard={refreshDashboard}
                 showErrorMessage={showErrorMessage}
