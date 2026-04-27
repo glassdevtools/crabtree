@@ -96,8 +96,8 @@ const COMMIT_GRAPH_LANE_WIDTH = 14;
 const COMMIT_GRAPH_PADDING_LEFT = 16;
 const COMMIT_GRAPH_MIN_WIDTH = 96;
 const COMMIT_GRAPH_DOT_RADIUS = 4;
-// TODO: AI-PICKED-VALUE: This black HEAD outline is thick enough to cover the graph line underneath while preserving the dot color.
-const COMMIT_GRAPH_HEAD_OUTLINE_RADIUS = 6;
+// TODO: AI-PICKED-VALUE: This small center dot makes the HEAD commit distinct without hiding the commit color.
+const COMMIT_GRAPH_HEAD_CENTER_DOT_RADIUS = 1.75;
 // TODO: AI-PICKED-VALUE: This keeps graph lines readable in compact rows while making them less heavy.
 const COMMIT_GRAPH_SEGMENT_STROKE_WIDTH = 2.25;
 // TODO: AI-PICKED-VALUE: The HEAD icon is large enough to read in compact rows without taking over the graph column.
@@ -1532,20 +1532,20 @@ const CommitGraphSvg = ({
 
         return (
           <g key={row.id}>
-            {isHeadRow ? (
-              <circle
-                cx={centerX}
-                cy={centerY}
-                r={COMMIT_GRAPH_HEAD_OUTLINE_RADIUS}
-                fill="#202124"
-              />
-            ) : null}
             <circle
               cx={centerX}
               cy={centerY}
               r={COMMIT_GRAPH_DOT_RADIUS}
               fill={readCommitGraphColor(row.colorIndex)}
             />
+            {isHeadRow ? (
+              <circle
+                cx={centerX}
+                cy={centerY}
+                r={COMMIT_GRAPH_HEAD_CENTER_DOT_RADIUS}
+                fill="#ffffff"
+              />
+            ) : null}
           </g>
         );
       })}
@@ -2551,11 +2551,11 @@ const CommitHistory = ({
   const refreshDashboardThenShowGitError = async (
     gitErrorMessage: string | null,
   ) => {
-    await refreshDashboard();
-
     if (gitErrorMessage !== null) {
       showErrorMessage(gitErrorMessage);
     }
+
+    await refreshDashboard();
   };
   const openBranchDeleteModal = (
     event: MouseEvent<HTMLButtonElement>,
@@ -3254,7 +3254,7 @@ const RepoSection = ({
             onClick={() => openBranchTagChangeModal("reset", repo.root)}
             disabled={repoBranchTagChanges.length === 0}
           >
-            <CircleArrowLeft aria-hidden="true" size={18} />
+            <CircleArrowLeft aria-hidden="true" size={18} strokeWidth={1.75} />
             <span>Revert</span>
           </button>
           <button
@@ -3264,7 +3264,7 @@ const RepoSection = ({
             onClick={() => openBranchTagChangeModal("pull", repo.root)}
             disabled={repoBranchTagChanges.length === 0}
           >
-            <CircleArrowDown aria-hidden="true" size={18} />
+            <CircleArrowDown aria-hidden="true" size={18} strokeWidth={1.75} />
             <span>Pull</span>
           </button>
           <button
@@ -3274,7 +3274,7 @@ const RepoSection = ({
             onClick={() => openBranchTagChangeModal("push", repo.root)}
             disabled={repoBranchTagChanges.length === 0}
           >
-            <CircleArrowUp aria-hidden="true" size={18} />
+            <CircleArrowUp aria-hidden="true" size={18} strokeWidth={1.75} />
             <span>Push</span>
           </button>
         </div>
@@ -3558,7 +3558,6 @@ export const App = () => {
     }
 
     closeBranchTagChangeModal();
-    let gitErrorMessage: string | null = null;
 
     try {
       switch (action) {
@@ -3580,16 +3579,13 @@ export const App = () => {
       );
       setSuccessMessage(branchTagChangeActionText.successMessage);
     } catch (error) {
-      gitErrorMessage =
+      const gitErrorMessage =
         error instanceof Error
           ? error.message
           : "Failed to apply branch tag changes.";
+      showErrorMessage(gitErrorMessage);
     } finally {
       await refreshDashboard();
-
-      if (gitErrorMessage !== null) {
-        showErrorMessage(gitErrorMessage);
-      }
     }
   };
   const branchTagChangesInConfirmation =

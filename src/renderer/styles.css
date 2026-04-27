@@ -204,7 +204,7 @@ textarea,
   overflow: hidden;
   border: 1px solid var(--input);
   border-radius: min(var(--radius-md), 10px);
-  background: var(--background);
+  background: #ffffff;
   color: #343a43;
 }
 
@@ -217,11 +217,11 @@ textarea,
   padding: 0;
   border: 0;
   border-right: 1px solid var(--border);
-  background: var(--background);
+  background: #ffffff;
 }
 
 .path-launcher-open:not(:disabled):hover {
-  background: var(--muted);
+  background: #ffffff;
 }
 
 .path-launcher-open:disabled {
@@ -243,12 +243,13 @@ textarea,
   padding: 0;
   border: 0;
   border-radius: 0;
-  background: var(--background);
+  background: #ffffff;
   box-shadow: none;
 }
 
-.path-launcher-select:hover {
-  background: var(--muted);
+.path-launcher-select:hover,
+.path-launcher-select[aria-expanded="true"] {
+  background: #ffffff;
 }
 
 .path-launcher-select [data-slot="select-value"] {
@@ -332,8 +333,13 @@ textarea,
   /* TODO: AI-PICKED-VALUE: Fixed at 176px so the shadcn repo select stays compact in the page control row. */
   width: 176px;
   max-width: calc(100vw - 92px);
-  background: var(--background);
+  background: #ffffff;
   flex: 0 0 auto;
+}
+
+.repo-picker-select:hover,
+.repo-picker-select[aria-expanded="true"] {
+  background: #ffffff;
 }
 
 .repo-picker-select > svg {
@@ -416,6 +422,10 @@ textarea,
 
 .repo-action-control svg {
   color: #343a43;
+}
+
+.repo-action-control svg circle {
+  fill: #ffffff;
 }
 
 .repo-action-control:hover:not(:disabled),
@@ -665,6 +675,8 @@ textarea,
   width: auto;
   height: auto;
   align-self: flex-start;
+  justify-self: start;
+  justify-content: flex-start;
   padding: 0;
   border: 0;
   background: transparent;
@@ -949,13 +961,18 @@ textarea,
 }
 
 .commit-thread-group {
-  min-height: 16px;
+  min-height: 18px;
   display: inline-flex;
   align-items: center;
   /* TODO: AI-PICKED-VALUE: This gives neighboring chat items inside a cwd group a little more breathing room without widening group breaks. */
   gap: 3px;
   min-width: max-content;
   flex: 0 0 auto;
+  padding: 1px 3px;
+  border: 0;
+  border-radius: 5px;
+  background: #fff8df;
+  box-sizing: border-box;
 }
 
 .commit-thread-chat {
