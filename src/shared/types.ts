@@ -89,6 +89,13 @@ export type GitBranchTagChange = {
   newSha: string | null;
 };
 
+export type PathLauncher = "vscode" | "cursor" | "finder";
+
+export type OpenPathRequest = {
+  path: string;
+  launcher: PathLauncher;
+};
+
 export type GitCommit = {
   sha: string;
   shortSha: string;
@@ -126,7 +133,7 @@ export type MoltTreeApi = {
   readDashboard: () => Promise<DashboardData>;
   openCodexThread: (threadId: string) => Promise<void>;
   openNewCodexThread: () => Promise<void>;
-  openVSCodePath: (path: string) => Promise<void>;
+  openPath: (openPathRequest: OpenPathRequest) => Promise<void>;
   copyText: (text: string) => Promise<void>;
   stageGitChanges: (path: string) => Promise<void>;
   unstageGitChanges: (path: string) => Promise<void>;

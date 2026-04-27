@@ -9,6 +9,8 @@ import type {
   GitDeleteBranchRequest,
   GitMergeBranchRequest,
   GitMoveBranchRequest,
+  OpenPathRequest,
+  PathLauncher,
 } from "../shared/types";
 import { readDashboardData } from "./dashboard";
 import {
@@ -237,6 +239,31 @@ const readGitMergeBranchRequest = (value: unknown) => {
   return gitMergeBranchRequest;
 };
 
+const readPathLauncher = (value: unknown): PathLauncher => {
+  if (value === "vscode" || value === "cursor" || value === "finder") {
+    return value;
+  }
+
+  throw new Error("launcher must be vscode, cursor, or finder.");
+};
+
+const readOpenPathRequest = (value: unknown) => {
+  if (!isObject(value)) {
+    throw new Error("openPathRequest must be an object.");
+  }
+
+  if (typeof value.path !== "string" || value.path.length === 0) {
+    throw new Error("openPathRequest needs a path.");
+  }
+
+  const openPathRequest: OpenPathRequest = {
+    path: value.path,
+    launcher: readPathLauncher(value.launcher),
+  };
+
+  return openPathRequest;
+};
+
 const readGitBranchTagChanges = (value: unknown) => {
   if (!Array.isArray(value)) {
     throw new Error("gitBranchTagChanges must be an array.");
@@ -292,12 +319,28 @@ ipcMain.handle("codex:openNewThread", async () => {
   await shell.openExternal("codex://new");
 });
 
-ipcMain.handle("vscode:openPath", async (_event, path: unknown) => {
-  if (typeof path !== "string" || path.length === 0) {
-    throw new Error("path must be a non-empty string.");
-  }
+ipcMain.handle("path:open", async (_event, value: unknown) => {
+  const openPathRequest = readOpenPathRequest(value);
 
-  await shell.openExternal(`vscode://file${pathToFileURL(path).pathname}`);
+  switch (openPathRequest.launcher) {
+    case "vscode":
+      await shell.openExternal(
+        `vscode://file${pathToFileURL(openPathRequest.path).pathname}`,
+      );
+      return;
+    case "cursor":
+      await shell.openExternal(
+        `cursor://file${pathToFileURL(openPathRequest.path).pathname}`,
+      );
+      return;
+    case "finder": {
+      const errorMessage = await shell.openPath(openPathRequest.path);
+
+      if (errorMessage.length > 0) {
+        throw new Error(errorMessage);
+      }
+    }
+  }
 });
 
 ipcMain.handle("clipboard:writeText", async (_event, text: unknown) => {

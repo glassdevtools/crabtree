@@ -1,9 +1,11 @@
 import {
+  Box,
   Check,
   CircleArrowDown,
   CircleArrowLeft,
   CircleArrowUp,
   ExternalLink,
+  FolderOpen,
   GitBranch,
   GitCommitHorizontal,
   GitPullRequestArrow,
@@ -12,6 +14,7 @@ import {
   User,
 } from "lucide-react";
 import { MdOutlineCallSplit } from "react-icons/md";
+import { VscVscode } from "react-icons/vsc";
 import { Resizable } from "react-resizable";
 import { toast } from "sonner";
 import {
@@ -38,6 +41,7 @@ import type {
   GitCommit,
   GitMergePreview,
   GitWorktree,
+  PathLauncher,
   RepoGraph,
 } from "../shared/types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -91,7 +95,7 @@ import initialLoadingImageUrl from "./assets/initial-loading.png";
 // TODO: AI-PICKED-VALUE: These graph sizes and colors are initial SourceTree-like choices for dense commit rows.
 const COMMIT_GRAPH_ROW_HEIGHT = 20;
 const COMMIT_GRAPH_LANE_WIDTH = 14;
-const COMMIT_GRAPH_PADDING_LEFT = 10;
+const COMMIT_GRAPH_PADDING_LEFT = 16;
 const COMMIT_GRAPH_MIN_WIDTH = 96;
 const COMMIT_GRAPH_DOT_RADIUS = 4;
 // TODO: AI-PICKED-VALUE: This keeps graph lines readable in compact rows while making them less heavy.
@@ -265,6 +269,42 @@ const TitleTooltip = ({
       </TooltipContent>
     </Tooltip>
   );
+};
+
+const readPathLauncher = (value: string): PathLauncher | null => {
+  switch (value) {
+    case "vscode":
+      return "vscode";
+    case "cursor":
+      return "cursor";
+    case "finder":
+      return "finder";
+    default:
+      return null;
+  }
+};
+
+const PathLauncherIcon = ({ pathLauncher }: { pathLauncher: PathLauncher }) => {
+  switch (pathLauncher) {
+    case "vscode":
+      return (
+        <span className="path-launcher-icon path-launcher-icon-vscode">
+          <VscVscode aria-hidden="true" size={20} />
+        </span>
+      );
+    case "cursor":
+      return (
+        <span className="path-launcher-icon path-launcher-icon-cursor">
+          <Box aria-hidden="true" size={15} />
+        </span>
+      );
+    case "finder":
+      return (
+        <span className="path-launcher-icon path-launcher-icon-finder">
+          <FolderOpen aria-hidden="true" size={15} />
+        </span>
+      );
+  }
 };
 
 const copyTextAfterContextMenu = async ({
@@ -1091,33 +1131,32 @@ const BranchTags = ({
         </Badge>
       ) : null}
       {worktreesForCommit.map((worktree) => (
-        <TitleTooltip title="Open worktree" key={worktree.path}>
-          <Badge
-            asChild
-            className="commit-ref commit-ref-head commit-ref-worktree"
-            variant="secondary"
+        <Badge
+          asChild
+          className="commit-ref commit-ref-head commit-ref-worktree"
+          variant="secondary"
+          key={worktree.path}
+        >
+          <Button
+            variant="ghost"
+            size="xs"
+            type="button"
+            onMouseDown={(event) => event.stopPropagation()}
+            onDoubleClick={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              void openCodePath(worktree.path);
+            }}
           >
-            <Button
-              variant="ghost"
-              size="xs"
-              type="button"
-              onMouseDown={(event) => event.stopPropagation()}
-              onDoubleClick={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                void openCodePath(worktree.path);
-              }}
-            >
-              <MdOutlineCallSplit
-                aria-hidden="true"
-                className="commit-ref-worktree-icon"
-                size={10}
-              />
-              <span>Worktree</span>
-            </Button>
-          </Badge>
-        </TitleTooltip>
+            <MdOutlineCallSplit
+              aria-hidden="true"
+              className="commit-ref-worktree-icon"
+              size={10}
+            />
+            <span>Worktree</span>
+          </Button>
+        </Badge>
       ))}
       {orderedRefs.map((ref) => {
         const refName = cleanRefName(ref);
@@ -1800,6 +1839,7 @@ const CommitHistory = ({
   currentBranch,
   defaultBranch,
   gitChangesOfCwd,
+  pathLauncher,
   refreshDashboard,
   showErrorMessage,
   rememberBranchTagChange,
@@ -1811,6 +1851,7 @@ const CommitHistory = ({
   currentBranch: string | null;
   defaultBranch: string | null;
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
+  pathLauncher: PathLauncher;
   refreshDashboard: () => Promise<void>;
   showErrorMessage: (message: string) => void;
   rememberBranchTagChange: (branchTagChange: GitBranchTagChange) => void;
@@ -2643,10 +2684,10 @@ const CommitHistory = ({
   };
   const openCodePath = async (path: string) => {
     try {
-      await window.molttree.openVSCodePath(path);
+      await window.molttree.openPath({ path, launcher: pathLauncher });
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Failed to open code.";
+        error instanceof Error ? error.message : "Failed to open path.";
       showErrorMessage(message);
     }
   };
@@ -3166,6 +3207,7 @@ const RepoSection = ({
   threadOfId,
   gitChangesOfCwd,
   repoBranchTagChanges,
+  pathLauncher,
   refreshDashboard,
   showErrorMessage,
   rememberBranchTagChange,
@@ -3175,6 +3217,7 @@ const RepoSection = ({
   threadOfId: { [id: string]: CodexThread };
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   repoBranchTagChanges: GitBranchTagChange[];
+  pathLauncher: PathLauncher;
   refreshDashboard: () => Promise<void>;
   showErrorMessage: (message: string) => void;
   rememberBranchTagChange: (branchTagChange: GitBranchTagChange) => void;
@@ -3185,9 +3228,12 @@ const RepoSection = ({
 }) => {
   const repoFolderName = readRepoFolderName(repo);
 
-  const openRepoInCode = async () => {
+  const openRepoPath = async () => {
     try {
-      await window.molttree.openVSCodePath(repo.root);
+      await window.molttree.openPath({
+        path: repo.root,
+        launcher: pathLauncher,
+      });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to open repo.";
@@ -3233,9 +3279,9 @@ const RepoSection = ({
           <button
             className="repo-action-control"
             type="button"
-            aria-label="Open repo in VS Code"
+            aria-label="Open repo"
             onClick={() => {
-              void openRepoInCode();
+              void openRepoPath();
             }}
           >
             <ExternalLink aria-hidden="true" size={18} />
@@ -3253,6 +3299,7 @@ const RepoSection = ({
           currentBranch={repo.currentBranch}
           defaultBranch={repo.defaultBranch}
           gitChangesOfCwd={gitChangesOfCwd}
+          pathLauncher={pathLauncher}
           refreshDashboard={refreshDashboard}
           showErrorMessage={showErrorMessage}
           rememberBranchTagChange={rememberBranchTagChange}
@@ -3267,6 +3314,7 @@ export const App = () => {
     null,
   );
   const [selectedRepoRoot, setSelectedRepoRoot] = useState<string | null>(null);
+  const [pathLauncher, setPathLauncher] = useState<PathLauncher>("vscode");
   const [isLoading, setIsLoading] = useState(true);
   const [dashboardErrorMessage, setDashboardErrorMessage] = useState<
     string | null
@@ -3588,36 +3636,110 @@ export const App = () => {
       </>
     );
   }
+  const openSelectedRepoPath = async () => {
+    if (selectedRepo === null) {
+      return;
+    }
+
+    try {
+      await window.molttree.openPath({
+        path: selectedRepo.root,
+        launcher: pathLauncher,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to open repo.";
+      showErrorMessage(message);
+    }
+  };
 
   return (
     <TooltipProvider>
       <main className="app-shell">
-        {dashboardData.repos.length === 0 ? null : (
-          <div className="repo-picker">
-            <Label className="repo-picker-label" htmlFor="repo-picker-select">
-              Repo
-            </Label>
+        <div className="top-controls">
+          <div className="path-launcher-control">
+            <button
+              aria-label="Open selected repo"
+              className="path-launcher-open"
+              type="button"
+              disabled={selectedRepo === null}
+              onClick={() => {
+                void openSelectedRepoPath();
+              }}
+            >
+              <PathLauncherIcon pathLauncher={pathLauncher} />
+            </button>
             <Select
-              value={selectedRepo?.root ?? ""}
-              onValueChange={setSelectedRepoRoot}
+              value={pathLauncher}
+              onValueChange={(value) => {
+                const nextPathLauncher = readPathLauncher(value);
+
+                if (nextPathLauncher !== null) {
+                  setPathLauncher(nextPathLauncher);
+                }
+              }}
             >
               <SelectTrigger
-                className="repo-picker-select"
-                id="repo-picker-select"
+                aria-label="Choose app for opening paths"
+                className="path-launcher-select"
                 size="sm"
+              />
+              <SelectContent
+                align="end"
+                className="path-launcher-select-content"
               >
-                <SelectValue placeholder="Select repo" />
-              </SelectTrigger>
-              <SelectContent align="end" className="repo-picker-select-content">
-                {dashboardData.repos.map((repo) => (
-                  <SelectItem value={repo.root} key={repo.root}>
-                    {readRepoFolderName(repo)}
-                  </SelectItem>
-                ))}
+                <SelectItem value="vscode">
+                  <span className="path-launcher-option">
+                    <PathLauncherIcon pathLauncher="vscode" />
+                    <span>VS Code</span>
+                  </span>
+                </SelectItem>
+                <SelectItem value="cursor">
+                  <span className="path-launcher-option">
+                    <PathLauncherIcon pathLauncher="cursor" />
+                    <span>Cursor</span>
+                  </span>
+                </SelectItem>
+                <SelectItem value="finder">
+                  <span className="path-launcher-option">
+                    <PathLauncherIcon pathLauncher="finder" />
+                    <span>Finder</span>
+                  </span>
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
-        )}
+
+          {dashboardData.repos.length === 0 ? null : (
+            <div className="repo-picker">
+              <Label className="repo-picker-label" htmlFor="repo-picker-select">
+                Repo
+              </Label>
+              <Select
+                value={selectedRepo?.root ?? ""}
+                onValueChange={setSelectedRepoRoot}
+              >
+                <SelectTrigger
+                  className="repo-picker-select"
+                  id="repo-picker-select"
+                  size="sm"
+                >
+                  <SelectValue placeholder="Select repo" />
+                </SelectTrigger>
+                <SelectContent
+                  align="end"
+                  className="repo-picker-select-content"
+                >
+                  {dashboardData.repos.map((repo) => (
+                    <SelectItem value={repo.root} key={repo.root}>
+                      {readRepoFolderName(repo)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
 
         <AlertDialog
           open={branchTagChangeConfirmation !== null}
@@ -3684,6 +3806,7 @@ export const App = () => {
                 repoBranchTagChanges={readVisibleBranchTagChangesForRepo(
                   selectedRepo.root,
                 )}
+                pathLauncher={pathLauncher}
                 refreshDashboard={refreshDashboard}
                 showErrorMessage={showErrorMessage}
                 rememberBranchTagChange={rememberBranchTagChange}
