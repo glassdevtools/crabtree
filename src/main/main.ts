@@ -529,7 +529,13 @@ const checkoutGitCommit = async ({
 
   const localBranchText = await readGitTextForPath({
     path: repoRoot,
-    args: ["branch", "--format=%(refname:short)", "--points-at", "HEAD"],
+    args: [
+      "for-each-ref",
+      "--points-at",
+      "HEAD",
+      "--format=%(refname:short)",
+      "refs/heads",
+    ],
   });
 
   if (localBranchText.length === 0) {
