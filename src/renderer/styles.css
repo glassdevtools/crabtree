@@ -246,14 +246,15 @@ button {
 .commit-history {
   --commit-history-grid-template-columns: 300px 260px 340px 420px 84px 150px
     170px;
+  --commit-history-details-grid-template-columns: 260px 340px 420px 84px 150px
+    170px;
   --commit-history-table-width: 1724px;
   overflow: auto;
-  border: 1px solid #cfd6df;
-  border-radius: 7px;
+  border: 0;
+  border-radius: 0;
   background: #ffffff;
 }
 
-.commit-history-header,
 .commit-history-row {
   display: grid;
   min-width: var(--commit-history-table-width);
@@ -264,13 +265,21 @@ button {
   position: sticky;
   top: 0;
   z-index: 5;
-  height: 30px;
+  min-width: var(--commit-history-table-width);
+  height: 22px;
   align-items: center;
-  border-bottom: 1px solid #cfd6df;
-  background: #edf1f6;
+  border-bottom: 0;
+  background: #ffffff;
   color: #5f6670;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
+}
+
+.commit-history-header-details {
+  min-width: 0;
+  height: 100%;
+  display: grid;
+  grid-template-columns: var(--commit-history-details-grid-template-columns);
 }
 
 .commit-history-header-cell {
@@ -279,7 +288,8 @@ button {
   display: flex;
   align-items: center;
   overflow: hidden;
-  padding: 0 10px;
+  height: 100%;
+  padding: 0 6px;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -315,7 +325,7 @@ button {
   position: absolute;
   top: 0;
   right: 0;
-  width: 7px;
+  width: 6px;
   height: 100%;
   padding: 0;
   border: 0;
@@ -326,6 +336,18 @@ button {
 }
 
 .commit-history-column-resize:hover {
+  background: rgba(63, 140, 255, 0.18);
+}
+
+.commit-history-panel-resize {
+  width: 8px;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.commit-history-panel-resize:hover,
+.commit-history-panel-resize[data-resize-handle-active] {
   background: rgba(63, 140, 255, 0.18);
 }
 
@@ -451,10 +473,10 @@ button {
 .commit-history-row {
   position: relative;
   z-index: 2;
-  height: 32px;
+  height: 16px;
   align-items: stretch;
-  border-bottom: 1px solid #edf0f4;
-  background: transparent;
+  border-bottom: 0;
+  background: #ffffff;
   color: #202124;
 }
 
@@ -465,7 +487,7 @@ button {
 }
 
 .commit-history-row:nth-child(even) {
-  background: rgba(248, 250, 252, 0.76);
+  background: #ffffff;
 }
 
 .commit-history-row-branch-drop-target:nth-child(even) {
@@ -480,11 +502,11 @@ button {
 .commit-graph-actions {
   position: absolute;
   top: 50%;
-  right: 7px;
+  right: 4px;
   transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
 }
 
 .commit-branch-tags-cell,
@@ -496,8 +518,8 @@ button {
   min-width: 0;
   display: flex;
   align-items: center;
-  padding: 0 10px;
-  border-left: 1px solid #edf0f4;
+  padding: 0 6px;
+  border-left: 0;
 }
 
 .commit-branch-tags-cell,
@@ -514,7 +536,7 @@ button {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 3px;
   flex: 0 1 auto;
   overflow: hidden;
 }
@@ -525,23 +547,25 @@ button {
 }
 
 .commit-thread-group + .commit-thread-group {
-  margin-left: 12px;
-  padding-left: 12px;
-  border-left: 1px solid #d8dee8;
+  margin-left: 8px;
+  padding-left: 0;
+  border-left: 0;
 }
 
 .commit-ref {
-  min-height: 24px;
+  height: 14px;
+  min-height: 14px;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 1px 7px;
+  gap: 3px;
+  padding: 0 4px;
   border: 1px solid #aeb9c7;
-  border-radius: 5px;
+  border-radius: 4px;
   background: #e9f8f1;
   color: #102f22;
   flex: 0 0 auto;
-  font-size: 13px;
+  font-size: 10px;
+  line-height: 12px;
   font-weight: 720;
 }
 
@@ -591,8 +615,8 @@ button {
 .commit-thread-commit-action,
 .commit-graph-merge-action,
 .commit-ref-delete {
-  width: 20px;
-  height: 20px;
+  width: 14px;
+  height: 14px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -604,8 +628,8 @@ button {
 }
 
 .commit-ref-delete {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
 }
 
 .commit-ref-delete:hover {
@@ -628,16 +652,16 @@ button {
 }
 
 .commit-thread-group {
-  min-height: 24px;
+  min-height: 16px;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
   flex: 0 0 auto;
 }
 
 .commit-thread-chat {
-  width: 18px;
-  height: 24px;
+  width: 16px;
+  height: 16px;
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -649,8 +673,8 @@ button {
 
 .commit-thread-worktree-mark {
   position: absolute;
-  right: -2px;
-  bottom: 1px;
+  right: -1px;
+  bottom: 0;
   z-index: 1;
   padding: 1px;
   border-radius: 50%;
@@ -664,14 +688,15 @@ button {
 }
 
 .commit-thread-change-count {
+  height: 16px;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
   padding: 0;
   border: 0;
   background: transparent;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 760;
   cursor: pointer;
 }
@@ -702,18 +727,18 @@ button {
 .commit-subject {
   min-width: 80px;
   flex: 1 1 auto;
-  font-size: 14px;
+  font-size: 11px;
 }
 
 .commit-hash-cell {
   color: #2f3339;
-  font-size: 13px;
+  font-size: 11px;
 }
 
 .commit-author-cell,
 .commit-date-cell {
   color: #343a43;
-  font-size: 13px;
+  font-size: 11px;
 }
 
 .warning-band {
