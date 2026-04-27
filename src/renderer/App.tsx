@@ -1,4 +1,5 @@
 import {
+  Archive,
   Bot,
   Check,
   Download,
@@ -913,6 +914,8 @@ const ChatRobotTags = ({
   openBranchCreateModal,
   openCommitMessageModal,
   openChangeSummaryModal,
+  archiveThreadGroup,
+  isThreadArchiveSafe,
 }: {
   threads: CodexThread[];
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
@@ -932,6 +935,11 @@ const ChatRobotTags = ({
     event: MouseEvent<HTMLButtonElement>,
     changeSummaryTarget: ChangeSummaryTarget,
   ) => void;
+  archiveThreadGroup: (
+    event: MouseEvent<HTMLButtonElement>,
+    threads: CodexThread[],
+  ) => void;
+  isThreadArchiveSafe: boolean;
 }) => {
   if (threads.length === 0) {
     return null;
@@ -1032,6 +1040,11 @@ const ChatRobotTags = ({
           threadGroup.cwd.length > 0 &&
           shouldShowChangeCount &&
           !shouldShowBranchCreateAction;
+        const shouldShowThreadArchiveAction =
+          threadGroup.cwd.length > 0 &&
+          storedChangeSummary !== undefined &&
+          isChangeSummaryEmpty &&
+          (isThreadArchiveSafe || threadGroups.length > 1);
 
         return (
           <span className="commit-thread-group" key={threadGroup.key}>
@@ -1123,6 +1136,20 @@ const ChatRobotTags = ({
                 }
               >
                 <Check size={13} />
+              </button>
+            ) : null}
+            {shouldShowThreadArchiveAction ? (
+              <button
+                className="commit-thread-archive-action"
+                title={`Archive chats for ${threadGroup.cwd}`}
+                type="button"
+                onMouseDown={(event) => event.stopPropagation()}
+                onDoubleClick={(event) => event.stopPropagation()}
+                onClick={(event) =>
+                  archiveThreadGroup(event, threadGroup.threads)
+                }
+              >
+                <Archive size={13} />
               </button>
             ) : null}
           </span>
@@ -1230,6 +1257,7 @@ const CommitHistoryRow = ({
   gitChangesOfCwd,
   isBranchPointerDropTarget,
   isHeadAncestor,
+  isThreadArchiveSafe,
   isBranchDeleteSafeOfBranch,
   updateBranchPointerDropTarget,
   clearBranchPointerDropTarget,
@@ -1240,6 +1268,7 @@ const CommitHistoryRow = ({
   openCommitMessageModal,
   openChangeSummaryModal,
   openBranchMergeModal,
+  archiveThreadGroup,
   startBranchPointerDrag,
   finishBranchPointerDrag,
 }: {
@@ -1252,6 +1281,7 @@ const CommitHistoryRow = ({
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   isBranchPointerDropTarget: boolean;
   isHeadAncestor: boolean;
+  isThreadArchiveSafe: boolean;
   isBranchDeleteSafeOfBranch: { [branch: string]: boolean };
   updateBranchPointerDropTarget: (event: DragEvent<HTMLDivElement>) => void;
   clearBranchPointerDropTarget: () => void;
@@ -1277,6 +1307,10 @@ const CommitHistoryRow = ({
   openBranchMergeModal: (
     event: MouseEvent<HTMLButtonElement>,
     branch: string,
+  ) => void;
+  archiveThreadGroup: (
+    event: MouseEvent<HTMLButtonElement>,
+    threads: CodexThread[],
   ) => void;
   startBranchPointerDrag: ({
     event,
@@ -1344,6 +1378,8 @@ const CommitHistoryRow = ({
           openBranchCreateModal={openBranchCreateModal}
           openCommitMessageModal={openCommitMessageModal}
           openChangeSummaryModal={openChangeSummaryModal}
+          archiveThreadGroup={archiveThreadGroup}
+          isThreadArchiveSafe={isThreadArchiveSafe}
         />
       </div>
       <div className="commit-branch-tags-cell">
@@ -1501,6 +1537,23 @@ const CommitHistory = ({
     }
 
     return nextIsHeadAncestorOfSha;
+  }, [commits]);
+  const isThreadArchiveSafeOfSha = useMemo(() => {
+    const childCountOfSha: { [sha: string]: number } = {};
+    const nextIsThreadArchiveSafeOfSha: { [sha: string]: boolean } = {};
+
+    for (const commit of commits) {
+      for (const parent of commit.parents) {
+        childCountOfSha[parent] = (childCountOfSha[parent] ?? 0) + 1;
+      }
+    }
+
+    for (const commit of commits) {
+      nextIsThreadArchiveSafeOfSha[commit.sha] =
+        commit.refs.length > 0 || (childCountOfSha[commit.sha] ?? 0) > 0;
+    }
+
+    return nextIsThreadArchiveSafeOfSha;
   }, [commits]);
   // Branch delete is safe only when local refs or fixed refs keep the branch tip visible.
   const isBranchDeleteSafeOfBranch = useMemo(() => {
@@ -1926,6 +1979,29 @@ const CommitHistory = ({
   const closeChangeSummaryModal = () => {
     setChangeSummaryTarget(null);
   };
+  const archiveThreadGroup = async (
+    event: MouseEvent<HTMLButtonElement>,
+    threads: CodexThread[],
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const threadIds = threads.map((thread) => thread.id);
+    let codexErrorMessage: string | null = null;
+
+    try {
+      await window.molttree.archiveCodexThreads(threadIds);
+    } catch (error) {
+      codexErrorMessage =
+        error instanceof Error ? error.message : "Failed to archive chats.";
+    } finally {
+      await refreshDashboard();
+
+      if (codexErrorMessage !== null) {
+        showErrorMessage(codexErrorMessage);
+      }
+    }
+  };
   const closeBranchMergeConfirmationModal = () => {
     setBranchMergeConfirmation(null);
   };
@@ -2209,6 +2285,9 @@ const CommitHistory = ({
                 branchPointerDropTargetRowId === row.id
               }
               isHeadAncestor={isHeadAncestorOfSha[row.commit.sha] === true}
+              isThreadArchiveSafe={
+                isThreadArchiveSafeOfSha[row.commit.sha] === true
+              }
               isBranchDeleteSafeOfBranch={isBranchDeleteSafeOfBranch}
               updateBranchPointerDropTarget={(event) =>
                 updateBranchPointerDropTarget({ event, row })
@@ -2223,6 +2302,7 @@ const CommitHistory = ({
               openCommitMessageModal={openCommitMessageModal}
               openChangeSummaryModal={openChangeSummaryModal}
               openBranchMergeModal={openBranchMergeModal}
+              archiveThreadGroup={archiveThreadGroup}
               startBranchPointerDrag={startBranchPointerDrag}
               finishBranchPointerDrag={finishBranchPointerDrag}
             />

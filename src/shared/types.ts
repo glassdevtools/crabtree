@@ -124,6 +124,7 @@ export type DashboardData = {
 export type MoltTreeApi = {
   readDashboard: () => Promise<DashboardData>;
   openCodexThread: (threadId: string) => Promise<void>;
+  archiveCodexThreads: (threadIds: string[]) => Promise<void>;
   openNewCodexThread: () => Promise<void>;
   openVSCodePath: (path: string) => Promise<void>;
   stageGitChanges: (path: string) => Promise<void>;

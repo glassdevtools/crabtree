@@ -12,6 +12,8 @@ import type {
   GitMergePreview,
   GitMoveBranchRequest,
 } from "../shared/types";
+import { createAppServerClient } from "./appServerClient";
+import { archiveCodexThreads } from "./codexThreads";
 import { readDashboardData } from "./dashboard";
 
 // The main process owns local system access. The renderer only receives narrow, typed IPC methods through preload.
@@ -207,6 +209,24 @@ const readGitMergeBranchRequest = (value: unknown) => {
   };
 
   return gitMergeBranchRequest;
+};
+
+const readCodexThreadIds = (value: unknown) => {
+  if (!Array.isArray(value)) {
+    throw new Error("threadIds must be an array.");
+  }
+
+  const threadIds: string[] = [];
+
+  for (const threadId of value) {
+    if (typeof threadId !== "string" || threadId.length === 0) {
+      throw new Error("threadIds must only contain non-empty strings.");
+    }
+
+    threadIds.push(threadId);
+  }
+
+  return threadIds;
 };
 
 const readGitBranchTagChanges = (value: unknown) => {
@@ -783,6 +803,17 @@ ipcMain.handle("codex:openThread", async (_event, threadId: unknown) => {
   }
 
   await shell.openExternal(`codex://threads/${threadId}`);
+});
+
+ipcMain.handle("codex:archiveThreads", async (_event, value: unknown) => {
+  const threadIds = readCodexThreadIds(value);
+  const appServerClient = await createAppServerClient();
+
+  try {
+    await archiveCodexThreads({ appServerClient, threadIds });
+  } finally {
+    appServerClient.close();
+  }
 });
 
 ipcMain.handle("codex:openNewThread", async () => {

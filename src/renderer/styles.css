@@ -540,6 +540,7 @@ button {
 
 /* TODO: AI-PICKED-VALUE: This keeps the delete affordance small enough to fit inside compact branch tags. */
 .commit-branch-create-action,
+.commit-thread-archive-action,
 .commit-thread-commit-action,
 .commit-graph-merge-action,
 .commit-ref-delete {
@@ -565,6 +566,7 @@ button {
 }
 
 .commit-branch-create-action:hover,
+.commit-thread-archive-action:hover,
 .commit-thread-commit-action:hover,
 .commit-graph-merge-action:hover {
   color: #0a64c9;

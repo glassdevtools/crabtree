@@ -166,3 +166,18 @@ const readActiveThreads = async (appServerClient: AppServerClient) => {
 export const readCodexThreads = async (appServerClient: AppServerClient) => {
   return await readActiveThreads(appServerClient);
 };
+
+export const archiveCodexThreads = async ({
+  appServerClient,
+  threadIds,
+}: {
+  appServerClient: AppServerClient;
+  threadIds: string[];
+}) => {
+  for (const threadId of threadIds) {
+    await appServerClient.request({
+      method: "thread/archive",
+      params: { threadId },
+    });
+  }
+};
