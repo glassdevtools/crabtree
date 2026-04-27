@@ -1,7 +1,6 @@
 import {
   Bot,
   Check,
-  GitBranch,
   GitBranchPlus,
   GitCommitHorizontal,
   GitPullRequestArrow,
@@ -2365,10 +2364,7 @@ const RepoSection = ({
             onClick={() => openBranchTagChangeModal("reset", repo.root)}
             disabled={repoBranchTagChanges.length === 0}
           >
-            <span className="branch-action-icon">
-              <GitBranch size={18} />
-              <Undo2 className="branch-action-icon-mark" size={10} />
-            </span>
+            <Undo2 size={18} />
           </button>
           <button
             className="icon-button"
@@ -2376,10 +2372,7 @@ const RepoSection = ({
             onClick={() => openBranchTagChangeModal("push", repo.root)}
             disabled={repoBranchTagChanges.length === 0}
           >
-            <span className="branch-action-icon">
-              <GitBranch size={18} />
-              <Upload className="branch-action-icon-mark" size={10} />
-            </span>
+            <Upload size={18} />
           </button>
         </div>
       </div>

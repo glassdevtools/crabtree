@@ -95,34 +95,6 @@ button {
   background: #ffffff;
 }
 
-/* TODO: AI-PICKED-VALUE: The overlay mark size and offset fit the existing 34px toolbar buttons. */
-.branch-action-icon {
-  position: relative;
-  width: 18px;
-  height: 18px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.branch-action-icon-mark {
-  position: absolute;
-  right: -3px;
-  bottom: -3px;
-  padding: 1px;
-  border-radius: 999px;
-  background: #ffffff;
-  stroke-width: 3px;
-}
-
-.icon-button:hover .branch-action-icon-mark {
-  background: #eef2f7;
-}
-
-.icon-button:disabled:hover .branch-action-icon-mark {
-  background: #ffffff;
-}
-
 .content-shell {
   min-height: 0;
   flex: 1;
