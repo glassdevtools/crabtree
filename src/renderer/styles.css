@@ -583,12 +583,25 @@ button {
 .commit-thread-chat {
   width: 18px;
   height: 24px;
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0;
   color: #202124;
   cursor: pointer;
+}
+
+.commit-thread-worktree-mark {
+  position: absolute;
+  right: -2px;
+  bottom: 1px;
+  z-index: 1;
+  padding: 1px;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #4d5562;
+  transform: rotate(90deg);
 }
 
 .commit-thread-chat:focus {

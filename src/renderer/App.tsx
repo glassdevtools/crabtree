@@ -1,16 +1,17 @@
 import {
-  Archive,
   Check,
   Download,
   GitBranch,
   GitCommitHorizontal,
   GitPullRequestArrow,
-  MessageCircle,
   Trash2,
   Undo2,
   Upload,
   User,
 } from "lucide-react";
+import { GoArchive } from "react-icons/go";
+import { IoChatbubbleOutline } from "react-icons/io5";
+import { MdOutlineCallSplit } from "react-icons/md";
 import {
   useCallback,
   useEffect,
@@ -906,6 +907,7 @@ const BranchTags = ({
 const ChatRobotTags = ({
   threads,
   gitChangesOfCwd,
+  worktrees,
   repoRoot,
   commitSha,
   localBranches,
@@ -918,6 +920,7 @@ const ChatRobotTags = ({
 }: {
   threads: CodexThread[];
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
+  worktrees: GitWorktree[];
   repoRoot: string;
   commitSha: string;
   localBranches: string[];
@@ -951,6 +954,18 @@ const ChatRobotTags = ({
     [];
   const groupIndexOfKey: { [key: string]: number } = {};
   const isLocalBranchOfBranch: { [branch: string]: boolean } = {};
+  const readIsWorktreeThread = (thread: CodexThread) => {
+    for (const worktree of worktrees) {
+      if (
+        thread.cwd === worktree.path ||
+        thread.cwd.startsWith(`${worktree.path}/`)
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  };
 
   for (const localBranch of localBranches) {
     isLocalBranchOfBranch[localBranch] = true;
@@ -1075,7 +1090,14 @@ const ChatRobotTags = ({
                     void openThread(thread.id);
                   }}
                 >
-                  <MessageCircle size={14} />
+                  <IoChatbubbleOutline size={17} />
+                  {readIsWorktreeThread(thread) ? (
+                    <MdOutlineCallSplit
+                      aria-hidden="true"
+                      className="commit-thread-worktree-mark"
+                      size={10}
+                    />
+                  ) : null}
                 </span>
               );
             })}
@@ -1148,7 +1170,7 @@ const ChatRobotTags = ({
                   archiveThreadGroup(event, threadGroup.threads)
                 }
               >
-                <Archive size={13} />
+                <GoArchive size={13} />
               </button>
             ) : null}
           </span>
@@ -1249,6 +1271,7 @@ const CommitGraphSvg = ({
 const CommitHistoryRow = ({
   row,
   repoRoot,
+  worktrees,
   currentBranch,
   defaultBranch,
   isHeadClean,
@@ -1273,6 +1296,7 @@ const CommitHistoryRow = ({
 }: {
   row: CommitGraphRow;
   repoRoot: string;
+  worktrees: GitWorktree[];
   currentBranch: string | null;
   defaultBranch: string | null;
   isHeadClean: boolean;
@@ -1348,9 +1372,11 @@ const CommitHistoryRow = ({
       onDragOver={updateBranchPointerDropTarget}
       onDragLeave={clearBranchPointerDropTarget}
       onDrop={finishBranchPointerDrop}
-      onDoubleClick={openRowAfterDoubleClick}
     >
-      <div className="commit-graph-cell">
+      <div
+        className="commit-graph-cell"
+        onDoubleClick={openRowAfterDoubleClick}
+      >
         {mergeableBranch === null ? null : (
           <div className="commit-graph-actions">
             <button
@@ -1370,6 +1396,7 @@ const CommitHistoryRow = ({
         <ChatRobotTags
           threads={threads}
           gitChangesOfCwd={gitChangesOfCwd}
+          worktrees={worktrees}
           repoRoot={repoRoot}
           commitSha={commit.sha}
           localBranches={commit.localBranches}
@@ -2275,6 +2302,7 @@ const CommitHistory = ({
               key={row.id}
               row={row}
               repoRoot={repoRoot}
+              worktrees={worktrees}
               currentBranch={currentBranch}
               defaultBranch={defaultBranch}
               isHeadClean={isHeadClean}
