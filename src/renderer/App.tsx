@@ -1207,7 +1207,7 @@ const BranchTags = ({
               void copyTextAfterContextMenu({
                 event,
                 text: refName,
-                copiedLabel: "tag",
+                copiedLabel: "tag name",
                 errorMessage: "Failed to copy branch name.",
               });
             }}
