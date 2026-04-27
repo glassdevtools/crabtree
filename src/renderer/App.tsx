@@ -2132,6 +2132,7 @@ const CommitHistory = ({
       await window.molttree.deleteGitBranch({
         repoRoot,
         branch: branchDeleteTarget.branch,
+        oldSha: branchDeleteTarget.oldSha,
       });
       rememberBranchTagChange({
         repoRoot,
