@@ -357,10 +357,14 @@ button {
 }
 
 .change-summary-modal {
-  width: 320px;
+  width: min(720px, calc(100vw - 32px));
 }
 
-/* TODO: AI-PICKED-VALUE: The wider modal and list columns leave room for repo paths while matching the existing modal style. */
+.change-summary-modal .branch-delete-modal-message {
+  overflow-wrap: anywhere;
+}
+
+/* TODO: AI-PICKED-VALUE: The modal width leaves room for branch names and hash changes while matching the existing modal style. */
 .branch-tag-change-modal {
   width: 520px;
 }
@@ -466,7 +470,7 @@ button {
 
 .branch-tag-change-list li {
   display: grid;
-  grid-template-columns: 150px 1fr 110px;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
   padding: 7px 9px;
@@ -564,7 +568,6 @@ button {
 }
 
 .commit-ref {
-  max-width: 142px;
   min-height: 24px;
   display: inline-flex;
   align-items: center;

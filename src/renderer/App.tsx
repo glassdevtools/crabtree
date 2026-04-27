@@ -998,7 +998,8 @@ const ChatRobotTags = ({
         const shouldShowCommitAction =
           threadGroup.cwd.length > 0 &&
           storedChangeSummary !== undefined &&
-          !isChangeSummaryEmpty;
+          !isChangeSummaryEmpty &&
+          !shouldShowBranchCreateAction;
 
         return (
           <span className="commit-thread-group" key={threadGroup.key}>
@@ -2681,7 +2682,6 @@ export const App = () => {
                   key={`${branchTagChange.repoRoot}:${branchTagChange.branch}`}
                 >
                   <strong>{branchTagChange.branch}</strong>
-                  <span>{branchTagChange.repoRoot}</span>
                   <code>
                     {branchTagChange.newSha === null
                       ? `${branchTagChange.oldSha.slice(0, 7)} -> deleted`
