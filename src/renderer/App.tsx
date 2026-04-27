@@ -903,7 +903,6 @@ const ChatRobotTags = ({
   commitSha,
   localBranches,
   currentBranch,
-  shouldShowBranchCreateActions,
   openBranchCreateModal,
   openCommitMessageModal,
   openChangeSummaryModal,
@@ -914,7 +913,6 @@ const ChatRobotTags = ({
   commitSha: string;
   localBranches: string[];
   currentBranch: string | null;
-  shouldShowBranchCreateActions: boolean;
   openBranchCreateModal: (
     event: MouseEvent<HTMLButtonElement>,
     branchCreateTarget: BranchCreateTarget,
@@ -1022,9 +1020,7 @@ const ChatRobotTags = ({
           ? "commit-thread-change-count commit-thread-change-count-empty"
           : "commit-thread-change-count";
         const shouldShowBranchCreateAction =
-          shouldShowBranchCreateActions &&
-          threadGroup.cwd.length > 0 &&
-          storedChangeSummary !== undefined;
+          threadGroup.cwd.length > 0 && commitBranchTarget === null;
         const shouldShowCommitAction =
           threadGroup.cwd.length > 0 &&
           storedChangeSummary !== undefined &&
@@ -1337,7 +1333,6 @@ const CommitHistoryRow = ({
           commitSha={commit.sha}
           localBranches={commit.localBranches}
           currentBranch={currentBranch}
-          shouldShowBranchCreateActions={commit.localBranches.length === 0}
           openBranchCreateModal={openBranchCreateModal}
           openCommitMessageModal={openCommitMessageModal}
           openChangeSummaryModal={openChangeSummaryModal}
@@ -1456,6 +1451,46 @@ const CommitHistory = ({
     headChangeSummary !== undefined &&
     totalHeadChangeSummary.added === 0 &&
     totalHeadChangeSummary.removed === 0;
+  const isHeadAncestorOfSha = useMemo(() => {
+    const commitOfSha: { [sha: string]: GitCommit } = {};
+    const nextIsHeadAncestorOfSha: { [sha: string]: boolean } = {};
+    let headSha: string | null = null;
+
+    for (const commit of commits) {
+      commitOfSha[commit.sha] = commit;
+
+      if (commit.refs.some((ref) => readIsHeadRef(ref))) {
+        headSha = commit.sha;
+      }
+    }
+
+    if (headSha === null) {
+      return nextIsHeadAncestorOfSha;
+    }
+
+    const shasToRead = [headSha];
+
+    while (shasToRead.length > 0) {
+      const sha = shasToRead.pop();
+
+      if (sha === undefined || nextIsHeadAncestorOfSha[sha] === true) {
+        continue;
+      }
+
+      nextIsHeadAncestorOfSha[sha] = true;
+      const commit = commitOfSha[sha];
+
+      if (commit === undefined) {
+        continue;
+      }
+
+      for (const parent of commit.parents) {
+        shasToRead.push(parent);
+      }
+    }
+
+    return nextIsHeadAncestorOfSha;
+  }, [commits]);
   // Branch delete is safe only when local refs or fixed refs keep the branch tip visible.
   const isBranchDeleteSafeOfBranch = useMemo(() => {
     const commitOfSha: { [sha: string]: GitCommit } = {};
@@ -2161,6 +2196,7 @@ const CommitHistory = ({
               isBranchPointerDropTarget={
                 branchPointerDropTargetRowId === row.id
               }
+              isHeadAncestor={isHeadAncestorOfSha[row.commit.sha] === true}
               isBranchDeleteSafeOfBranch={isBranchDeleteSafeOfBranch}
               updateBranchPointerDropTarget={(event) =>
                 updateBranchPointerDropTarget({ event, row })
