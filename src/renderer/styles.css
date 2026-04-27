@@ -235,7 +235,7 @@ button {
 }
 
 .commit-history {
-  --commit-history-grid-template-columns: 300px 340px 260px 420px 84px 150px
+  --commit-history-grid-template-columns: 300px 260px 340px 420px 84px 150px
     170px;
   --commit-history-table-width: 1724px;
   overflow: auto;
@@ -555,6 +555,7 @@ button {
 
 /* TODO: AI-PICKED-VALUE: This keeps the delete affordance small enough to fit inside compact branch tags. */
 .commit-branch-create-action,
+.commit-thread-commit-action,
 .commit-ref-action,
 .commit-ref-delete {
   width: 20px;
@@ -580,8 +581,17 @@ button {
 }
 
 .commit-branch-create-action:hover,
+.commit-thread-commit-action:hover,
 .commit-ref-action:hover {
   color: #0a64c9;
+}
+
+.commit-ref-action[aria-disabled="true"],
+.commit-ref-delete[aria-disabled="true"],
+.commit-ref-action[aria-disabled="true"]:hover,
+.commit-ref-delete[aria-disabled="true"]:hover {
+  color: #c2c8d0;
+  cursor: not-allowed;
 }
 
 .commit-thread-group {
@@ -626,6 +636,11 @@ button {
 
 .commit-thread-change-removed {
   color: #c53a13;
+}
+
+.commit-thread-change-count-empty .commit-thread-change-added,
+.commit-thread-change-count-empty .commit-thread-change-removed {
+  color: #8b929c;
 }
 
 .commit-ref svg,

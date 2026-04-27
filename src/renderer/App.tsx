@@ -1,6 +1,8 @@
 import {
   Bot,
+  Check,
   GitBranch,
+  GitBranchPlus,
   GitCommitHorizontal,
   GitMerge,
   RefreshCw,
@@ -229,6 +231,11 @@ type BranchCreateTarget = {
   title: string;
 };
 
+type CommitMessageTarget = {
+  path: string;
+  title: string;
+};
+
 type BranchMergeConfirmation = {
   branch: string;
   preview: GitMergePreview;
@@ -347,7 +354,7 @@ const readCommitGraphWidth = ({ laneCount }: { laneCount: number }) => {
 const readCommitGridTemplateColumns = (
   columnWidths: CommitHistoryColumnWidths,
 ) => {
-  return `${columnWidths.graph}px ${columnWidths.branchTags}px ${columnWidths.actors}px ${columnWidths.description}px ${columnWidths.commit}px ${columnWidths.author}px ${columnWidths.date}px`;
+  return `${columnWidths.graph}px ${columnWidths.actors}px ${columnWidths.branchTags}px ${columnWidths.description}px ${columnWidths.commit}px ${columnWidths.author}px ${columnWidths.date}px`;
 };
 
 const readCommitHistoryTableWidth = (
@@ -718,6 +725,7 @@ const BranchTags = ({
   refs,
   localBranches,
   currentBranch,
+  isHeadClean,
   commitSha,
   commitShortSha,
   isBranchDeleteSafeOfBranch,
@@ -729,6 +737,7 @@ const BranchTags = ({
   refs: string[];
   localBranches: string[];
   currentBranch: string | null;
+  isHeadClean: boolean;
   commitSha: string;
   commitShortSha: string;
   isBranchDeleteSafeOfBranch: { [branch: string]: boolean };
@@ -761,7 +770,14 @@ const BranchTags = ({
   const hasHead = refs.some((ref) => readIsHeadRef(ref));
   const normalRefs = refs.filter((ref) => ref !== "HEAD");
   const orderedRefs = [
-    ...normalRefs.filter((ref) => !ref.startsWith("tag: ")),
+    ...normalRefs.filter(
+      (ref) =>
+        !ref.startsWith("tag: ") && !cleanRefName(ref).startsWith("origin/"),
+    ),
+    ...normalRefs.filter(
+      (ref) =>
+        !ref.startsWith("tag: ") && cleanRefName(ref).startsWith("origin/"),
+    ),
     ...normalRefs.filter((ref) => ref.startsWith("tag: ")),
   ];
   const isLocalBranchOfName: { [name: string]: boolean } = {};
@@ -783,11 +799,29 @@ const BranchTags = ({
         const isTag = ref.startsWith("tag: ");
         const isOriginBranch = refName.startsWith("origin/");
         let refClassName = "commit-ref commit-ref-local";
-        const shouldShowMerge = isLocalBranch && refName !== currentBranch;
-        const shouldShowDelete =
+        const shouldShowBranchActions = !isTag;
+        const canMergeBranch =
+          isLocalBranch && refName !== currentBranch && isHeadClean;
+        const canDeleteBranch =
           isLocalBranch &&
           refName !== currentBranch &&
           isBranchDeleteSafeOfBranch[refName] === true;
+        const mergeTitle = canMergeBranch
+          ? `Merge ${refName} into HEAD`
+          : !isLocalBranch
+            ? "Only local branches can be merged."
+            : refName === currentBranch
+              ? "This branch is already checked out."
+              : !isHeadClean
+                ? "Cannot merge while HEAD has changes."
+                : "Cannot merge this branch.";
+        const deleteTitle = canDeleteBranch
+          ? `Delete ${refName}`
+          : !isLocalBranch
+            ? "Only local branches can be deleted."
+            : refName === currentBranch
+              ? "Cannot delete the checked-out branch."
+              : "Deleting this branch could hide commits not kept by another local branch, tag, HEAD, or worktree.";
 
         if (isOriginBranch) {
           refClassName = "commit-ref commit-ref-origin";
@@ -823,29 +857,42 @@ const BranchTags = ({
             onDragEnd={finishBranchPointerDrag}
           >
             <span>{refName}</span>
-            {shouldShowMerge ? (
+            {shouldShowBranchActions ? (
               <button
                 className="commit-ref-action"
-                title={`Merge ${refName} into HEAD`}
+                title={mergeTitle}
                 type="button"
+                aria-disabled={!canMergeBranch}
                 draggable={false}
                 onMouseDown={(event) => event.stopPropagation()}
                 onDoubleClick={(event) => event.stopPropagation()}
-                onClick={(event) => openBranchMergeModal(event, refName)}
+                onClick={(event) => {
+                  if (!canMergeBranch) {
+                    return;
+                  }
+
+                  openBranchMergeModal(event, refName);
+                }}
               >
                 <GitMerge size={12} />
               </button>
             ) : null}
-            {shouldShowDelete ? (
+            {shouldShowBranchActions ? (
               <button
                 className="commit-ref-delete"
+                title={deleteTitle}
                 type="button"
+                aria-disabled={!canDeleteBranch}
                 draggable={false}
                 onMouseDown={(event) => event.stopPropagation()}
                 onDoubleClick={(event) => event.stopPropagation()}
-                onClick={(event) =>
-                  openBranchDeleteModal(event, refName, commitSha)
-                }
+                onClick={(event) => {
+                  if (!canDeleteBranch) {
+                    return;
+                  }
+
+                  openBranchDeleteModal(event, refName, commitSha);
+                }}
               >
                 <Trash2 size={11} />
               </button>
@@ -862,6 +909,7 @@ const ChatRobotTags = ({
   gitChangesOfCwd,
   shouldShowBranchCreateActions,
   openBranchCreateModal,
+  openCommitMessageModal,
   openCodePath,
 }: {
   threads: CodexThread[];
@@ -870,6 +918,10 @@ const ChatRobotTags = ({
   openBranchCreateModal: (
     event: MouseEvent<HTMLButtonElement>,
     branchCreateTarget: BranchCreateTarget,
+  ) => void;
+  openCommitMessageModal: (
+    event: MouseEvent<HTMLButtonElement>,
+    commitMessageTarget: CommitMessageTarget,
   ) => void;
   openCodePath: (path: string) => void;
 }) => {
@@ -905,12 +957,20 @@ const ChatRobotTags = ({
         const changeSummary = storedChangeSummary ?? EMPTY_GIT_CHANGE_SUMMARY;
         const totalChangeSummary = readTotalGitChangeSummary(changeSummary);
         const shouldShowChangeCount = storedChangeSummary !== undefined;
+        const isChangeSummaryEmpty =
+          totalChangeSummary.added === 0 && totalChangeSummary.removed === 0;
+        const changeCountClassName = isChangeSummaryEmpty
+          ? "commit-thread-change-count commit-thread-change-count-empty"
+          : "commit-thread-change-count";
         const shouldShowBranchCreateAction =
           shouldShowBranchCreateActions &&
           threadGroup.cwd.length > 0 &&
           storedChangeSummary !== undefined &&
-          totalChangeSummary.added === 0 &&
-          totalChangeSummary.removed === 0;
+          isChangeSummaryEmpty;
+        const shouldShowCommitAction =
+          threadGroup.cwd.length > 0 &&
+          storedChangeSummary !== undefined &&
+          !isChangeSummaryEmpty;
 
         return (
           <span className="commit-thread-group" key={threadGroup.key}>
@@ -948,7 +1008,7 @@ const ChatRobotTags = ({
             })}
             {shouldShowChangeCount ? (
               <button
-                className="commit-thread-change-count"
+                className={changeCountClassName}
                 title={threadGroup.cwd}
                 type="button"
                 onMouseDown={(event) => event.stopPropagation()}
@@ -967,6 +1027,23 @@ const ChatRobotTags = ({
                 </span>
               </button>
             ) : null}
+            {shouldShowCommitAction ? (
+              <button
+                className="commit-thread-commit-action"
+                title={`Commit changes for ${threadGroup.cwd}`}
+                type="button"
+                onMouseDown={(event) => event.stopPropagation()}
+                onDoubleClick={(event) => event.stopPropagation()}
+                onClick={(event) =>
+                  openCommitMessageModal(event, {
+                    path: threadGroup.cwd,
+                    title: threadGroup.cwd,
+                  })
+                }
+              >
+                <Check size={13} />
+              </button>
+            ) : null}
             {shouldShowBranchCreateAction ? (
               <button
                 className="commit-branch-create-action"
@@ -981,7 +1058,7 @@ const ChatRobotTags = ({
                   })
                 }
               >
-                <GitBranch size={13} />
+                <GitBranchPlus size={13} />
               </button>
             ) : null}
           </span>
@@ -1082,6 +1159,7 @@ const CommitGraphSvg = ({
 const CommitHistoryRow = ({
   row,
   currentBranch,
+  isHeadClean,
   threadOfId,
   gitChangesOfCwd,
   isBranchPointerDropTarget,
@@ -1092,6 +1170,7 @@ const CommitHistoryRow = ({
   openRowAfterDoubleClick,
   openBranchDeleteModal,
   openBranchCreateModal,
+  openCommitMessageModal,
   openBranchMergeModal,
   openCodePath,
   startBranchPointerDrag,
@@ -1099,6 +1178,7 @@ const CommitHistoryRow = ({
 }: {
   row: CommitGraphRow;
   currentBranch: string | null;
+  isHeadClean: boolean;
   threadOfId: { [id: string]: CodexThread };
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   isBranchPointerDropTarget: boolean;
@@ -1115,6 +1195,10 @@ const CommitHistoryRow = ({
   openBranchCreateModal: (
     event: MouseEvent<HTMLButtonElement>,
     branchCreateTarget: BranchCreateTarget,
+  ) => void;
+  openCommitMessageModal: (
+    event: MouseEvent<HTMLButtonElement>,
+    commitMessageTarget: CommitMessageTarget,
   ) => void;
   openBranchMergeModal: (
     event: MouseEvent<HTMLButtonElement>,
@@ -1156,11 +1240,22 @@ const CommitHistoryRow = ({
       onDoubleClick={openRowAfterDoubleClick}
     >
       <div className="commit-graph-cell" />
+      <div className="commit-actors-cell">
+        <ChatRobotTags
+          threads={threads}
+          gitChangesOfCwd={gitChangesOfCwd}
+          shouldShowBranchCreateActions={!hasBranchRef}
+          openBranchCreateModal={openBranchCreateModal}
+          openCommitMessageModal={openCommitMessageModal}
+          openCodePath={openCodePath}
+        />
+      </div>
       <div className="commit-branch-tags-cell">
         <BranchTags
           refs={commit.refs}
           localBranches={commit.localBranches}
           currentBranch={currentBranch}
+          isHeadClean={isHeadClean}
           commitSha={commit.sha}
           commitShortSha={commit.shortSha}
           isBranchDeleteSafeOfBranch={isBranchDeleteSafeOfBranch}
@@ -1168,15 +1263,6 @@ const CommitHistoryRow = ({
           openBranchMergeModal={openBranchMergeModal}
           startBranchPointerDrag={startBranchPointerDrag}
           finishBranchPointerDrag={finishBranchPointerDrag}
-        />
-      </div>
-      <div className="commit-actors-cell">
-        <ChatRobotTags
-          threads={threads}
-          gitChangesOfCwd={gitChangesOfCwd}
-          shouldShowBranchCreateActions={!hasBranchRef}
-          openBranchCreateModal={openBranchCreateModal}
-          openCodePath={openCodePath}
         />
       </div>
       <div className="commit-description-cell">
@@ -1253,6 +1339,9 @@ const CommitHistory = ({
   const [branchCreateTarget, setBranchCreateTarget] =
     useState<BranchCreateTarget | null>(null);
   const [branchName, setBranchName] = useState("");
+  const [commitMessageTarget, setCommitMessageTarget] =
+    useState<CommitMessageTarget | null>(null);
+  const [commitMessage, setCommitMessage] = useState("");
   const [branchToDelete, setBranchToDelete] =
     useState<BranchDeleteTarget | null>(null);
   const [branchMergeConfirmation, setBranchMergeConfirmation] =
@@ -1262,7 +1351,19 @@ const CommitHistory = ({
   const [branchPointerDropTargetRowId, setBranchPointerDropTargetRowId] =
     useState<string | null>(null);
   const graph = useMemo(() => createCommitGraph(commits), [commits]);
-  // Branch delete buttons are only shown when the branch tip would stay visible after removing that branch and its matching origin ref.
+  const headChangeSummary = gitChangesOfCwd[repoRoot];
+  const headTotalChangeSummary =
+    headChangeSummary === undefined
+      ? EMPTY_GIT_CHANGE_SUMMARY
+      : headChangeSummary;
+  const totalHeadChangeSummary = readTotalGitChangeSummary(
+    headTotalChangeSummary,
+  );
+  const isHeadClean =
+    headChangeSummary !== undefined &&
+    totalHeadChangeSummary.added === 0 &&
+    totalHeadChangeSummary.removed === 0;
+  // Branch delete is safe only when local refs or fixed refs keep the branch tip visible.
   const isBranchDeleteSafeOfBranch = useMemo(() => {
     const commitOfSha: { [sha: string]: GitCommit } = {};
     const branchShaOfBranch: { [branch: string]: string } = {};
@@ -1327,6 +1428,15 @@ const CommitHistory = ({
       for (const ref of commit.refs) {
         if (ref.startsWith("HEAD -> ")) {
           isBranchCheckedOutOfBranch[cleanRefName(ref)] = true;
+          continue;
+        }
+
+        if (ref !== "HEAD") {
+          continue;
+        }
+
+        for (const localBranch of commit.localBranches) {
+          isBranchCheckedOutOfBranch[localBranch] = true;
         }
       }
     }
@@ -1368,24 +1478,7 @@ const CommitHistory = ({
           continue;
         }
 
-        if (refName === "origin/HEAD") {
-          const ignoredBranchOfBranch: { [branch: string]: boolean } = {};
-
-          for (const branch of Object.keys(branchShaOfBranch)) {
-            if (commit.refs.includes(`origin/${branch}`)) {
-              ignoredBranchOfBranch[branch] = true;
-            }
-          }
-
-          rootShas.push({ sha: commit.sha, ignoredBranchOfBranch });
-          continue;
-        }
-
         if (refName.startsWith("origin/")) {
-          pushRootSha({
-            sha: commit.sha,
-            ignoredBranch: refName.slice("origin/".length),
-          });
           continue;
         }
 
@@ -1401,7 +1494,7 @@ const CommitHistory = ({
       pushRootSha({ sha: worktree.head, ignoredBranch: worktree.branch });
     }
 
-    // Finally test each branch as if both the local branch and origin branch were gone.
+    // Finally test each branch as if the local branch were gone.
     const nextIsBranchDeleteSafeOfBranch: { [branch: string]: boolean } = {};
 
     for (const branch of Object.keys(branchShaOfBranch)) {
@@ -1683,6 +1776,19 @@ const CommitHistory = ({
     setBranchCreateTarget(null);
     setBranchName("");
   };
+  const openCommitMessageModal = (
+    event: MouseEvent<HTMLButtonElement>,
+    commitMessageTarget: CommitMessageTarget,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setCommitMessageTarget(commitMessageTarget);
+    setCommitMessage("");
+  };
+  const closeCommitMessageModal = () => {
+    setCommitMessageTarget(null);
+    setCommitMessage("");
+  };
   const closeBranchMergeConfirmationModal = () => {
     setBranchMergeConfirmation(null);
   };
@@ -1708,6 +1814,29 @@ const CommitHistory = ({
     } catch (error) {
       gitErrorMessage =
         error instanceof Error ? error.message : "Failed to create branch.";
+    } finally {
+      await refreshDashboardThenShowGitError(gitErrorMessage);
+    }
+  };
+  const submitCommitMessage = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (commitMessageTarget === null) {
+      return;
+    }
+
+    const request = commitMessageTarget;
+    let gitErrorMessage: string | null = null;
+
+    try {
+      await window.molttree.commitAllGitChanges({
+        path: request.path,
+        message: commitMessage.trim(),
+      });
+      closeCommitMessageModal();
+    } catch (error) {
+      gitErrorMessage =
+        error instanceof Error ? error.message : "Failed to commit changes.";
     } finally {
       await refreshDashboardThenShowGitError(gitErrorMessage);
     }
@@ -1856,18 +1985,18 @@ const CommitHistory = ({
             />
           </div>
           <div className="commit-history-header-cell">
-            <span>Branch Tags</span>
+            <span>Actors</span>
             <CommitHistoryColumnResizeHandle
-              columnKey="branchTags"
+              columnKey="actors"
               startColumnResize={startColumnResize}
               updateColumnResize={updateColumnResize}
               finishColumnResize={finishColumnResize}
             />
           </div>
           <div className="commit-history-header-cell">
-            <span>Actors</span>
+            <span>Branch Tags</span>
             <CommitHistoryColumnResizeHandle
-              columnKey="actors"
+              columnKey="branchTags"
               startColumnResize={startColumnResize}
               updateColumnResize={updateColumnResize}
               finishColumnResize={finishColumnResize}
@@ -1917,6 +2046,7 @@ const CommitHistory = ({
               key={row.id}
               row={row}
               currentBranch={currentBranch}
+              isHeadClean={isHeadClean}
               threadOfId={threadOfId}
               gitChangesOfCwd={gitChangesOfCwd}
               isBranchPointerDropTarget={
@@ -1933,6 +2063,7 @@ const CommitHistory = ({
               openRowAfterDoubleClick={() => openRowAfterDoubleClick(row)}
               openBranchDeleteModal={openBranchDeleteModal}
               openBranchCreateModal={openBranchCreateModal}
+              openCommitMessageModal={openCommitMessageModal}
               openBranchMergeModal={openBranchMergeModal}
               openCodePath={(path) => {
                 void openCodePath(path);
@@ -1960,6 +2091,35 @@ const CommitHistory = ({
                 </button>
                 <button type="submit" disabled={branchName.trim().length === 0}>
                   Create
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+        {commitMessageTarget === null ? null : (
+          <div className="commit-message-modal-backdrop">
+            <form
+              className="commit-message-modal"
+              onSubmit={submitCommitMessage}
+            >
+              <h3>Commit Changes</h3>
+              <p className="branch-delete-modal-message">
+                Commit changes for {commitMessageTarget.title}.
+              </p>
+              <input
+                autoFocus
+                value={commitMessage}
+                onChange={(event) => setCommitMessage(event.target.value)}
+              />
+              <div className="commit-message-modal-actions">
+                <button type="button" onClick={closeCommitMessageModal}>
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={commitMessage.trim().length === 0}
+                >
+                  Commit
                 </button>
               </div>
             </form>
