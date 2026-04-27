@@ -540,6 +540,18 @@ button {
   color: #343a43;
 }
 
+.commit-ref-worktree {
+  cursor: pointer;
+}
+
+.commit-ref-worktree:hover {
+  background: #e3e7ed;
+}
+
+.commit-ref-worktree-icon {
+  transform: rotate(90deg);
+}
+
 .commit-ref-draggable {
   cursor: grab;
 }

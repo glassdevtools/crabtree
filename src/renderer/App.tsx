@@ -774,6 +774,7 @@ const createThreadOfId = (threads: CodexThread[]) => {
 
 const BranchTags = ({
   refs,
+  worktrees,
   localBranches,
   currentBranch,
   defaultBranch,
@@ -782,10 +783,12 @@ const BranchTags = ({
   commitSubject,
   isBranchDeleteSafeOfBranch,
   openBranchDeleteModal,
+  openCodePath,
   startBranchPointerDrag,
   finishBranchPointerDrag,
 }: {
   refs: string[];
+  worktrees: GitWorktree[];
   localBranches: string[];
   currentBranch: string | null;
   defaultBranch: string | null;
@@ -798,6 +801,7 @@ const BranchTags = ({
     branch: string,
     oldSha: string,
   ) => void;
+  openCodePath: (path: string) => Promise<void>;
   startBranchPointerDrag: ({
     event,
     branch,
@@ -813,10 +817,9 @@ const BranchTags = ({
   }) => void;
   finishBranchPointerDrag: () => void;
 }) => {
-  if (refs.length === 0) {
-    return null;
-  }
-
+  const worktreesForCommit = worktrees.filter(
+    (worktree) => worktree.head === commitSha,
+  );
   const hasHead = refs.some((ref) => readIsHeadRef(ref));
   const normalRefs = refs.filter((ref) => ref !== "HEAD");
   const orderedRefs = [
@@ -836,6 +839,10 @@ const BranchTags = ({
     isLocalBranchOfName[localBranch] = true;
   }
 
+  if (refs.length === 0 && worktreesForCommit.length === 0) {
+    return null;
+  }
+
   return (
     <div className="commit-label-list">
       {hasHead ? (
@@ -843,6 +850,28 @@ const BranchTags = ({
           <span>HEAD</span>
         </span>
       ) : null}
+      {worktreesForCommit.map((worktree) => (
+        <button
+          className="commit-ref commit-ref-head commit-ref-worktree"
+          title={`Open ${worktree.path}`}
+          type="button"
+          key={worktree.path}
+          onMouseDown={(event) => event.stopPropagation()}
+          onDoubleClick={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            void openCodePath(worktree.path);
+          }}
+        >
+          <MdOutlineCallSplit
+            aria-hidden="true"
+            className="commit-ref-worktree-icon"
+            size={13}
+          />
+          <span>Worktree</span>
+        </button>
+      ))}
       {orderedRefs.map((ref) => {
         const refName = cleanRefName(ref);
         const isLocalBranch = isLocalBranchOfName[refName] === true;
@@ -1275,6 +1304,7 @@ const CommitHistoryRow = ({
   openCommitMessageModal,
   openChangeSummaryModal,
   openBranchMergeModal,
+  openCodePath,
   startBranchPointerDrag,
   finishBranchPointerDrag,
 }: {
@@ -1315,6 +1345,7 @@ const CommitHistoryRow = ({
     event: MouseEvent<HTMLButtonElement>,
     branch: string,
   ) => void;
+  openCodePath: (path: string) => Promise<void>;
   startBranchPointerDrag: ({
     event,
     branch,
@@ -1391,6 +1422,7 @@ const CommitHistoryRow = ({
       <div className="commit-branch-tags-cell">
         <BranchTags
           refs={commit.refs}
+          worktrees={worktrees}
           localBranches={commit.localBranches}
           currentBranch={currentBranch}
           defaultBranch={defaultBranch}
@@ -1399,6 +1431,7 @@ const CommitHistoryRow = ({
           commitSubject={commit.subject}
           isBranchDeleteSafeOfBranch={isBranchDeleteSafeOfBranch}
           openBranchDeleteModal={openBranchDeleteModal}
+          openCodePath={openCodePath}
           startBranchPointerDrag={startBranchPointerDrag}
           finishBranchPointerDrag={finishBranchPointerDrag}
         />
@@ -2460,6 +2493,7 @@ const CommitHistory = ({
               openCommitMessageModal={openCommitMessageModal}
               openChangeSummaryModal={openChangeSummaryModal}
               openBranchMergeModal={openBranchMergeModal}
+              openCodePath={openCodePath}
               startBranchPointerDrag={startBranchPointerDrag}
               finishBranchPointerDrag={finishBranchPointerDrag}
             />
