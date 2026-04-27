@@ -303,6 +303,7 @@ textarea,
   display: flex;
   flex-direction: column;
   gap: 2px;
+  user-select: text;
 }
 
 .copy-toast-value {
