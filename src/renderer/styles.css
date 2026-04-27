@@ -262,6 +262,11 @@ button {
   margin-left: auto;
 }
 
+.title-tooltip-trigger {
+  min-width: 0;
+  display: inline-flex;
+}
+
 .commit-history {
   --commit-history-grid-template-columns: 300px 260px 340px 420px 84px 150px
     170px;
@@ -521,6 +526,7 @@ button {
   height: 16px;
   align-items: stretch;
   border-bottom: 0;
+  border-radius: 0;
   background: #ffffff;
   color: #202124;
 }
@@ -533,6 +539,13 @@ button {
 
 .commit-history-row:nth-child(even) {
   background: #ffffff;
+}
+
+/* TODO: AI-PICKED-VALUE: This blue is intentionally brighter than the branch tag blue so the selected row is obvious without adding a line. */
+.commit-history-row-selected,
+.commit-history-row-selected:nth-child(even) {
+  border-radius: 5px;
+  background: #dbeafe;
 }
 
 .commit-history-row-branch-drop-target:nth-child(even) {
@@ -564,7 +577,6 @@ button {
   display: flex;
   align-items: center;
   padding: 0 6px;
-  border-left: 0;
 }
 
 .commit-branch-tags-cell,
@@ -723,7 +735,6 @@ button {
   z-index: 1;
   padding: 1px;
   border-radius: 50%;
-  background: #ffffff;
   color: #4d5562;
   transform: rotate(90deg);
 }
@@ -792,57 +803,6 @@ button {
   gap: 8px;
   padding: 9px 18px;
   border-bottom: 1px solid #d9dee6;
-  font-size: 13px;
-}
-
-/* TODO: AI-PICKED-VALUE: This toast size keeps errors visible while leaving the graph usable underneath. */
-.error-banner {
-  position: fixed;
-  right: 18px;
-  bottom: 18px;
-  z-index: 30;
-  max-width: 440px;
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid #f0b6aa;
-  border-radius: 7px;
-  background: #fbe8e3;
-  box-shadow: 0 12px 28px rgba(26, 33, 44, 0.18);
-  color: #7c2d1e;
-  font-size: 13px;
-}
-
-.error-banner span {
-  min-width: 0;
-  flex: 1 1 auto;
-  white-space: pre-wrap;
-}
-
-.error-banner button {
-  flex: 0 0 auto;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: #7c2d1e;
-  cursor: pointer;
-  font: inherit;
-  font-weight: 700;
-}
-
-.success-banner {
-  position: fixed;
-  right: 18px;
-  bottom: 18px;
-  z-index: 30;
-  max-width: 440px;
-  padding: 10px 12px;
-  border: 1px solid #a9d7b7;
-  border-radius: 7px;
-  background: #e5f6ea;
-  box-shadow: 0 12px 28px rgba(26, 33, 44, 0.18);
-  color: #245b36;
   font-size: 13px;
 }
 
