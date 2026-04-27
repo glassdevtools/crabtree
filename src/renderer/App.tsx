@@ -11,11 +11,7 @@ import {
 } from "lucide-react";
 import { IoChatbubbleOutline } from "react-icons/io5";
 import { MdOutlineCallSplit } from "react-icons/md";
-import {
-  Group as ResizablePanelGroup,
-  Panel as ResizablePanel,
-  Separator as ResizablePanelResizeHandle,
-} from "react-resizable-panels";
+import { Resizable } from "react-resizable";
 import {
   useCallback,
   useEffect,
@@ -25,7 +21,7 @@ import {
   useState,
 } from "react";
 import type { DragEvent, FormEvent, MouseEvent, PointerEvent } from "react";
-import type { PanelSize } from "react-resizable-panels";
+import type { ResizeCallbackData } from "react-resizable";
 import type {
   CodexThread,
   DashboardData,
@@ -85,6 +81,7 @@ const COMMIT_GRAPH_USER_ICON_SIZE = 10;
 // TODO: AI-PICKED-VALUE: This keeps the HEAD icon aligned with the right edge of the graph column.
 const COMMIT_GRAPH_USER_ICON_RIGHT_PADDING = 6;
 const COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO = 0;
+const COMMIT_HISTORY_HEADER_HEIGHT = 22;
 // Dashboard reads touch Codex and Git, so automatic refreshes share the manual refresh path and never overlap.
 // TODO: AI-PICKED-VALUE: Refreshing every second keeps branch/worktree state current while the refresh queue prevents overlapping Git reads.
 const DASHBOARD_REFRESH_INTERVAL_MS = 1000;
@@ -260,11 +257,6 @@ const COMMIT_HISTORY_MIN_DETAILS_WIDTH =
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.commit +
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.author +
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.date;
-// TODO: AI-PICKED-VALUE: This keeps the graph resize target easy to grab with a mouse while staying visually compact.
-const COMMIT_HISTORY_GRAPH_RESIZE_TARGET_MIN_SIZE = {
-  coarse: 20,
-  fine: 8,
-};
 
 type CommitHistoryColumnKey =
   | "branchTags"
@@ -462,12 +454,6 @@ const readCommitGridTemplateColumns = (
   return `${columnWidths.graph}px ${columnWidths.actors}px ${columnWidths.branchTags}px ${columnWidths.description}px ${columnWidths.commit}px ${columnWidths.author}px ${columnWidths.date}px`;
 };
 
-const readCommitDetailsGridTemplateColumns = (
-  columnWidths: CommitHistoryColumnWidths,
-) => {
-  return `${columnWidths.actors}px ${columnWidths.branchTags}px ${columnWidths.description}px ${columnWidths.commit}px ${columnWidths.author}px ${columnWidths.date}px`;
-};
-
 const readCommitHistoryTableWidth = (
   columnWidths: CommitHistoryColumnWidths,
 ) => {
@@ -514,10 +500,6 @@ const updateCommitHistoryColumnStyles = (
   commitHistory.style.setProperty(
     "--commit-history-grid-template-columns",
     readCommitGridTemplateColumns(columnWidths),
-  );
-  commitHistory.style.setProperty(
-    "--commit-history-details-grid-template-columns",
-    readCommitDetailsGridTemplateColumns(columnWidths),
   );
   commitHistory.style.setProperty(
     "--commit-history-table-width",
@@ -2069,10 +2051,7 @@ const CommitHistory = ({
   const graphWidth = visibleColumnWidths.graph;
   const gridTemplateColumns =
     readCommitGridTemplateColumns(visibleColumnWidths);
-  const detailsGridTemplateColumns =
-    readCommitDetailsGridTemplateColumns(visibleColumnWidths);
   const tableWidth = readCommitHistoryTableWidth(visibleColumnWidths);
-  const detailsWidth = tableWidth - graphWidth;
   const graphMaxWidth = Math.max(
     graphMinimumWidth,
     tableWidth - COMMIT_HISTORY_MIN_DETAILS_WIDTH,
@@ -2088,14 +2067,10 @@ const CommitHistory = ({
       gridTemplateColumns,
     );
     commitHistoryRef.current.style.setProperty(
-      "--commit-history-details-grid-template-columns",
-      detailsGridTemplateColumns,
-    );
-    commitHistoryRef.current.style.setProperty(
       "--commit-history-table-width",
       `${tableWidth}px`,
     );
-  }, [detailsGridTemplateColumns, gridTemplateColumns, tableWidth]);
+  }, [gridTemplateColumns, tableWidth]);
 
   const readColumnMinWidth = (columnKey: CommitHistoryColumnKey) => {
     return COMMIT_HISTORY_MIN_COLUMN_WIDTHS[columnKey];
@@ -2160,14 +2135,14 @@ const CommitHistory = ({
     );
     columnResizeRef.current = null;
   };
-  const resizeGraphColumn = (panelSize: PanelSize) => {
-    if (!Number.isFinite(panelSize.inPixels)) {
+  const resizeGraphColumn = (data: ResizeCallbackData) => {
+    if (!Number.isFinite(data.size.width)) {
       return;
     }
 
     const nextGraphWidth = Math.min(
       graphMaxWidth,
-      Math.max(graphMinimumWidth, Math.round(panelSize.inPixels)),
+      Math.max(graphMinimumWidth, Math.round(data.size.width)),
     );
 
     setColumnWidths((currentColumnWidths) => {
@@ -2564,91 +2539,85 @@ const CommitHistory = ({
         Show chats only
       </Label>
       <Card className="commit-history gap-0 py-0 ring-0" ref={commitHistoryRef}>
-        <ResizablePanelGroup
-          className="commit-history-header"
-          orientation="horizontal"
-          resizeTargetMinimumSize={COMMIT_HISTORY_GRAPH_RESIZE_TARGET_MIN_SIZE}
-          style={{ width: tableWidth }}
-        >
-          <ResizablePanel
-            id="graph"
-            defaultSize={`${graphWidth}px`}
-            minSize={`${graphMinimumWidth}px`}
-            maxSize={`${graphMaxWidth}px`}
-            groupResizeBehavior="preserve-pixel-size"
-            onResize={resizeGraphColumn}
-          >
-            <div className="commit-history-header-cell commit-history-graph-title">
-              <span>Graph</span>
-            </div>
-          </ResizablePanel>
-          <ResizablePanelResizeHandle
-            className="commit-history-panel-resize"
-            disableDoubleClick
-          />
-          <ResizablePanel
-            id="details"
-            defaultSize={`${detailsWidth}px`}
-            minSize={`${COMMIT_HISTORY_MIN_DETAILS_WIDTH}px`}
-          >
-            <div className="commit-history-header-details">
-              <div className="commit-history-header-cell">
-                <span>Actors</span>
-                <CommitHistoryColumnResizeHandle
-                  columnKey="actors"
-                  startColumnResize={startColumnResize}
-                  updateColumnResize={updateColumnResize}
-                  finishColumnResize={finishColumnResize}
+        <div className="commit-history-header">
+          <div className="commit-history-header-cell commit-history-graph-title">
+            <span>Graph</span>
+            <Resizable
+              axis="x"
+              width={graphWidth}
+              height={COMMIT_HISTORY_HEADER_HEIGHT}
+              minConstraints={[graphMinimumWidth, COMMIT_HISTORY_HEADER_HEIGHT]}
+              maxConstraints={[graphMaxWidth, COMMIT_HISTORY_HEADER_HEIGHT]}
+              resizeHandles={["e"]}
+              handle={(resizeHandle, ref) => (
+                <span
+                  className={`commit-history-panel-resize react-resizable-handle react-resizable-handle-${resizeHandle}`}
+                  ref={ref}
                 />
-              </div>
-              <div className="commit-history-header-cell">
-                <span>Branch Tags</span>
-                <CommitHistoryColumnResizeHandle
-                  columnKey="branchTags"
-                  startColumnResize={startColumnResize}
-                  updateColumnResize={updateColumnResize}
-                  finishColumnResize={finishColumnResize}
-                />
-              </div>
-              <div className="commit-history-header-cell">
-                <span>Description</span>
-                <CommitHistoryColumnResizeHandle
-                  columnKey="description"
-                  startColumnResize={startColumnResize}
-                  updateColumnResize={updateColumnResize}
-                  finishColumnResize={finishColumnResize}
-                />
-              </div>
-              <div className="commit-history-header-cell">
-                <span>Commit</span>
-                <CommitHistoryColumnResizeHandle
-                  columnKey="commit"
-                  startColumnResize={startColumnResize}
-                  updateColumnResize={updateColumnResize}
-                  finishColumnResize={finishColumnResize}
-                />
-              </div>
-              <div className="commit-history-header-cell">
-                <span>Author</span>
-                <CommitHistoryColumnResizeHandle
-                  columnKey="author"
-                  startColumnResize={startColumnResize}
-                  updateColumnResize={updateColumnResize}
-                  finishColumnResize={finishColumnResize}
-                />
-              </div>
-              <div className="commit-history-header-cell">
-                <span>Date</span>
-                <CommitHistoryColumnResizeHandle
-                  columnKey="date"
-                  startColumnResize={startColumnResize}
-                  updateColumnResize={updateColumnResize}
-                  finishColumnResize={finishColumnResize}
-                />
-              </div>
-            </div>
-          </ResizablePanel>
-        </ResizablePanelGroup>
+              )}
+              onResize={(_event, data) => resizeGraphColumn(data)}
+            >
+              <div
+                className="commit-history-graph-resize-surface"
+                aria-hidden="true"
+              />
+            </Resizable>
+          </div>
+          <div className="commit-history-header-cell">
+            <span>Actors</span>
+            <CommitHistoryColumnResizeHandle
+              columnKey="actors"
+              startColumnResize={startColumnResize}
+              updateColumnResize={updateColumnResize}
+              finishColumnResize={finishColumnResize}
+            />
+          </div>
+          <div className="commit-history-header-cell">
+            <span>Branch Tags</span>
+            <CommitHistoryColumnResizeHandle
+              columnKey="branchTags"
+              startColumnResize={startColumnResize}
+              updateColumnResize={updateColumnResize}
+              finishColumnResize={finishColumnResize}
+            />
+          </div>
+          <div className="commit-history-header-cell">
+            <span>Description</span>
+            <CommitHistoryColumnResizeHandle
+              columnKey="description"
+              startColumnResize={startColumnResize}
+              updateColumnResize={updateColumnResize}
+              finishColumnResize={finishColumnResize}
+            />
+          </div>
+          <div className="commit-history-header-cell">
+            <span>Commit</span>
+            <CommitHistoryColumnResizeHandle
+              columnKey="commit"
+              startColumnResize={startColumnResize}
+              updateColumnResize={updateColumnResize}
+              finishColumnResize={finishColumnResize}
+            />
+          </div>
+          <div className="commit-history-header-cell">
+            <span>Author</span>
+            <CommitHistoryColumnResizeHandle
+              columnKey="author"
+              startColumnResize={startColumnResize}
+              updateColumnResize={updateColumnResize}
+              finishColumnResize={finishColumnResize}
+            />
+          </div>
+          <div className="commit-history-header-cell">
+            <span>Date</span>
+            <CommitHistoryColumnResizeHandle
+              columnKey="date"
+              startColumnResize={startColumnResize}
+              updateColumnResize={updateColumnResize}
+              finishColumnResize={finishColumnResize}
+            />
+          </div>
+        </div>
         <div className="commit-history-body">
           <CommitGraphSvg graph={visibleGraph} graphWidth={graphWidth} />
           {visibleGraph.rows.map((row) => (
@@ -3365,10 +3334,14 @@ export const App = () => {
         </div>
         <div className="toolbar">
           {dashboardData === null || dashboardData.repos.length === 0 ? null : (
-            <Label className="repo-picker">
-              <span>Repo</span>
+            <div className="repo-picker">
+              <Label className="repo-picker-label" htmlFor="repo-picker-select">
+                Repo
+              </Label>
               <NativeSelect
-                className="min-w-0 flex-1"
+                className="repo-picker-select"
+                id="repo-picker-select"
+                size="sm"
                 value={selectedRepo?.root ?? ""}
                 onChange={(event) => setSelectedRepoRoot(event.target.value)}
               >
@@ -3378,7 +3351,7 @@ export const App = () => {
                   </NativeSelectOption>
                 ))}
               </NativeSelect>
-            </Label>
+            </div>
           )}
         </div>
       </header>
