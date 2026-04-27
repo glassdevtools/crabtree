@@ -2713,7 +2713,13 @@ const CommitHistory = ({
                 </span>
                 <span>
                   with{" "}
-                  <strong className="branch-merge-conflict-count">
+                  <strong
+                    className={
+                      branchMergeConfirmation.preview.conflictCount === 0
+                        ? "branch-merge-conflict-count branch-merge-conflict-count-empty"
+                        : "branch-merge-conflict-count"
+                    }
+                  >
                     {branchMergeConfirmation.preview.conflictCount} conflicts
                   </strong>
                   .

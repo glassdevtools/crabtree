@@ -355,6 +355,10 @@ button {
   font-weight: 820;
 }
 
+.branch-merge-conflict-count-empty {
+  color: #343a43;
+}
+
 .change-summary-breakdown {
   display: flex;
   flex-direction: column;
