@@ -44,3 +44,5 @@ MoltTree is a local tool for browsing Codex threads alongside their Git history 
 
 - Not used in v1.
 - TODO: document the read-only tables and lookup queries if we add a debug-only reader.
+
+Test change.
