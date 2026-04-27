@@ -1,4 +1,5 @@
 import {
+  ArrowLeft,
   Box,
   Check,
   CircleArrowDown,
@@ -1658,6 +1659,22 @@ const CommitHistoryRow = ({
       >
         {shouldShowGraphActions ? (
           <div className="commit-graph-actions">
+            {isHeadRow ? (
+              <TitleTooltip title="You">
+                <span className="commit-graph-head-icon" aria-label="You">
+                  <ArrowLeft
+                    aria-hidden="true"
+                    size={10}
+                    strokeWidth={COMMIT_GRAPH_USER_ICON_STROKE_WIDTH}
+                  />
+                  <User
+                    aria-hidden="true"
+                    size={COMMIT_GRAPH_USER_ICON_SIZE}
+                    strokeWidth={COMMIT_GRAPH_USER_ICON_STROKE_WIDTH}
+                  />
+                </span>
+              </TitleTooltip>
+            ) : null}
             {branchCreateTarget !== null ? (
               <TitleTooltip title="Add branch here">
                 <Button
@@ -1700,17 +1717,6 @@ const CommitHistoryRow = ({
                 </span>
               </TitleTooltip>
             )}
-            {isHeadRow ? (
-              <TitleTooltip title="You">
-                <span className="commit-graph-head-icon" aria-label="You">
-                  <User
-                    aria-hidden="true"
-                    size={COMMIT_GRAPH_USER_ICON_SIZE}
-                    strokeWidth={COMMIT_GRAPH_USER_ICON_STROKE_WIDTH}
-                  />
-                </span>
-              </TitleTooltip>
-            ) : null}
           </div>
         ) : null}
       </div>

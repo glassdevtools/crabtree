@@ -552,11 +552,12 @@ textarea,
 }
 
 .commit-graph-head-icon {
-  width: 16px;
+  width: 28px;
   height: 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 1px;
   /* TODO: AI-PICKED-VALUE: This nudges the HEAD user marker left from the graph edge without moving other graph actions. */
   margin-right: 4px;
   color: #343a43;
