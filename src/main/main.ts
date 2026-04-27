@@ -1,4 +1,6 @@
 import { app, BrowserWindow, clipboard, ipcMain, shell } from "electron";
+import electronUpdater from "electron-updater";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type {
@@ -35,6 +37,24 @@ const MAIN_WINDOW_MIN_WIDTH = 980;
 const MAIN_WINDOW_MIN_HEIGHT = 640;
 let dashboardReadPromise: ReturnType<typeof readDashboardData> | null = null;
 let shouldReadDashboardAgain = false;
+
+const startAutoUpdates = () => {
+  if (!app.isPackaged) {
+    return;
+  }
+
+  const appUpdateConfigPath = join(process.resourcesPath, "app-update.yml");
+  if (!existsSync(appUpdateConfigPath)) {
+    return;
+  }
+
+  // Packaged release builds get their update feed from Electron Builder's app-update.yml.
+  const { autoUpdater } = electronUpdater;
+  autoUpdater.on("error", (error) => {
+    console.error("Failed to update MoltTree.", error);
+  });
+  autoUpdater.checkForUpdatesAndNotify();
+};
 
 const createMainWindow = () => {
   const mainWindow = new BrowserWindow({
@@ -423,6 +443,7 @@ ipcMain.handle("git:mergeBranch", async (_event, value: unknown) => {
 
 app.whenReady().then(() => {
   createMainWindow();
+  startAutoUpdates();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
