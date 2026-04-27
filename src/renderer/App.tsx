@@ -70,7 +70,6 @@ import {
   EmptyMedia,
 } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -288,7 +287,7 @@ const PathLauncherIcon = ({ pathLauncher }: { pathLauncher: PathLauncher }) => {
     case "vscode":
       return (
         <span className="path-launcher-icon path-launcher-icon-vscode">
-          <VscVscode aria-hidden="true" size={20} />
+          <VscVscode aria-hidden="true" className="text-current" size={20} />
         </span>
       );
     case "cursor":
@@ -334,7 +333,12 @@ const copyTextAfterContextMenu = async ({
 
   try {
     await window.molttree.copyText(text);
-    toast(`Copied ${copiedLabel}!`);
+    toast(
+      <div className="copy-toast">
+        <div>{`Copied ${copiedLabel.toLowerCase()}!`}</div>
+        <div className="copy-toast-value">{text}</div>
+      </div>,
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : errorMessage;
     toast.error("Error", {
@@ -1256,6 +1260,7 @@ const ChatRobotTags = ({
   commitSha,
   localBranches,
   currentBranch,
+  openBranchCreateModal,
   openCommitMessageModal,
   openChangeSummaryModal,
 }: {
@@ -1266,6 +1271,10 @@ const ChatRobotTags = ({
   commitSha: string;
   localBranches: string[];
   currentBranch: string | null;
+  openBranchCreateModal: (
+    event: MouseEvent<HTMLButtonElement>,
+    branchCreateTarget: BranchCreateTarget,
+  ) => void;
   openCommitMessageModal: (
     event: MouseEvent<HTMLButtonElement>,
     commitMessageTarget: CommitMessageTarget,
@@ -1282,10 +1291,21 @@ const ChatRobotTags = ({
   const openThread = async (threadId: string) => {
     await window.molttree.openCodexThread(threadId);
   };
+  let branchCreateThreadGroupKey: string | null = null;
+
+  if (localBranches.length === 0) {
+    for (const threadGroup of threadGroups) {
+      if (threadGroup.cwd.length > 0) {
+        branchCreateThreadGroupKey = threadGroup.key;
+        break;
+      }
+    }
+  }
 
   return (
     <div className="commit-label-list commit-thread-group-list">
       {threadGroups.map((threadGroup) => {
+        let branchCreateTarget: BranchCreateTarget | null = null;
         const storedChangeSummary = gitChangesOfCwd[threadGroup.cwd];
         const changeSummary = storedChangeSummary ?? EMPTY_GIT_CHANGE_SUMMARY;
         const totalChangeSummary = readTotalGitChangeSummary(changeSummary);
@@ -1305,6 +1325,14 @@ const ChatRobotTags = ({
           threadGroup.cwd.length > 0 &&
           shouldShowChangeCount &&
           commitBranchTarget !== null;
+
+        if (threadGroup.key === branchCreateThreadGroupKey) {
+          branchCreateTarget = {
+            path: threadGroup.cwd,
+            title: threadGroup.cwd,
+          };
+        }
+
         return (
           <span className="commit-thread-group" key={threadGroup.key}>
             <TooltipProvider
@@ -1443,7 +1471,23 @@ const ChatRobotTags = ({
                   <Check size={10} />
                 </Button>
               </TitleTooltip>
-            ) : null}
+            ) : branchCreateTarget === null ? null : (
+              <TitleTooltip title="Add branch here">
+                <Button
+                  className="commit-branch-create-action"
+                  variant="ghost"
+                  size="icon-xs"
+                  type="button"
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onDoubleClick={(event) => event.stopPropagation()}
+                  onClick={(event) =>
+                    openBranchCreateModal(event, branchCreateTarget)
+                  }
+                >
+                  <GitBranch size={10} />
+                </Button>
+              </TitleTooltip>
+            )}
           </span>
         );
       })}
@@ -1621,7 +1665,6 @@ const CommitHistoryRow = ({
           (localBranch) => localBranch !== currentBranch,
         ) ?? null);
   let mergeDisabledReason: string | null = null;
-  let branchCreateTarget: BranchCreateTarget | null = null;
   let rowClassName = "commit-history-row";
 
   if (mergeBranch !== null && isHeadClean === false) {
@@ -1629,22 +1672,7 @@ const CommitHistoryRow = ({
       "Current HEAD working tree must be clean before merging.";
   }
 
-  if (commit.localBranches.length === 0) {
-    for (const threadGroup of threadGroups) {
-      if (threadGroup.cwd.length === 0) {
-        continue;
-      }
-
-      branchCreateTarget = {
-        path: threadGroup.cwd,
-        title: threadGroup.cwd,
-      };
-      break;
-    }
-  }
-
-  const shouldShowGraphActions =
-    branchCreateTarget !== null || mergeBranch !== null || isHeadRow;
+  const shouldShowGraphActions = mergeBranch !== null || isHeadRow;
   const commitDateText = formatCommitDate(commit.date);
 
   if (isBranchPointerDropTarget) {
@@ -1669,23 +1697,7 @@ const CommitHistoryRow = ({
       >
         {shouldShowGraphActions ? (
           <div className="commit-graph-actions">
-            {branchCreateTarget !== null ? (
-              <TitleTooltip title="Add branch here">
-                <Button
-                  className="commit-branch-create-action"
-                  variant="ghost"
-                  size="icon-xs"
-                  type="button"
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onDoubleClick={(event) => event.stopPropagation()}
-                  onClick={(event) =>
-                    openBranchCreateModal(event, branchCreateTarget)
-                  }
-                >
-                  <GitBranch size={10} />
-                </Button>
-              </TitleTooltip>
-            ) : mergeBranch === null ? null : (
+            {mergeBranch === null ? null : (
               <TitleTooltip
                 title={
                   mergeDisabledReason === null
@@ -1734,6 +1746,7 @@ const CommitHistoryRow = ({
           commitSha={commit.sha}
           localBranches={commit.localBranches}
           currentBranch={currentBranch}
+          openBranchCreateModal={openBranchCreateModal}
           openCommitMessageModal={openCommitMessageModal}
           openChangeSummaryModal={openChangeSummaryModal}
         />
@@ -3239,12 +3252,9 @@ const RepoSection = ({
     repoRoot: string,
   ) => void;
 }) => {
-  const repoFolderName = readRepoFolderName(repo);
-
   return (
     <section className="repo-section">
       <div className="repo-header">
-        <div className="repo-title">{repoFolderName}</div>
         <div className="repo-actions">
           <button
             className="repo-action-control"
@@ -3696,9 +3706,6 @@ export const App = () => {
 
       {dashboardData.repos.length === 0 ? null : (
         <div className="repo-picker">
-          <Label className="repo-picker-label" htmlFor="repo-picker-select">
-            Repo
-          </Label>
           <Select
             value={selectedRepo?.root ?? ""}
             onValueChange={setSelectedRepoRoot}

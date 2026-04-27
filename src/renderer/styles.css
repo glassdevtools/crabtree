@@ -190,11 +190,11 @@ textarea,
 
 .repo-header-controls {
   min-width: 0;
-  margin-left: auto;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+  margin-left: auto;
 }
 
 .path-launcher-control {
@@ -217,7 +217,7 @@ textarea,
   padding: 0;
   border: 0;
   border-right: 1px solid var(--border);
-  background: transparent;
+  background: var(--background);
 }
 
 .path-launcher-open:not(:disabled):hover {
@@ -229,6 +229,13 @@ textarea,
   opacity: 0.46;
 }
 
+.path-launcher-open .path-launcher-icon,
+.path-launcher-open .path-launcher-icon-image,
+.path-launcher-open .path-launcher-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
 .path-launcher-select {
   width: 26px;
   height: 100%;
@@ -236,7 +243,7 @@ textarea,
   padding: 0;
   border: 0;
   border-radius: 0;
-  background: transparent;
+  background: var(--background);
   box-shadow: none;
 }
 
@@ -251,6 +258,7 @@ textarea,
 .path-launcher-select > svg {
   width: 14px;
   height: 14px;
+  color: #5f6670;
 }
 
 .path-launcher-select-content {
@@ -258,19 +266,23 @@ textarea,
 }
 
 .path-launcher-option {
-  display: inline-flex;
+  min-height: 24px;
+  display: flex;
   align-items: center;
   gap: 10px;
   font-size: 14px;
+  line-height: 1;
 }
 
 .path-launcher-icon {
   width: 20px;
   height: 20px;
+  flex: 0 0 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: #343a43;
+  line-height: 0;
 }
 
 .path-launcher-icon-vscode {
@@ -282,6 +294,26 @@ textarea,
   height: 20px;
   display: block;
   object-fit: contain;
+  vertical-align: middle;
+}
+
+.copy-toast {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.copy-toast-value {
+  min-width: 0;
+  /* TODO: AI-PICKED-VALUE: This width keeps copied paths and SHAs readable without making the toast too wide. */
+  max-width: min(340px, calc(100vw - 96px));
+  overflow: hidden;
+  color: #5f6670;
+  font-size: 12px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .repo-picker {
@@ -295,16 +327,17 @@ textarea,
   font-weight: 700;
 }
 
-.repo-picker-label {
-  flex: 0 0 auto;
-}
-
 .repo-picker-select {
   min-width: 0;
   /* TODO: AI-PICKED-VALUE: Fixed at 176px so the shadcn repo select stays compact in the page control row. */
   width: 176px;
   max-width: calc(100vw - 92px);
+  background: var(--background);
   flex: 0 0 auto;
+}
+
+.repo-picker-select > svg {
+  color: #5f6670;
 }
 
 .repo-picker-select [data-slot="select-value"] {
@@ -329,31 +362,34 @@ textarea,
   min-width: 0;
   min-height: 0;
   flex: 1;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   overflow-anchor: none;
   padding: 12px 0;
 }
 
 .repo-section {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   margin-bottom: 26px;
+}
+
+.repo-panel {
+  min-height: 0;
+  flex: 1;
+  display: flex;
 }
 
 .repo-header {
   min-width: 0;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
   gap: 8px;
   padding-bottom: 10px;
   padding-inline: 12px;
-}
-
-.repo-title {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  color: #202124;
-  font-size: 17px;
-  font-weight: 760;
 }
 
 .repo-actions {
@@ -401,6 +437,8 @@ textarea,
   --commit-history-grid-template-columns: 300px 260px 340px 420px 84px 150px
     170px;
   --commit-history-table-width: 1724px;
+  min-height: 0;
+  flex: 1;
   overflow: auto;
   overflow-anchor: none;
   border: 1px solid #d9dee6;
@@ -564,8 +602,7 @@ textarea,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  /* TODO: AI-PICKED-VALUE: This nudges the HEAD user marker left from the graph edge without moving other graph actions. */
-  margin-right: 4px;
+  margin-right: 0;
   color: #343a43;
 }
 
@@ -723,7 +760,8 @@ textarea,
 .commit-graph-actions {
   position: absolute;
   top: 50%;
-  right: 4px;
+  /* TODO: AI-PICKED-VALUE: This keeps every graph action as far from the right edge as the HEAD marker was. */
+  right: 8px;
   transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
