@@ -1265,6 +1265,7 @@ const CommitHistoryRow = ({
       : commit.localBranches.filter(
           (localBranch) => localBranch !== currentBranch,
         );
+  const mergeableBranch = mergeableBranches[0] ?? null;
   let rowClassName = "commit-history-row";
 
   if (isBranchPointerDropTarget) {
@@ -1280,21 +1281,18 @@ const CommitHistoryRow = ({
       onDoubleClick={openRowAfterDoubleClick}
     >
       <div className="commit-graph-cell">
-        {mergeableBranches.length === 0 ? null : (
+        {mergeableBranch === null ? null : (
           <div className="commit-graph-actions">
-            {mergeableBranches.map((branch) => (
-              <button
-                className="commit-graph-merge-action"
-                title={`Merge ${branch} into HEAD`}
-                type="button"
-                key={branch}
-                onMouseDown={(event) => event.stopPropagation()}
-                onDoubleClick={(event) => event.stopPropagation()}
-                onClick={(event) => openBranchMergeModal(event, branch)}
-              >
-                <GitPullRequestArrow size={14} />
-              </button>
-            ))}
+            <button
+              className="commit-graph-merge-action"
+              title={`Merge ${mergeableBranch} into HEAD`}
+              type="button"
+              onMouseDown={(event) => event.stopPropagation()}
+              onDoubleClick={(event) => event.stopPropagation()}
+              onClick={(event) => openBranchMergeModal(event, mergeableBranch)}
+            >
+              <GitPullRequestArrow size={14} />
+            </button>
           </div>
         )}
       </div>

@@ -252,10 +252,74 @@ const commitAllGitChanges = async ({
   path,
   message,
 }: GitCommitChangesRequest) => {
+  const repoRoot = await readGitTextForPath({
+    path,
+    args: ["rev-parse", "--show-toplevel"],
+  });
+  const oldSha = await readGitTextForPath({
+    path,
+    args: ["rev-parse", "HEAD"],
+  });
+  const localBranchText = await readGitTextForPath({
+    path,
+    args: [
+      "for-each-ref",
+      "--points-at",
+      oldSha,
+      "--format=%(refname:short)",
+      "refs/heads",
+    ],
+  });
+  const branchesToMove = localBranchText
+    .split("\n")
+    .filter((branch) => branch.length > 0);
+
   await runGitCommandForPath({ path, args: ["add", "--all", "--", "."] });
   await runGitCommandForPath({ path, args: ["commit", "-m", message] });
 
-  return await readGitTextForPath({ path, args: ["rev-parse", "HEAD"] });
+  const newSha = await readGitTextForPath({
+    path,
+    args: ["rev-parse", "HEAD"],
+  });
+
+  for (const branch of branchesToMove) {
+    const branchRef = `refs/heads/${branch}`;
+    const branchHead = await readGitTextForPath({
+      path,
+      args: ["rev-parse", "--verify", branchRef],
+    });
+
+    if (branchHead === newSha) {
+      continue;
+    }
+
+    if (branchHead !== oldSha) {
+      throw new Error(`${branch} moved. Refresh and try again.`);
+    }
+
+    const worktreePath = await readGitWorktreePathForBranch({
+      repoRoot,
+      branch,
+    });
+
+    if (worktreePath !== null) {
+      continue;
+    }
+
+    await runGitCommandForPath({
+      path,
+      args: [
+        "update-ref",
+        "-m",
+        `MoltTree: move ${branch}`,
+        branchRef,
+        newSha,
+        oldSha,
+      ],
+    });
+  }
+
+  return newSha;
 };
 
 const createGitBranch = async ({ path, branch }: GitCreateBranchRequest) => {
@@ -527,20 +591,22 @@ const checkoutGitCommit = async ({
     throw new Error("Working tree must be clean before checking out a row.");
   }
 
-  const localBranchText = await readGitTextForPath({
+  const visibleRefText = await readGitTextForPath({
     path: repoRoot,
     args: [
       "for-each-ref",
-      "--points-at",
-      "HEAD",
+      "--contains",
+      currentSha,
       "--format=%(refname:short)",
       "refs/heads",
+      "refs/remotes",
+      "refs/tags",
     ],
   });
 
-  if (localBranchText.length === 0) {
+  if (visibleRefText.length === 0) {
     throw new Error(
-      "Current HEAD must have a local branch before switching rows.",
+      "Current HEAD must be reachable from a branch or tag before switching rows.",
     );
   }
 
