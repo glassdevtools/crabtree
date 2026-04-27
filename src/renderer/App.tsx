@@ -70,9 +70,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Toaster } from "@/components/ui/sonner";
 import {
   Tooltip,
@@ -93,10 +96,14 @@ const COMMIT_GRAPH_DOT_RADIUS = 4;
 const COMMIT_GRAPH_SEGMENT_STROKE_WIDTH = 2.25;
 // TODO: AI-PICKED-VALUE: The HEAD icon is small enough to sit beside dense graph lanes without taking over the row.
 const COMMIT_GRAPH_USER_ICON_SIZE = 10;
+// TODO: AI-PICKED-VALUE: This stroke weight visually matches the rendered chat icon outline at dense row sizes.
+const COMMIT_GRAPH_USER_ICON_STROKE_WIDTH = 1.35;
 // TODO: AI-PICKED-VALUE: This keeps the HEAD icon aligned with the right edge of the graph column.
 const COMMIT_GRAPH_USER_ICON_RIGHT_PADDING = 6;
 const COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO = 0;
 const COMMIT_HISTORY_HEADER_HEIGHT = 22;
+// TODO: AI-PICKED-VALUE: This lets neighboring chat title tooltips hand off as a hover group without changing unrelated tooltip behavior.
+const CHAT_TITLE_TOOLTIP_SKIP_DELAY_MS = 350;
 // Dashboard reads touch Codex and Git, so automatic refreshes share the manual refresh path and never overlap.
 // TODO: AI-PICKED-VALUE: Refreshing every second keeps branch/worktree state current while the refresh queue prevents overlapping Git reads.
 const DASHBOARD_REFRESH_INTERVAL_MS = 1000;
@@ -1225,92 +1232,96 @@ const ChatRobotTags = ({
           commitBranchTarget !== null;
         return (
           <span className="commit-thread-group" key={threadGroup.key}>
-            {threadGroup.threads.map((thread) => {
-              const title = threadTitle(thread);
-              const chatTooltipTitle =
-                title.startsWith("/") ||
-                title.startsWith("~") ||
-                title.includes("/Users/")
-                  ? "Open chat"
-                  : title;
-              const isThreadActive = readIsThreadActive(thread);
-              const isWorktreeThread = readIsWorktreeCwd({
-                cwd: thread.cwd,
-                worktrees,
-              });
-              const chatIconMaskId = `commit-thread-chat-mask-${thread.id.replace(/[^A-Za-z0-9_-]/g, "-")}`;
+            <TooltipProvider
+              skipDelayDuration={CHAT_TITLE_TOOLTIP_SKIP_DELAY_MS}
+            >
+              {threadGroup.threads.map((thread) => {
+                const title = threadTitle(thread);
+                const chatTooltipTitle =
+                  title.startsWith("/") ||
+                  title.startsWith("~") ||
+                  title.includes("/Users/")
+                    ? "Open chat"
+                    : title;
+                const isThreadActive = readIsThreadActive(thread);
+                const isWorktreeThread = readIsWorktreeCwd({
+                  cwd: thread.cwd,
+                  worktrees,
+                });
+                const chatIconMaskId = `commit-thread-chat-mask-${thread.id.replace(/[^A-Za-z0-9_-]/g, "-")}`;
 
-              return (
-                <TitleTooltip
-                  title={
-                    isThreadActive
-                      ? `${chatTooltipTitle} is loading`
-                      : chatTooltipTitle
-                  }
-                  key={thread.id}
-                >
-                  <Button
-                    className="commit-thread-chat"
-                    variant="ghost"
-                    size="icon-xs"
-                    type="button"
-                    onMouseDown={(event) => event.stopPropagation()}
-                    onDoubleClick={(event) => event.stopPropagation()}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      void openThread(thread.id);
-                    }}
+                return (
+                  <TitleTooltip
+                    title={
+                      isThreadActive
+                        ? `${chatTooltipTitle} is loading`
+                        : chatTooltipTitle
+                    }
+                    key={thread.id}
                   >
-                    <svg
-                      aria-hidden="true"
-                      className="commit-thread-chat-icon"
-                      focusable="false"
-                      viewBox="0 0 512 512"
+                    <Button
+                      className="commit-thread-chat"
+                      variant="ghost"
+                      size="icon-xs"
+                      type="button"
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onDoubleClick={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void openThread(thread.id);
+                      }}
                     >
-                      {isWorktreeThread ? (
-                        <defs>
-                          <mask id={chatIconMaskId}>
-                            <rect width="512" height="512" fill="#ffffff" />
-                            {/* TODO: AI-PICKED-VALUE: This cutout gives the composed remix mark a little extra room above the chat outline at dense row sizes. */}
-                            <ellipse
-                              cx="390"
-                              cy="376"
-                              rx="154"
-                              ry="166"
-                              fill="#000000"
-                            />
-                          </mask>
-                        </defs>
-                      ) : null}
-                      <path
-                        className="commit-thread-chat-bubble"
-                        d="M87.49 380c1.19-4.38-1.44-10.47-3.95-14.86a44.86 44.86 0 0 0-2.54-3.8 199.81 199.81 0 0 1-33-110C47.65 139.09 140.73 48 255.83 48 356.21 48 440 117.54 459.58 209.85a199 199 0 0 1 4.42 41.64c0 112.41-89.49 204.93-204.59 204.93-18.3 0-43-4.6-56.47-8.37s-26.92-8.77-30.39-10.11a31.09 31.09 0 0 0-11.12-2.07 30.71 30.71 0 0 0-12.09 2.43l-67.83 24.48a16 16 0 0 1-4.67 1.22 9.6 9.6 0 0 1-9.57-9.74 15.85 15.85 0 0 1 .6-3.29z"
-                        fill="none"
-                        mask={
-                          isWorktreeThread
-                            ? `url(#${chatIconMaskId})`
-                            : undefined
-                        }
-                        strokeLinecap="round"
-                        strokeMiterlimit={10}
-                        strokeWidth={32}
-                      />
-                      {isWorktreeThread ? (
-                        // TODO: AI-PICKED-VALUE: This transform preserves the old 90-degree rotation while placing the original Material icon in the chat corner.
-                        <g
-                          className="commit-thread-worktree-mark"
-                          transform="translate(390 390) rotate(90) scale(12) translate(-12 -12)"
-                        >
-                          <path fill="none" d="M0 0h24v24H0V0z" />
-                          <path d="m14 4 2.29 2.29-2.88 2.88 1.42 1.42 2.88-2.88L20 10V4h-6zm-4 0H4v6l2.29-2.29 4.71 4.7V20h2v-8.41l-5.29-5.3L10 4z" />
-                        </g>
-                      ) : null}
-                    </svg>
-                  </Button>
-                </TitleTooltip>
-              );
-            })}
+                      <svg
+                        aria-hidden="true"
+                        className="commit-thread-chat-icon"
+                        focusable="false"
+                        viewBox="0 0 512 512"
+                      >
+                        {isWorktreeThread ? (
+                          <defs>
+                            <mask id={chatIconMaskId}>
+                              <rect width="512" height="512" fill="#ffffff" />
+                              {/* TODO: AI-PICKED-VALUE: This cutout gives the composed remix mark a little extra room above the chat outline at dense row sizes. */}
+                              <ellipse
+                                cx="390"
+                                cy="376"
+                                rx="154"
+                                ry="166"
+                                fill="#000000"
+                              />
+                            </mask>
+                          </defs>
+                        ) : null}
+                        <path
+                          className="commit-thread-chat-bubble"
+                          d="M87.49 380c1.19-4.38-1.44-10.47-3.95-14.86a44.86 44.86 0 0 0-2.54-3.8 199.81 199.81 0 0 1-33-110C47.65 139.09 140.73 48 255.83 48 356.21 48 440 117.54 459.58 209.85a199 199 0 0 1 4.42 41.64c0 112.41-89.49 204.93-204.59 204.93-18.3 0-43-4.6-56.47-8.37s-26.92-8.77-30.39-10.11a31.09 31.09 0 0 0-11.12-2.07 30.71 30.71 0 0 0-12.09 2.43l-67.83 24.48a16 16 0 0 1-4.67 1.22 9.6 9.6 0 0 1-9.57-9.74 15.85 15.85 0 0 1 .6-3.29z"
+                          fill="none"
+                          mask={
+                            isWorktreeThread
+                              ? `url(#${chatIconMaskId})`
+                              : undefined
+                          }
+                          strokeLinecap="round"
+                          strokeMiterlimit={10}
+                          strokeWidth={32}
+                        />
+                        {isWorktreeThread ? (
+                          // TODO: AI-PICKED-VALUE: This transform preserves the old 90-degree rotation while placing the original Material icon in the chat corner.
+                          <g
+                            className="commit-thread-worktree-mark"
+                            transform="translate(390 390) rotate(90) scale(12) translate(-12 -12)"
+                          >
+                            <path fill="none" d="M0 0h24v24H0V0z" />
+                            <path d="m14 4 2.29 2.29-2.88 2.88 1.42 1.42 2.88-2.88L20 10V4h-6zm-4 0H4v6l2.29-2.29 4.71 4.7V20h2v-8.41l-5.29-5.3L10 4z" />
+                          </g>
+                        ) : null}
+                      </svg>
+                    </Button>
+                  </TitleTooltip>
+                );
+              })}
+            </TooltipProvider>
             {shouldShowChangeCount ? (
               <TitleTooltip title="Show changes">
                 <Button
@@ -1438,13 +1449,16 @@ const CommitGraphSvg = ({
               fill={readCommitGraphColor(row.colorIndex)}
             />
             {isHead ? (
-              <User
-                x={userIconX}
-                y={centerY - COMMIT_GRAPH_USER_ICON_SIZE / 2}
-                size={COMMIT_GRAPH_USER_ICON_SIZE}
-                color="#343a43"
-                strokeWidth={2}
-              />
+              <g className="commit-graph-head-icon">
+                <title>HEAD</title>
+                <User
+                  x={userIconX}
+                  y={centerY - COMMIT_GRAPH_USER_ICON_SIZE / 2}
+                  size={COMMIT_GRAPH_USER_ICON_SIZE}
+                  color="#343a43"
+                  strokeWidth={COMMIT_GRAPH_USER_ICON_STROKE_WIDTH}
+                />
+              </g>
             ) : null}
           </g>
         );
@@ -3488,19 +3502,28 @@ export const App = () => {
                 >
                   Repo
                 </Label>
-                <NativeSelect
-                  className="repo-picker-select"
-                  id="repo-picker-select"
-                  size="sm"
+                <Select
                   value={selectedRepo?.root ?? ""}
-                  onChange={(event) => setSelectedRepoRoot(event.target.value)}
+                  onValueChange={setSelectedRepoRoot}
                 >
-                  {dashboardData.repos.map((repo) => (
-                    <NativeSelectOption value={repo.root} key={repo.root}>
-                      {readRepoFolderName(repo)}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                  <SelectTrigger
+                    className="repo-picker-select"
+                    id="repo-picker-select"
+                    size="sm"
+                  >
+                    <SelectValue placeholder="Select repo" />
+                  </SelectTrigger>
+                  <SelectContent
+                    align="end"
+                    className="repo-picker-select-content"
+                  >
+                    {dashboardData.repos.map((repo) => (
+                      <SelectItem value={repo.root} key={repo.root}>
+                        {readRepoFolderName(repo)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
           </div>

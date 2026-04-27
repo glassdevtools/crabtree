@@ -175,11 +175,11 @@ button {
 
 .repo-picker {
   min-width: 0;
-  width: min(260px, 100%);
+  width: auto;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  flex: 1 1 180px;
+  flex: 0 0 auto;
   color: #5f6670;
   font-size: 12px;
   font-weight: 700;
@@ -191,8 +191,21 @@ button {
 
 .repo-picker-select {
   min-width: 0;
-  width: min(220px, 100%);
-  flex: 1 1 auto;
+  /* TODO: AI-PICKED-VALUE: Fixed at 176px so the shadcn repo select stays compact in the top bar. */
+  width: 176px;
+  max-width: calc(100vw - 92px);
+  flex: 0 0 auto;
+}
+
+.repo-picker-select [data-slot="select-value"] {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.repo-picker-select-content {
+  width: var(--radix-select-trigger-width);
+  max-width: min(220px, calc(100vw - 16px));
 }
 
 .icon-button {
@@ -414,6 +427,10 @@ button {
   pointer-events: none;
 }
 
+.commit-graph-head-icon {
+  pointer-events: auto;
+}
+
 .change-summary-modal {
   width: min(720px, calc(100vw - 32px));
 }
@@ -618,8 +635,8 @@ button {
 }
 
 .commit-ref {
-  height: 14px;
-  min-height: 14px;
+  height: 16px;
+  min-height: 16px;
   display: inline-flex;
   align-items: center;
   gap: 3px;
