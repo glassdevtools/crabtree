@@ -86,35 +86,30 @@ If reusing the `wgpu-test-4` GitHub secrets, note that its `APPLE_API_KEY` value
 
 ## Auto Updates
 
-The app uses `electron-updater` in packaged builds. Electron Builder writes the update config into the app when `MOLTTREE_UPDATE_BASE_URL` is set during packaging:
+The app uses `electron-updater` in packaged builds. Electron Builder writes `app-update.yml` into the packaged app from the GitHub publish config in `electron-builder.config.cjs`.
 
-```bash
-export MOLTTREE_UPDATE_BASE_URL="https://updates.example.com/molttree/macos"
-npm run dist:mac
-```
-
-Upload the macOS update files from `dist/` to that URL:
+Release builds publish to:
 
 ```text
-latest-mac.yml
-MoltTree-<version>-<arch>.dmg
-MoltTree-<version>-<arch>.zip
-*.blockmap
+https://github.com/glassdevtools/molttree/releases
 ```
 
-The `.zip` target must stay enabled because the macOS updater uses it. The `.dmg` is for direct install downloads.
+This assumes the release assets are public. Do not ship a desktop updater that needs a private GitHub token on user machines.
+
+The release assets must include `latest-mac.yml`, the `.dmg`, the `.zip`, and blockmaps. The `.zip` target must stay enabled because the macOS updater uses it. The `.dmg` is for direct install downloads.
 
 ## Values To Decide Before Public Release
 
 - Confirm `appId` in `electron-builder.config.cjs`; changing it after public release will look like a different app to macOS.
-- Choose the permanent update host and set `MOLTTREE_UPDATE_BASE_URL` in release builds.
-- Add a release publishing job once the host is chosen.
+- Make sure `package.json` `version` is the release version before tagging.
 
 ## GitHub Actions
 
 `.github/workflows/build-macos-installer.yml` builds the macOS installer on pushes to `main`, version tags, and manual dispatch.
 
-The workflow always uploads the generated `dist/MoltTree-*.dmg`, `dist/MoltTree-*.zip`, and blockmaps as a GitHub Actions artifact. If the Apple signing secrets are missing, it builds an unsigned artifact for CI testing. If all Apple signing secrets are present, it signs and notarizes the app before uploading it.
+For pushes to `main` and manual dispatches, the workflow uploads the generated `dist/MoltTree-*.dmg`, `dist/MoltTree-*.zip`, and blockmaps as a GitHub Actions artifact. If the Apple signing secrets are missing, it builds an unsigned artifact for CI testing. If all Apple signing secrets are present, it signs and notarizes the app before uploading it.
+
+For `v*` tags, the workflow requires signing secrets, validates that the tag matches `package.json` `version`, then publishes the signed and notarized macOS release assets to `glassdevtools/molttree` GitHub Releases.
 
 Required secrets for signed builds:
 
@@ -126,8 +121,11 @@ APPLE_API_ISSUER
 APPLE_API_KEY_P8_BASE64
 ```
 
-Optional repository variable for update metadata:
+Release command:
 
-```text
-MOLTTREE_UPDATE_BASE_URL
+```bash
+npm version patch
+git push origin main --follow-tags
 ```
+
+If you do not want `npm version` to create the tag, update `package.json` manually, commit it, then run `git tag vX.Y.Z && git push origin main vX.Y.Z`.

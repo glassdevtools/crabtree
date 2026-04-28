@@ -9,7 +9,7 @@ on:
       - "v*"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-macos-installer:
@@ -21,7 +21,6 @@ jobs:
       APPLE_API_KEY_ID_FROM_SECRET: ${{ secrets.APPLE_API_KEY }}
       APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
       APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
-      MOLTTREE_UPDATE_BASE_URL: ${{ vars.MOLTTREE_UPDATE_BASE_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -34,6 +33,16 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Validate release tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          if [[ "v${PACKAGE_VERSION}" != "$GITHUB_REF_NAME" ]]; then
+            echo "Release tag $GITHUB_REF_NAME does not match package.json version v${PACKAGE_VERSION}." >&2
+            exit 1
+          fi
 
       - name: Prepare App Store Connect key
         id: signing
@@ -53,12 +62,25 @@ jobs:
             echo "mode=unsigned" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Require signing for release tags
+        if: startsWith(github.ref, 'refs/tags/') && steps.signing.outputs.mode != 'signed'
+        shell: bash
+        run: |
+          echo "Release tags require APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_API_KEY, APPLE_API_ISSUER, and APPLE_API_KEY_P8_BASE64." >&2
+          exit 1
+
+      - name: Build and publish signed release
+        if: startsWith(github.ref, 'refs/tags/') && steps.signing.outputs.mode == 'signed'
+        run: npm run dist:mac -- --publish always
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Build signed installer
-        if: steps.signing.outputs.mode == 'signed'
+        if: ${{ !startsWith(github.ref, 'refs/tags/') && steps.signing.outputs.mode == 'signed' }}
         run: npm run dist:mac -- --publish never
 
       - name: Build unsigned installer
-        if: steps.signing.outputs.mode == 'unsigned'
+        if: ${{ !startsWith(github.ref, 'refs/tags/') && steps.signing.outputs.mode == 'unsigned' }}
         run: npm run dist:mac -- --publish never -c.mac.identity=null -c.mac.notarize=false
 
       - name: Upload macOS installer
@@ -69,6 +91,6 @@ jobs:
             dist/MoltTree-*.dmg
             dist/MoltTree-*.zip
             dist/*.blockmap
-            dist/latest-mac.yml
+            dist/latest*.yml
           if-no-files-found: error
           retention-days: 14
