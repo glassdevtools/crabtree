@@ -116,9 +116,24 @@ Required secrets for signed builds:
 ```text
 APPLE_CERTIFICATE
 APPLE_CERTIFICATE_PASSWORD
+```
+
+Then choose one notarization mode.
+
+App Store Connect API key mode:
+
+```text
 APPLE_API_KEY
 APPLE_API_ISSUER
 APPLE_API_KEY_P8_BASE64
+```
+
+Apple ID app-specific password mode:
+
+```text
+APPLE_ID
+APPLE_APP_SPECIFIC_PASSWORD
+APPLE_TEAM_ID
 ```
 
 Release command:
