@@ -1,5 +1,3 @@
-const releaseBaseUrl = process.env.MOLTTREE_UPDATE_BASE_URL;
-
 const config = {
   // TODO: AI-PICKED-VALUE: This bundle id is based on the existing Glass signing identity and the MoltTree app name.
   appId: "com.glassdevtools.molttree",
@@ -11,7 +9,16 @@ const config = {
   extraMetadata: {
     main: "out/main/main.js",
   },
+  electronUpdaterCompatibility: ">=2.16",
   artifactName: "${productName}-${version}-${arch}.${ext}",
+  publish: [
+    {
+      provider: "github",
+      owner: "glassdevtools",
+      repo: "molttree",
+      releaseType: "release",
+    },
+  ],
   mac: {
     category: "public.app-category.developer-tools",
     target: ["dmg", "zip"],
@@ -25,14 +32,5 @@ const config = {
     artifactName: "${productName}-${version}-${arch}.${ext}",
   },
 };
-
-if (releaseBaseUrl) {
-  config.publish = [
-    {
-      provider: "generic",
-      url: releaseBaseUrl,
-    },
-  ];
-}
 
 module.exports = config;
