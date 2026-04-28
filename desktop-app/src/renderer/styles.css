@@ -201,14 +201,19 @@ textarea,
 }
 
 .repo-header-refresh-status {
+  position: absolute;
+  top: 50%;
+  left: 50%;
   width: 20px;
   height: 28px;
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
+  transform: translate(-50%, -50%);
   color: #68717d;
   opacity: 0;
+  pointer-events: none;
 }
 
 .repo-header-refresh-status-active {
@@ -420,6 +425,7 @@ textarea,
 }
 
 .repo-header {
+  position: relative;
   min-width: 0;
   display: flex;
   align-items: center;
