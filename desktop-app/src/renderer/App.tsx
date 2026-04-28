@@ -189,7 +189,7 @@ const syncBranchTagChangesWithDashboardData = ({
   } = {};
   const nextBranchTagChanges: GitBranchTagChange[] = [];
 
-  // The dashboard data is the current local branch state compared to origin, so use it as the in-memory baseline after each refresh.
+  // Dashboard branch changes are the source of truth; this state only keeps user actions alive while a Git refresh is still catching up.
   for (const repo of dashboardData.repos) {
     const branchTagChangeOfBranch: {
       [branch: string]: GitBranchTagChange;
@@ -198,25 +198,26 @@ const syncBranchTagChangesWithDashboardData = ({
 
     for (const branchTagChange of repo.branchTagChanges) {
       branchTagChangeOfBranch[branchTagChange.branch] = branchTagChange;
-      nextBranchTagChanges.push(branchTagChange);
     }
   }
 
-  // Keep explicit branch choices that the dashboard cannot report, like local deletes and local-only branch moves.
   for (const branchTagChange of branchTagChanges) {
     const branchTagChangeOfBranch =
       branchTagChangeOfBranchOfRepo[branchTagChange.repoRoot];
 
     if (branchTagChangeOfBranch === undefined) {
+      continue;
+    }
+
+    const repoBranchTagChange = branchTagChangeOfBranch[branchTagChange.branch];
+
+    if (repoBranchTagChange === undefined) {
+      continue;
+    }
+
+    if (repoBranchTagChange.newSha === branchTagChange.oldSha) {
       nextBranchTagChanges.push(branchTagChange);
-      continue;
     }
-
-    if (branchTagChangeOfBranch[branchTagChange.branch] !== undefined) {
-      continue;
-    }
-
-    nextBranchTagChanges.push(branchTagChange);
   }
 
   return nextBranchTagChanges;
