@@ -774,6 +774,39 @@ test("previews and merges a branch into HEAD", async () => {
   });
 });
 
+test("rejects merge when the branch is already in HEAD", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    await commitRepoFile({
+      repoRoot,
+      filePath: "base.txt",
+      content: "base\n",
+      message: "base",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
+    await commitRepoFile({
+      repoRoot,
+      filePath: "feature.txt",
+      content: "feature\n",
+      message: "feature",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "main"] });
+    await commitRepoFile({
+      repoRoot,
+      filePath: "main.txt",
+      content: "main\n",
+      message: "main",
+    });
+    await runGit({ cwd: repoRoot, args: ["merge", "--no-edit", "feature"] });
+
+    await assert.rejects(async () => {
+      await previewGitMerge({ repoRoot, branch: "feature" });
+    }, /already in HEAD/);
+    await assert.rejects(async () => {
+      await mergeGitBranch({ repoRoot, branch: "feature" });
+    }, /already in HEAD/);
+  });
+});
+
 test("rejects merge when the working tree is dirty", async () => {
   await withRepo(async ({ repoRoot }) => {
     await commitRepoFile({

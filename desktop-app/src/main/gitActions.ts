@@ -434,11 +434,25 @@ const readGitMergeBranchRef = async ({
   });
 
   const branchRef = `refs/heads/${branch}`;
-
-  await readGitTextForPath({
+  const branchHead = await readGitTextForPath({
     path: repoRoot,
     args: ["rev-parse", "--verify", `${branchRef}^{commit}`],
   });
+  const headSha = await readGitTextForPath({
+    path: repoRoot,
+    args: ["rev-parse", "HEAD"],
+  });
+
+  // The renderer hides these, and the Git action rejects stale calls for the same graph rule.
+  if (
+    await readIsShaReachableFromRootSha({
+      repoRoot,
+      sha: branchHead,
+      rootSha: headSha,
+    })
+  ) {
+    throw new Error("This branch is already in HEAD.");
+  }
 
   return branchRef;
 };

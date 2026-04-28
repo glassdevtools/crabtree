@@ -1584,8 +1584,7 @@ const CommitHistoryRow = ({
   gitChangesOfCwd,
   isBranchPointerDropTarget,
   isSelected,
-  isHeadAncestor,
-  isAfterHead,
+  isBranchMergeableOfBranch,
   isBranchDeleteSafeOfBranch,
   selectRow,
   updateBranchPointerDropTarget,
@@ -1611,8 +1610,7 @@ const CommitHistoryRow = ({
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   isBranchPointerDropTarget: boolean;
   isSelected: boolean;
-  isHeadAncestor: boolean;
-  isAfterHead: boolean;
+  isBranchMergeableOfBranch: { [branch: string]: boolean };
   isBranchDeleteSafeOfBranch: { [branch: string]: boolean };
   selectRow: () => void;
   updateBranchPointerDropTarget: (event: DragEvent<HTMLDivElement>) => void;
@@ -1662,12 +1660,13 @@ const CommitHistoryRow = ({
     .filter((rowThread): rowThread is CodexThread => rowThread !== undefined);
   const threadGroups = readDisplayedThreadGroups({ threads, worktrees });
   const isHeadRow = commit.refs.some((ref) => readIsHeadRef(ref));
-  const mergeBranch =
-    isHeadRow || isHeadAncestor || isAfterHead
-      ? null
-      : (commit.localBranches.find(
-          (localBranch) => localBranch !== currentBranch,
-        ) ?? null);
+  const mergeBranch = isHeadRow
+    ? null
+    : (commit.localBranches.find(
+        (localBranch) =>
+          localBranch !== currentBranch &&
+          isBranchMergeableOfBranch[localBranch] === true,
+      ) ?? null);
   let mergeDisabledReason: string | null = null;
   let rowClassName = "commit-history-row";
 
@@ -1723,7 +1722,7 @@ const CommitHistoryRow = ({
               <TitleTooltip
                 title={
                   mergeDisabledReason === null
-                    ? `Merge ${mergeBranch} into HEAD`
+                    ? "Merge this into HEAD"
                     : mergeDisabledReason
                 }
               >
@@ -1733,6 +1732,7 @@ const CommitHistoryRow = ({
                     variant="ghost"
                     size="icon-xs"
                     type="button"
+                    aria-label="Merge this into HEAD"
                     disabled={mergeDisabledReason !== null}
                     onMouseDown={(event) => event.stopPropagation()}
                     onDoubleClick={(event) => event.stopPropagation()}
@@ -1937,9 +1937,11 @@ const CommitHistory = ({
     headChangeSummary !== undefined &&
     totalHeadChangeSummary.added === 0 &&
     totalHeadChangeSummary.removed === 0;
-  const isHeadAncestorOfSha = useMemo(() => {
+  const isBranchMergeableOfBranch = useMemo(() => {
     const commitOfSha: { [sha: string]: GitCommit } = {};
-    const nextIsHeadAncestorOfSha: { [sha: string]: boolean } = {};
+    const branchShaOfBranch: { [branch: string]: string } = {};
+    const isShaReachableFromHead: { [sha: string]: boolean } = {};
+    const nextIsBranchMergeableOfBranch: { [branch: string]: boolean } = {};
     let headSha: string | null = null;
 
     for (const commit of commits) {
@@ -1948,10 +1950,14 @@ const CommitHistory = ({
       if (commit.refs.some((ref) => readIsHeadRef(ref))) {
         headSha = commit.sha;
       }
+
+      for (const localBranch of commit.localBranches) {
+        branchShaOfBranch[localBranch] = commit.sha;
+      }
     }
 
     if (headSha === null) {
-      return nextIsHeadAncestorOfSha;
+      return nextIsBranchMergeableOfBranch;
     }
 
     const shasToRead = [headSha];
@@ -1959,11 +1965,11 @@ const CommitHistory = ({
     while (shasToRead.length > 0) {
       const sha = shasToRead.pop();
 
-      if (sha === undefined || nextIsHeadAncestorOfSha[sha] === true) {
+      if (sha === undefined || isShaReachableFromHead[sha] === true) {
         continue;
       }
 
-      nextIsHeadAncestorOfSha[sha] = true;
+      isShaReachableFromHead[sha] = true;
       const commit = commitOfSha[sha];
 
       if (commit === undefined) {
@@ -1975,49 +1981,19 @@ const CommitHistory = ({
       }
     }
 
-    return nextIsHeadAncestorOfSha;
-  }, [commits]);
-  const isAfterHeadOfSha = useMemo(() => {
-    const childShasOfSha: { [sha: string]: string[] } = {};
-    const nextIsAfterHeadOfSha: { [sha: string]: boolean } = {};
-    let headSha: string | null = null;
-
-    for (const commit of commits) {
-      if (commit.refs.some((ref) => readIsHeadRef(ref))) {
-        headSha = commit.sha;
-      }
-
-      for (const parent of commit.parents) {
-        if (childShasOfSha[parent] === undefined) {
-          childShasOfSha[parent] = [];
-        }
-
-        childShasOfSha[parent].push(commit.sha);
-      }
-    }
-
-    if (headSha === null) {
-      return nextIsAfterHeadOfSha;
-    }
-
-    const shasToRead = [...(childShasOfSha[headSha] ?? [])];
-
-    while (shasToRead.length > 0) {
-      const sha = shasToRead.pop();
-
-      if (sha === undefined || nextIsAfterHeadOfSha[sha] === true) {
+    // A merge button is useful only when the branch tip is not already part of HEAD's reachable history.
+    for (const branch of Object.keys(branchShaOfBranch)) {
+      if (branch === currentBranch) {
+        nextIsBranchMergeableOfBranch[branch] = false;
         continue;
       }
 
-      nextIsAfterHeadOfSha[sha] = true;
-
-      for (const childSha of childShasOfSha[sha] ?? []) {
-        shasToRead.push(childSha);
-      }
+      nextIsBranchMergeableOfBranch[branch] =
+        isShaReachableFromHead[branchShaOfBranch[branch]] !== true;
     }
 
-    return nextIsAfterHeadOfSha;
-  }, [commits]);
+    return nextIsBranchMergeableOfBranch;
+  }, [commits, currentBranch]);
   // Branch delete is safe only when local refs or fixed refs keep the branch tip visible.
   const isBranchDeleteSafeOfBranch = useMemo(() => {
     const commitOfSha: { [sha: string]: GitCommit } = {};
@@ -2949,8 +2925,7 @@ const CommitHistory = ({
                   branchPointerDropTargetRowId === row.id
                 }
                 isSelected={selectedCommitRowId === row.id}
-                isHeadAncestor={isHeadAncestorOfSha[row.commit.sha] === true}
-                isAfterHead={isAfterHeadOfSha[row.commit.sha] === true}
+                isBranchMergeableOfBranch={isBranchMergeableOfBranch}
                 isBranchDeleteSafeOfBranch={isBranchDeleteSafeOfBranch}
                 selectRow={() => setSelectedCommitRowId(row.id)}
                 updateBranchPointerDropTarget={(event) =>
