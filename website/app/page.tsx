@@ -1,6 +1,5 @@
 import Image from "next/image";
 import { ClientDownloadLink } from "./client-download-link";
-import defaultAppIcon from "../src/assets/default-app-icon.png";
 import originalLobsterTreeIcon from "../src/assets/original-lobster-tree-icon.png";
 
 const repoUrl = "https://github.com/glassdevtools/molttree";
@@ -10,27 +9,14 @@ const HomePage = () => {
     <main className="page">
       <nav className="topNav" aria-label="Primary">
         <a className="wordmark" href="/">
-          <Image
-            src={originalLobsterTreeIcon}
-            alt=""
-            aria-hidden="true"
-            width={24}
-            height={24}
-            preload
-          />
-          MoltTree
+          <Image src={originalLobsterTreeIcon} alt="" aria-hidden="true" />
+          <span className="wordmarkText">MoltTree</span>
         </a>
       </nav>
 
       <section className="hero" aria-labelledby="hero-title">
         <ClientDownloadLink className="heroArt" ariaLabel="Download">
-          <Image
-            src={defaultAppIcon}
-            alt="MoltTree app icon"
-            width={132}
-            height={132}
-            preload
-          />
+          <Image src={originalLobsterTreeIcon} alt="MoltTree icon" preload />
         </ClientDownloadLink>
 
         <h1 id="hero-title">MoltTree</h1>
@@ -51,11 +37,6 @@ const HomePage = () => {
             </svg>
             GitHub
           </a>
-        </div>
-        <div className="hero__details" aria-label="Product focus">
-          <span>Local-first</span>
-          <span>Git-aware</span>
-          <span>Codex-native</span>
         </div>
       </section>
     </main>
