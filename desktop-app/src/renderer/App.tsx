@@ -2668,18 +2668,22 @@ const CommitHistory = ({
         });
 
         if (request.branchTarget !== null) {
-          await window.molttree.moveGitBranch({
-            repoRoot,
-            branch: request.branchTarget.branch,
-            oldSha: request.branchTarget.oldSha,
-            newSha,
-          });
-          rememberBranchTagChange({
-            repoRoot,
-            branch: request.branchTarget.branch,
-            oldSha: request.branchTarget.oldSha,
-            newSha,
-          });
+          try {
+            await window.molttree.moveGitBranch({
+              repoRoot,
+              branch: request.branchTarget.branch,
+              oldSha: request.branchTarget.oldSha,
+              newSha,
+            });
+            rememberBranchTagChange({
+              repoRoot,
+              branch: request.branchTarget.branch,
+              oldSha: request.branchTarget.oldSha,
+              newSha,
+            });
+          } catch {
+            // The commit already succeeded, so a stale branch tag should not turn it into an error.
+          }
         }
 
         closeCommitMessageModal();

@@ -292,41 +292,42 @@ export const commitAllGitChanges = async ({
     args: ["rev-parse", "HEAD"],
   });
 
+  // The commit is complete here, so extra branch tag moves should never make the commit look failed.
   for (const branch of branchesToMove) {
-    const branchRef = `refs/heads/${branch}`;
-    const branchHead = await readGitTextForPath({
-      path,
-      args: ["rev-parse", "--verify", branchRef],
-    });
+    try {
+      const branchRef = `refs/heads/${branch}`;
+      const branchHead = await readGitTextForPath({
+        path,
+        args: ["rev-parse", "--verify", branchRef],
+      });
 
-    if (branchHead === newSha) {
+      if (branchHead === newSha || branchHead !== oldSha) {
+        continue;
+      }
+
+      const worktreePath = await readGitWorktreePathForBranch({
+        repoRoot,
+        branch,
+      });
+
+      if (worktreePath !== null) {
+        continue;
+      }
+
+      await runGitCommandForPath({
+        path,
+        args: [
+          "update-ref",
+          "-m",
+          `MoltTree: move ${branch}`,
+          branchRef,
+          newSha,
+          oldSha,
+        ],
+      });
+    } catch {
       continue;
     }
-
-    if (branchHead !== oldSha) {
-      throw new Error(`${branch} moved. Refresh and try again.`);
-    }
-
-    const worktreePath = await readGitWorktreePathForBranch({
-      repoRoot,
-      branch,
-    });
-
-    if (worktreePath !== null) {
-      continue;
-    }
-
-    await runGitCommandForPath({
-      path,
-      args: [
-        "update-ref",
-        "-m",
-        `MoltTree: move ${branch}`,
-        branchRef,
-        newSha,
-        oldSha,
-      ],
-    });
   }
 
   return newSha;

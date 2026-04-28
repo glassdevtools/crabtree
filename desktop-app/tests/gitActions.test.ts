@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import {
   appendFile,
+  chmod,
   mkdir,
   mkdtemp,
   readFile,
@@ -422,6 +423,52 @@ test("commits all changes and advances colocated local branch tags", async () =>
     assert.equal(
       await readSha({ cwd: repoRoot, ref: "refs/heads/topic" }),
       newSha,
+    );
+    assert.equal(
+      await runGit({ cwd: repoRoot, args: ["rev-parse", `${newSha}^`] }),
+      oldSha,
+    );
+  });
+});
+
+test("keeps a successful commit when a colocated branch tag moves first", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    const oldSha = await commitRepoFile({
+      repoRoot,
+      filePath: "file.txt",
+      content: "one\n",
+      message: "initial",
+    });
+    await runGit({ cwd: repoRoot, args: ["branch", "topic", oldSha] });
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "side", oldSha] });
+    const sideSha = await commitRepoFile({
+      repoRoot,
+      filePath: "side.txt",
+      content: "side\n",
+      message: "side",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "main"] });
+    const hookPath = join(repoRoot, ".git", "hooks", "post-commit");
+    await writeFile(
+      hookPath,
+      `#!/bin/sh\ngit update-ref refs/heads/topic ${sideSha} ${oldSha}\n`,
+    );
+    await chmod(hookPath, 0o755);
+    await appendRepoFile({
+      repoRoot,
+      filePath: "file.txt",
+      content: "two\n",
+    });
+
+    const newSha = await commitAllGitChanges({
+      path: repoRoot,
+      message: "second",
+    });
+
+    assert.equal(await readSha({ cwd: repoRoot, ref: "HEAD" }), newSha);
+    assert.equal(
+      await readSha({ cwd: repoRoot, ref: "refs/heads/topic" }),
+      sideSha,
     );
     assert.equal(
       await runGit({ cwd: repoRoot, args: ["rev-parse", `${newSha}^`] }),
