@@ -9,14 +9,21 @@
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "next": "^16.2.4",
+    "radix-ui": "^1.4.3",
     "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "react-dom": "^19.2.5",
+    "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.4",
     "@types/node": "^22.19.17",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "postcss": "^8.5.12",
+    "tailwindcss": "^4.2.4",
     "typescript": "^6.0.3"
   }
 }
