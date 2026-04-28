@@ -12,7 +12,6 @@ import {
   User,
 } from "lucide-react";
 import { MdOutlineCallSplit } from "react-icons/md";
-import { RiGitBranchLine } from "react-icons/ri";
 import { VscVscode } from "react-icons/vsc";
 import { Resizable } from "react-resizable";
 import { toast } from "sonner";
@@ -1098,6 +1097,7 @@ const readCommitBranchTarget = ({
 const BranchTags = ({
   refs,
   worktrees,
+  repoRoot,
   localBranches,
   currentBranch,
   defaultBranch,
@@ -1112,6 +1112,7 @@ const BranchTags = ({
 }: {
   refs: string[];
   worktrees: GitWorktree[];
+  repoRoot: string;
   localBranches: string[];
   currentBranch: string | null;
   defaultBranch: string | null;
@@ -1169,7 +1170,18 @@ const BranchTags = ({
   return (
     <div className="commit-label-list">
       {hasHead ? (
-        <Badge className="commit-ref commit-ref-head" variant="secondary">
+        <Badge
+          className="commit-ref commit-ref-head"
+          variant="secondary"
+          onContextMenu={(event) => {
+            void copyTextAfterContextMenu({
+              event,
+              text: repoRoot,
+              copiedLabel: "path",
+              errorMessage: "Failed to copy path.",
+            });
+          }}
+        >
           <span>HEAD</span>
         </Badge>
       ) : null}
@@ -1186,6 +1198,14 @@ const BranchTags = ({
             type="button"
             onMouseDown={(event) => event.stopPropagation()}
             onDoubleClick={(event) => event.stopPropagation()}
+            onContextMenu={(event) => {
+              void copyTextAfterContextMenu({
+                event,
+                text: worktree.path,
+                copiedLabel: "path",
+                errorMessage: "Failed to copy path.",
+              });
+            }}
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
@@ -1412,10 +1432,10 @@ const ChatRobotTags = ({
                   }}
                 >
                   {isThreadGroupWorktree ? (
-                    <RiGitBranchLine
+                    <MdOutlineCallSplit
                       aria-hidden="true"
-                      className="commit-thread-chat-icon"
-                      size={12}
+                      className="commit-thread-chat-icon commit-ref-worktree-icon"
+                      size={10}
                     />
                   ) : null}
                   <span className="commit-thread-chat-title">{title}</span>
@@ -1772,6 +1792,7 @@ const CommitHistoryRow = ({
         <BranchTags
           refs={commit.refs}
           worktrees={worktrees}
+          repoRoot={repoRoot}
           localBranches={commit.localBranches}
           currentBranch={currentBranch}
           defaultBranch={defaultBranch}
