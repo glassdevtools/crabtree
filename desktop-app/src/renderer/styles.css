@@ -920,7 +920,6 @@ textarea,
 
 .commit-thread-group + .commit-thread-group {
   margin-left: 8px;
-  padding-left: 0;
   border-left: 0;
 }
 
@@ -1034,13 +1033,14 @@ textarea,
   gap: 3px;
   min-width: max-content;
   flex: 0 0 auto;
-  padding: 1px 3px;
+  padding: 0;
   border: 0;
   border-radius: 5px;
   box-sizing: border-box;
 }
 
 .commit-thread-group-highlighted {
+  padding: 1px 3px;
   background: #fff8df;
 }
 
