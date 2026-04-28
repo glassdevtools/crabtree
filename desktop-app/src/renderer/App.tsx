@@ -1895,7 +1895,7 @@ const CommitHistory = ({
   refreshDashboard: () => Promise<void>;
   refreshDashboardAfterUserGitUpdate: (
     finishUserGitUpdate: () => void,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   runUserGitUpdate: (
     updateGit: (finishUserGitUpdate: () => void) => Promise<void>,
   ) => Promise<void>;
@@ -2558,11 +2558,11 @@ const CommitHistory = ({
     await runUserGitUpdate(async (finishUserGitUpdate) => {
       const gitErrorMessage = await updateGit();
 
+      await refreshDashboardAfterUserGitUpdate(finishUserGitUpdate);
+
       if (gitErrorMessage !== null) {
         showErrorMessage(gitErrorMessage);
       }
-
-      await refreshDashboardAfterUserGitUpdate(finishUserGitUpdate);
     });
   };
   const openBranchDeleteModal = (
@@ -3273,7 +3273,7 @@ const RepoSection = ({
   refreshDashboard: () => Promise<void>;
   refreshDashboardAfterUserGitUpdate: (
     finishUserGitUpdate: () => void,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   runUserGitUpdate: (
     updateGit: (finishUserGitUpdate: () => void) => Promise<void>,
   ) => Promise<void>;
@@ -3318,6 +3318,7 @@ export const App = () => {
   const [dashboardErrorMessage, setDashboardErrorMessage] = useState<
     string | null
   >(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [branchTagChanges, setBranchTagChanges] = useState<
     GitBranchTagChange[]
@@ -3427,6 +3428,7 @@ export const App = () => {
         const nextDashboardData = await window.molttree.readDashboard();
         finishUserGitUpdate();
         applyDashboardData(nextDashboardData);
+        return true;
       } catch (error) {
         finishUserGitUpdate();
         const message =
@@ -3435,6 +3437,7 @@ export const App = () => {
             : "Failed to read dashboard data.";
         setSuccessMessage(null);
         setDashboardErrorMessage(message);
+        return false;
       } finally {
         setIsLoading(false);
       }
@@ -3443,10 +3446,7 @@ export const App = () => {
   );
   const showErrorMessage = useCallback((message: string) => {
     setSuccessMessage(null);
-    toast.error("Error", {
-      description: message,
-      duration: Infinity,
-    });
+    setErrorMessage(message);
   }, []);
   // User Git updates use this wrapper so the header spinner is tied to action results, not background polling.
   const runUserGitUpdate = useCallback(
@@ -3566,6 +3566,18 @@ export const App = () => {
   }, [dashboardErrorMessage]);
 
   useEffect(() => {
+    if (errorMessage === null) {
+      return;
+    }
+
+    toast.error("Error", {
+      description: errorMessage,
+      duration: Infinity,
+    });
+    setErrorMessage(null);
+  }, [errorMessage]);
+
+  useEffect(() => {
     if (successMessage === null) {
       return;
     }
@@ -3631,6 +3643,9 @@ export const App = () => {
     closeBranchTagChangeModal();
 
     await runUserGitUpdate(async (finishUserGitUpdate) => {
+      let gitSuccessMessage: string | null = null;
+      let gitErrorMessage: string | null = null;
+
       try {
         switch (action) {
           case "push":
@@ -3649,15 +3664,24 @@ export const App = () => {
             (branchTagChange) => branchTagChange.repoRoot !== repoRoot,
           ),
         );
-        setSuccessMessage(branchTagChangeActionText.successMessage);
+        gitSuccessMessage = branchTagChangeActionText.successMessage;
       } catch (error) {
-        const gitErrorMessage =
+        gitErrorMessage =
           error instanceof Error
             ? error.message
             : "Failed to apply branch tag changes.";
-        showErrorMessage(gitErrorMessage);
-      } finally {
+      }
+
+      const didRefreshDashboard =
         await refreshDashboardAfterUserGitUpdate(finishUserGitUpdate);
+
+      if (gitErrorMessage !== null) {
+        showErrorMessage(gitErrorMessage);
+        return;
+      }
+
+      if (didRefreshDashboard && gitSuccessMessage !== null) {
+        setSuccessMessage(gitSuccessMessage);
       }
     });
   };
