@@ -1142,6 +1142,7 @@ const BranchTags = ({
   const worktreesForCommit = worktrees.filter(
     (worktree) => worktree.head === commitSha,
   );
+  const hasHead = refs.some((ref) => readIsHeadRef(ref));
   const normalRefs = refs.filter((ref) => ref !== "HEAD");
   const orderedRefs = [
     ...normalRefs.filter(
@@ -1160,12 +1161,17 @@ const BranchTags = ({
     isLocalBranchOfName[localBranch] = true;
   }
 
-  if (orderedRefs.length === 0 && worktreesForCommit.length === 0) {
+  if (!hasHead && orderedRefs.length === 0 && worktreesForCommit.length === 0) {
     return null;
   }
 
   return (
     <div className="commit-label-list">
+      {hasHead ? (
+        <Badge className="commit-ref commit-ref-head" variant="secondary">
+          <span>HEAD</span>
+        </Badge>
+      ) : null}
       {worktreesForCommit.map((worktree) => (
         <Badge
           asChild
