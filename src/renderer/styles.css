@@ -197,6 +197,25 @@ textarea,
   margin-left: auto;
 }
 
+.repo-header-refresh-status {
+  width: 20px;
+  height: 28px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  color: #68717d;
+  opacity: 0;
+}
+
+.repo-header-refresh-status-active {
+  opacity: 1;
+}
+
+.repo-header-refresh-status-active .repo-header-refresh-spinner {
+  animation: initial-loading-spin 900ms linear infinite;
+}
+
 .path-launcher-control {
   height: 28px;
   display: inline-flex;
@@ -1023,7 +1042,10 @@ textarea,
   border-radius: inherit;
 }
 
-.commit-thread-group [data-slot="button"] {
+.commit-thread-group .commit-thread-chat,
+.commit-thread-group .commit-thread-change-count,
+.commit-thread-group .commit-branch-create-action,
+.commit-thread-group .commit-thread-commit-action {
   position: relative;
   z-index: 1;
 }
