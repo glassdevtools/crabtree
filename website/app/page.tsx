@@ -64,13 +64,9 @@ const HomePage = () => {
       </nav>
 
       <section className="hero" aria-labelledby="hero-title">
-        <a
-          className="heroArt"
-          href={downloadAction.href}
-          aria-label={downloadAction.label}
-        >
+        <div className="heroArt">
           <Image src={defaultAppIcon} alt="MoltTree app icon" priority />
-        </a>
+        </div>
 
         <h1 id="hero-title">MoltTree</h1>
         <p className="description">
