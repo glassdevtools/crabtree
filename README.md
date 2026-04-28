@@ -1,10 +1,60 @@
 # MoltTree
 
-Small README change for testing local edits.
+MoltTree is a local desktop tool for browsing Codex threads alongside their Git history and opening the right context back in Codex Desktop.
 
-MoltTree is a local tool for browsing Codex threads alongside their Git history and opening the right context back in Codex Desktop.
+## Repo Layout
 
-## Features by Interface
+- `desktop-app/`: Electron desktop app, macOS packaging, auto-update config, and desktop tests.
+- `website/`: Vite React marketing/download website.
+- `.github/workflows/build-macos-installer.yml`: macOS installer release workflow.
+
+## Commands
+
+Install dependencies from the repo root:
+
+```bash
+npm ci
+```
+
+Run the desktop app:
+
+```bash
+npm run dev
+```
+
+This starts the website on `http://127.0.0.1:5174/` and the desktop app together.
+
+Run only the desktop app:
+
+```bash
+npm run dev:desktop
+```
+
+Build the desktop app:
+
+```bash
+npm run build:desktop
+```
+
+Build the macOS installer:
+
+```bash
+npm run dist:mac
+```
+
+Run the website locally:
+
+```bash
+npm run dev:website
+```
+
+Build the website:
+
+```bash
+npm run build:website
+```
+
+## Desktop Features By Interface
 
 - Git graph, branches, commits, thread markers, and file change actions: `simple-git`.
 - Non-archived thread list, thread history, new threads, and sending messages: Codex app-server.
@@ -42,5 +92,3 @@ MoltTree is a local tool for browsing Codex threads alongside their Git history 
 
 - Not used in v1.
 - TODO: document the read-only tables and lookup queries if we add a debug-only reader.
-
-Test change.

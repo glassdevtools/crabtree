@@ -5,19 +5,20 @@
 MoltTree uses Electron Builder for macOS packaging. The packaging flow is:
 
 1. Build the Electron app into `out/`.
-2. Regenerate the macOS icon from `packaging/macos/assets/icon-source.png`.
+2. Regenerate the macOS icon from `src/renderer/assets/default-app-icon.png`.
 3. Build `dist/MoltTree-<version>-<arch>.dmg` and `dist/MoltTree-<version>-<arch>.zip`.
 4. Code sign and notarize when signing and Apple credentials are available.
 
 Run:
 
 ```bash
-npm run dist:mac
+npm run dist:mac --workspace desktop-app
 ```
 
 For a local unsigned package while testing the bundle shape:
 
 ```bash
+cd desktop-app
 npm run build
 npm run icons:mac
 npx electron-builder --config electron-builder.config.cjs --mac dir -c.mac.identity=null -c.mac.notarize=false
@@ -28,13 +29,13 @@ npx electron-builder --config electron-builder.config.cjs --mac dir -c.mac.ident
 Keep the checked-in source image here:
 
 ```text
-packaging/macos/assets/icon-source.png
+src/renderer/assets/default-app-icon.png
 ```
 
 Regenerate icons with:
 
 ```bash
-npm run icons:mac
+npm run icons:mac --workspace desktop-app
 ```
 
 The script writes `packaging/macos/generated-icons/icon.icns` and `packaging/macos/generated-icons/icon.png`. That generated directory is ignored and should be recreated before packaging, matching the `wgpu-test-4` source-image-to-generated-icons pattern.
@@ -105,11 +106,11 @@ The release assets must include `latest-mac.yml`, the `.dmg`, the `.zip`, and bl
 
 ## GitHub Actions
 
-`.github/workflows/build-macos-installer.yml` builds the macOS installer on pushes to `main`, version tags, and manual dispatch.
+`../.github/workflows/build-macos-installer.yml` builds the macOS installer on pushes to `main`, version tags, and manual dispatch.
 
-For pushes to `main` and manual dispatches, the workflow uploads the generated `dist/MoltTree-*.dmg`, `dist/MoltTree-*.zip`, and blockmaps as a GitHub Actions artifact. If the Apple signing secrets are missing, it builds an unsigned artifact for CI testing. If all Apple signing secrets are present, it signs and notarizes the app before uploading it.
+For pushes to `main` and manual dispatches, the workflow uploads the generated `desktop-app/dist/MoltTree-*.dmg`, `desktop-app/dist/MoltTree-*.zip`, and blockmaps as a GitHub Actions artifact. If the Apple signing secrets are missing, it builds an unsigned artifact for CI testing. If all Apple signing secrets are present, it signs and notarizes the app before uploading it.
 
-For `v*` tags, the workflow requires signing secrets, validates that the tag matches `package.json` `version`, then publishes the signed and notarized macOS release assets to `glassdevtools/molttree` GitHub Releases.
+For `v*` tags, the workflow requires signing secrets, validates that the tag matches `desktop-app/package.json` `version`, then publishes the signed and notarized macOS release assets to `glassdevtools/molttree` GitHub Releases.
 
 Required secrets for signed builds:
 
@@ -139,8 +140,11 @@ APPLE_TEAM_ID
 Release command:
 
 ```bash
-npm version patch
-git push origin main --follow-tags
+npm version patch --workspace desktop-app --no-git-tag-version
+git add desktop-app/package.json package-lock.json
+git commit -m "Release vX.Y.Z"
+git tag vX.Y.Z
+git push origin main vX.Y.Z
 ```
 
-If you do not want `npm version` to create the tag, update `package.json` manually, commit it, then run `git tag vX.Y.Z && git push origin main vX.Y.Z`.
+Replace `X.Y.Z` with the new `desktop-app/package.json` version.

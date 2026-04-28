@@ -33,6 +33,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -41,9 +42,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         shell: bash
         run: |
-          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          PACKAGE_VERSION="$(node -p "require('./desktop-app/package.json').version")"
           if [[ "v${PACKAGE_VERSION}" != "$GITHUB_REF_NAME" ]]; then
-            echo "Release tag $GITHUB_REF_NAME does not match package.json version v${PACKAGE_VERSION}." >&2
+            echo "Release tag $GITHUB_REF_NAME does not match desktop-app/package.json version v${PACKAGE_VERSION}." >&2
             exit 1
           fi
 
@@ -86,26 +87,51 @@ jobs:
 
       - name: Build and publish signed release
         if: startsWith(github.ref, 'refs/tags/') && steps.signing.outputs.mode == 'signed'
-        run: npm run dist:mac -- --publish always
+        run: npm run dist:mac --workspace desktop-app -- --publish always
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Publish static download aliases
+        if: startsWith(github.ref, 'refs/tags/') && steps.signing.outputs.mode == 'signed'
+        shell: bash
+        run: |
+          shopt -s nullglob
+
+          static_assets=()
+          for arch in arm64 x64; do
+            for dmg_path in desktop-app/dist/MoltTree-*-"${arch}".dmg; do
+              static_asset_path="desktop-app/dist/MoltTree_${arch}.dmg"
+              cp "$dmg_path" "$static_asset_path"
+              static_assets+=("$static_asset_path")
+              break
+            done
+          done
+
+          if [[ ${#static_assets[@]} -eq 0 ]]; then
+            echo "No static download aliases were created."
+            exit 0
+          fi
+
+          gh release upload "$GITHUB_REF_NAME" "${static_assets[@]}" --clobber
         env:
           GH_TOKEN: ${{ github.token }}
 
       - name: Build signed installer
         if: ${{ !startsWith(github.ref, 'refs/tags/') && steps.signing.outputs.mode == 'signed' }}
-        run: npm run dist:mac -- --publish never
+        run: npm run dist:mac --workspace desktop-app -- --publish never
 
       - name: Build unsigned installer
         if: ${{ !startsWith(github.ref, 'refs/tags/') && steps.signing.outputs.mode == 'unsigned' }}
-        run: npm run dist:mac -- --publish never -c.mac.identity=null -c.mac.notarize=false
+        run: npm run dist:mac --workspace desktop-app -- --publish never -c.mac.identity=null -c.mac.notarize=false
 
       - name: Upload macOS installer
         uses: actions/upload-artifact@v4
         with:
           name: molttree-macos-${{ runner.arch }}
           path: |
-            dist/MoltTree-*.dmg
-            dist/MoltTree-*.zip
-            dist/*.blockmap
-            dist/latest*.yml
+            desktop-app/dist/MoltTree-*.dmg
+            desktop-app/dist/MoltTree-*.zip
+            desktop-app/dist/*.blockmap
+            desktop-app/dist/latest*.yml
           if-no-files-found: error
           retention-days: 14

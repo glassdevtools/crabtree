@@ -2,6 +2,7 @@ const config = {
   // TODO: AI-PICKED-VALUE: This bundle id is based on the existing Glass signing identity and the MoltTree app name.
   appId: "com.glassdevtools.molttree",
   productName: "MoltTree",
+  electronVersion: "41.3.0",
   directories: {
     output: "dist",
   },

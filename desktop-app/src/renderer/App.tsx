@@ -3608,6 +3608,7 @@ export const App = () => {
             <img
               alt=""
               className="initial-loading-image"
+              draggable={false}
               src={initialLoadingImageUrl}
             />
             <div className="initial-loading-status">

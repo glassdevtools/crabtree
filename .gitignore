@@ -1,5 +1,10 @@
 node_modules/
+**/node_modules/
 out/
 .test-out/
 dist/
-packaging/macos/generated-icons/
+desktop-app/out/
+desktop-app/.test-out/
+desktop-app/dist/
+desktop-app/packaging/macos/generated-icons/
+website/dist/

@@ -162,6 +162,9 @@ textarea,
   max-width: calc(100vw - 48px);
   max-height: calc(100vh - 120px);
   object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .initial-loading-status {
