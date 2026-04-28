@@ -1,0 +1,111 @@
+name: Build macOS Installer
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos-installer:
+    name: Build macOS installer
+    runs-on: macos-14
+    env:
+      CSC_LINK: ${{ secrets.APPLE_CERTIFICATE }}
+      CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_API_KEY_ID_FROM_SECRET: ${{ secrets.APPLE_API_KEY }}
+      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate release tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          if [[ "v${PACKAGE_VERSION}" != "$GITHUB_REF_NAME" ]]; then
+            echo "Release tag $GITHUB_REF_NAME does not match package.json version v${PACKAGE_VERSION}." >&2
+            exit 1
+          fi
+
+      - name: Prepare App Store Connect key
+        id: signing
+        shell: bash
+        run: |
+          is_api_key_ready=false
+          is_apple_id_ready=false
+
+          if [[ -n "$APPLE_API_KEY_ID_FROM_SECRET" && -n "$APPLE_API_KEY_P8_BASE64" ]]; then
+            API_KEY_PATH="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID_FROM_SECRET}.p8"
+            printf '%s' "$APPLE_API_KEY_P8_BASE64" | base64 -D > "$API_KEY_PATH"
+            chmod 600 "$API_KEY_PATH"
+            echo "APPLE_API_KEY=$API_KEY_PATH" >> "$GITHUB_ENV"
+            echo "APPLE_API_KEY_ID=$APPLE_API_KEY_ID_FROM_SECRET" >> "$GITHUB_ENV"
+          fi
+
+          if [[ -n "$APPLE_API_KEY_ID_FROM_SECRET" && -n "$APPLE_API_ISSUER" && -n "$APPLE_API_KEY_P8_BASE64" ]]; then
+            is_api_key_ready=true
+          fi
+
+          if [[ -n "$APPLE_ID" && -n "$APPLE_APP_SPECIFIC_PASSWORD" && -n "$APPLE_TEAM_ID" ]]; then
+            is_apple_id_ready=true
+          fi
+
+          if [[ -n "$CSC_LINK" && -n "$CSC_KEY_PASSWORD" && ("$is_api_key_ready" == "true" || "$is_apple_id_ready" == "true") ]]; then
+            echo "mode=signed" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=unsigned" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Require signing for release tags
+        if: startsWith(github.ref, 'refs/tags/') && steps.signing.outputs.mode != 'signed'
+        shell: bash
+        run: |
+          echo "Release tags require APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, and notarization credentials." >&2
+          echo "Use either APPLE_API_KEY + APPLE_API_ISSUER + APPLE_API_KEY_P8_BASE64, or APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD + APPLE_TEAM_ID." >&2
+          exit 1
+
+      - name: Build and publish signed release
+        if: startsWith(github.ref, 'refs/tags/') && steps.signing.outputs.mode == 'signed'
+        run: npm run dist:mac -- --publish always
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Build signed installer
+        if: ${{ !startsWith(github.ref, 'refs/tags/') && steps.signing.outputs.mode == 'signed' }}
+        run: npm run dist:mac -- --publish never
+
+      - name: Build unsigned installer
+        if: ${{ !startsWith(github.ref, 'refs/tags/') && steps.signing.outputs.mode == 'unsigned' }}
+        run: npm run dist:mac -- --publish never -c.mac.identity=null -c.mac.notarize=false
+
+      - name: Upload macOS installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: molttree-macos-${{ runner.arch }}
+          path: |
+            dist/MoltTree-*.dmg
+            dist/MoltTree-*.zip
+            dist/*.blockmap
+            dist/latest*.yml
+          if-no-files-found: error
+          retention-days: 14

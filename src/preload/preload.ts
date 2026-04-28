@@ -9,6 +9,7 @@ import type {
   GitMergeBranchRequest,
   GitMoveBranchRequest,
   MoltTreeApi,
+  OpenPathRequest,
 } from "../shared/types";
 
 const api: MoltTreeApi = {
@@ -24,8 +25,11 @@ const api: MoltTreeApi = {
   openNewCodexThread: async () => {
     await ipcRenderer.invoke("codex:openNewThread");
   },
-  openVSCodePath: async (path: string) => {
-    await ipcRenderer.invoke("vscode:openPath", path);
+  openPath: async (openPathRequest: OpenPathRequest) => {
+    await ipcRenderer.invoke("path:open", openPathRequest);
+  },
+  copyText: async (text: string) => {
+    await ipcRenderer.invoke("clipboard:writeText", text);
   },
   stageGitChanges: async (path: string) => {
     await ipcRenderer.invoke("git:stageChanges", path);

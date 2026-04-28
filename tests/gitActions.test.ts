@@ -282,6 +282,32 @@ test("reads repo graphs with commits, worktrees, and branch tag changes", async 
   });
 });
 
+test("reads a missing local branch as a branch tag deletion", async () => {
+  await withOriginRepo(async ({ repoRoot }) => {
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
+    const oldSha = await commitRepoFile({
+      repoRoot,
+      filePath: "feature.txt",
+      content: "feature\n",
+      message: "feature",
+    });
+    await runGit({ cwd: repoRoot, args: ["push", "-u", "origin", "feature"] });
+    await runGit({ cwd: repoRoot, args: ["switch", "main"] });
+    await runGit({ cwd: repoRoot, args: ["branch", "-D", "feature"] });
+
+    const { repos, warnings, gitErrors } = await readRepoGraphs({
+      threads: [createThread({ id: "root-thread", cwd: repoRoot })],
+    });
+    const repo = repos[0];
+
+    assert.equal(warnings.length, 0);
+    assert.equal(gitErrors.length, 0);
+    assert.deepEqual(repo?.branchTagChanges, [
+      { repoRoot, branch: "feature", oldSha, newSha: null },
+    ]);
+  });
+});
+
 test("reads staged and unstaged change summaries for repo and worktree cwd values", async () => {
   await withOriginRepo(async ({ parentRoot, repoRoot }) => {
     await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
@@ -955,5 +981,26 @@ test("resets a local branch when another ref keeps the local tip visible", async
       await readSha({ cwd: repoRoot, ref: "keep-local-feature" }),
       newSha,
     );
+  });
+});
+
+test("recreates a missing local branch from origin during reset", async () => {
+  await withOriginRepo(async ({ repoRoot }) => {
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
+    const oldSha = await commitRepoFile({
+      repoRoot,
+      filePath: "feature.txt",
+      content: "feature\n",
+      message: "feature",
+    });
+    await runGit({ cwd: repoRoot, args: ["push", "-u", "origin", "feature"] });
+    await runGit({ cwd: repoRoot, args: ["switch", "main"] });
+    await runGit({ cwd: repoRoot, args: ["branch", "-D", "feature"] });
+
+    await resetGitBranchTagChanges([
+      { repoRoot, branch: "feature", oldSha, newSha: null },
+    ]);
+
+    assert.equal(await readSha({ cwd: repoRoot, ref: "feature" }), oldSha);
   });
 });
