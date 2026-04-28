@@ -38,7 +38,7 @@ Regenerate icons with:
 npm run icons:mac --workspace desktop-app
 ```
 
-The script writes `packaging/macos/generated-icons/icon.icns` and `packaging/macos/generated-icons/icon.png`. That generated directory is ignored and should be recreated before packaging, matching the `wgpu-test-4` source-image-to-generated-icons pattern.
+The script writes `packaging/macos/generated-icons/icon.icns`, `packaging/macos/generated-icons/icon.png`, `packaging/macos/generated-icons/dmg-background.png`, and `packaging/macos/generated-icons/dmg-background@2x.png`. That generated directory is ignored and should be recreated before packaging, matching the `wgpu-test-4` source-image-to-generated-icons pattern.
 
 ## Code Signing And Notarization
 
