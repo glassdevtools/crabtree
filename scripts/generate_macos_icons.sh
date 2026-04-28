@@ -5,11 +5,17 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 SOURCE_ICON_PATH="packaging/macos/assets/icon-source.png"
+DMG_BACKGROUND_SOURCE_PATH="packaging/macos/assets/dmg-background.svg"
 GENERATED_ICON_DIR="packaging/macos/generated-icons"
 ICONSET_PATH="$GENERATED_ICON_DIR/icon.iconset"
 
 if [[ ! -f "$SOURCE_ICON_PATH" ]]; then
   echo "Missing macOS source icon at $SOURCE_ICON_PATH" >&2
+  exit 1
+fi
+
+if [[ ! -f "$DMG_BACKGROUND_SOURCE_PATH" ]]; then
+  echo "Missing macOS DMG background at $DMG_BACKGROUND_SOURCE_PATH" >&2
   exit 1
 fi
 
@@ -40,4 +46,5 @@ sips -z 1024 1024 "$SOURCE_ICON_PATH" --out "$ICONSET_PATH/icon_512x512@2x.png" 
 
 iconutil -c icns "$ICONSET_PATH" -o "$GENERATED_ICON_DIR/icon.icns"
 sips -z 512 512 "$SOURCE_ICON_PATH" --out "$GENERATED_ICON_DIR/icon.png" >/dev/null
+sips -s format png "$DMG_BACKGROUND_SOURCE_PATH" --out "$GENERATED_ICON_DIR/dmg-background.png" >/dev/null
 rm -rf "$ICONSET_PATH"

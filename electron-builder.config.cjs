@@ -30,6 +30,21 @@ const config = {
   },
   dmg: {
     artifactName: "${productName}-${version}-${arch}.${ext}",
+    background: "packaging/macos/generated-icons/dmg-background.png",
+    // TODO: AI-PICKED-VALUE: These icon centers keep the default DMG spacing but move the row up to the middle of the visible area.
+    contents: [
+      {
+        x: 130,
+        y: 145,
+        type: "file",
+      },
+      {
+        x: 410,
+        y: 145,
+        type: "link",
+        path: "/Applications",
+      },
+    ],
   },
 };
 
