@@ -6,7 +6,6 @@ import {
   CLIENT_DOWNLOAD_PAGE_PATH,
   getAutoDetectedDownloadUrl,
 } from "../src/clientDownloadUrls";
-import defaultAppIcon from "../src/assets/default-app-icon.png";
 import originalLobsterTreeIcon from "../src/assets/original-lobster-tree-icon.png";
 
 const repoUrl = "https://github.com/glassdevtools/molttree";
@@ -59,7 +58,7 @@ const HomePage = () => {
       <nav className="topNav" aria-label="Primary">
         <a className="wordmark" href="/">
           <Image src={originalLobsterTreeIcon} alt="" aria-hidden="true" />
-          MoltTree
+          <span className="wordmarkText">MoltTree</span>
         </a>
       </nav>
 
@@ -69,7 +68,7 @@ const HomePage = () => {
           href={downloadAction.href}
           aria-label={downloadAction.label}
         >
-          <Image src={defaultAppIcon} alt="MoltTree app icon" priority />
+          <Image src={originalLobsterTreeIcon} alt="MoltTree icon" priority />
         </a>
 
         <h1 id="hero-title">MoltTree</h1>
@@ -87,11 +86,6 @@ const HomePage = () => {
             </svg>
             GitHub
           </a>
-        </div>
-        <div className="hero__details" aria-label="Product focus">
-          <span>Local-first</span>
-          <span>Git-aware</span>
-          <span>Codex-native</span>
         </div>
       </section>
     </main>

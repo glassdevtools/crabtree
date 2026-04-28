@@ -66,6 +66,27 @@ a {
   object-fit: contain;
 }
 
+.wordmarkText {
+  background-image: linear-gradient(
+    90deg,
+    #192019 0%,
+    #192019 45%,
+    #c53a13 68%,
+    #ff6b45 100%
+  );
+  background-position: 0 50%;
+  background-size: 260% 100%;
+  background-clip: text;
+  color: transparent;
+  transition: background-position 180ms ease;
+  -webkit-background-clip: text;
+}
+
+.wordmark:hover .wordmarkText,
+.wordmark:focus-visible .wordmarkText {
+  background-position: 100% 50%;
+}
+
 .hero {
   display: flex;
   align-items: center;
@@ -163,24 +184,6 @@ h1 {
 .button--secondary:hover {
   border-color: #bfc9ba;
   background: #f7f8f5;
-}
-
-.hero__details {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 22px;
-  color: #687366;
-  font-size: 0.82rem;
-  font-weight: 750;
-}
-
-.hero__details span {
-  border: 1px solid #dfe5dc;
-  border-radius: 999px;
-  padding: 7px 10px;
-  background: rgba(255, 255, 255, 0.72);
 }
 
 @media (max-width: 640px) {
