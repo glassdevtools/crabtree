@@ -5,7 +5,7 @@ MoltTree is a local desktop tool for browsing Codex threads alongside their Git 
 ## Repo Layout
 
 - `desktop-app/`: Electron desktop app, macOS packaging, auto-update config, and desktop tests.
-- `website/`: Vite React marketing/download website.
+- `website/`: Next.js marketing/download website.
 - `.github/workflows/build-macos-installer.yml`: macOS installer release workflow.
 
 ## Commands

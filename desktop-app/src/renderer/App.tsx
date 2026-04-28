@@ -1423,30 +1423,28 @@ const ChatRobotTags = ({
               );
             })}
             {shouldShowChangeCount ? (
-              <TitleTooltip title="Show changes">
-                <Button
-                  className="commit-thread-change-count"
-                  variant="ghost"
-                  size="xs"
-                  type="button"
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onDoubleClick={(event) => event.stopPropagation()}
-                  onClick={(event) =>
-                    openChangeSummaryModal(event, {
-                      path: threadGroup.cwd,
-                      title: threadGroup.cwd,
-                      changeSummary,
-                    })
-                  }
-                >
-                  <span className="commit-thread-change-added">
-                    +{totalChangeSummary.added}
-                  </span>
-                  <span className="commit-thread-change-removed">
-                    -{totalChangeSummary.removed}
-                  </span>
-                </Button>
-              </TitleTooltip>
+              <Button
+                className="commit-thread-change-count"
+                variant="ghost"
+                size="xs"
+                type="button"
+                onMouseDown={(event) => event.stopPropagation()}
+                onDoubleClick={(event) => event.stopPropagation()}
+                onClick={(event) =>
+                  openChangeSummaryModal(event, {
+                    path: threadGroup.cwd,
+                    title: threadGroup.cwd,
+                    changeSummary,
+                  })
+                }
+              >
+                <span className="commit-thread-change-added">
+                  +{totalChangeSummary.added}
+                </span>
+                <span className="commit-thread-change-removed">
+                  -{totalChangeSummary.removed}
+                </span>
+              </Button>
             ) : null}
             {shouldShowCommitAction ? (
               <TitleTooltip title="Commit">

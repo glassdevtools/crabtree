@@ -1,6 +1,6 @@
 # MoltTree Website
 
-Static Vite React site for MoltTree.
+Next.js site for MoltTree.
 
 Run from the repo root:
 
@@ -10,3 +10,5 @@ npm run build:website
 ```
 
 The primary download link points at the latest GitHub Release.
+
+For Vercel, create the project from this repo and set the root directory to `website`.

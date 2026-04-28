@@ -1,10 +1,13 @@
+"use client";
+
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import {
   CLIENT_DOWNLOAD_PAGE_PATH,
   getAutoDetectedDownloadUrl,
-} from "./clientDownloadUrls";
-import defaultAppIcon from "./assets/default-app-icon.png";
-import originalLobsterTreeIcon from "./assets/original-lobster-tree-icon.png";
+} from "../src/clientDownloadUrls";
+import defaultAppIcon from "../src/assets/default-app-icon.png";
+import originalLobsterTreeIcon from "../src/assets/original-lobster-tree-icon.png";
 
 const repoUrl = "https://github.com/glassdevtools/molttree";
 
@@ -18,7 +21,7 @@ const defaultDownloadAction: DownloadAction = {
   label: "All Downloads",
 };
 
-export const App = () => {
+const HomePage = () => {
   const [downloadAction, setDownloadAction] = useState<DownloadAction>(
     defaultDownloadAction,
   );
@@ -55,7 +58,7 @@ export const App = () => {
     <main className="page">
       <nav className="topNav" aria-label="Primary">
         <a className="wordmark" href="/">
-          <img src={originalLobsterTreeIcon} alt="" aria-hidden="true" />
+          <Image src={originalLobsterTreeIcon} alt="" aria-hidden="true" />
           MoltTree
         </a>
       </nav>
@@ -66,7 +69,7 @@ export const App = () => {
           href={downloadAction.href}
           aria-label={downloadAction.label}
         >
-          <img src={defaultAppIcon} alt="MoltTree app icon" />
+          <Image src={defaultAppIcon} alt="MoltTree app icon" priority />
         </a>
 
         <h1 id="hero-title">MoltTree</h1>
@@ -94,3 +97,5 @@ export const App = () => {
     </main>
   );
 };
+
+export default HomePage;

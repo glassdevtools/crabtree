@@ -12,7 +12,7 @@
     "build:desktop": "npm run build --workspace desktop-app",
     "dist:mac": "npm run dist:mac --workspace desktop-app",
     "test:desktop": "npm run test --workspace desktop-app",
-    "dev:website": "npm run dev --workspace website -- --host 127.0.0.1 --port 5174 --strictPort",
+    "dev:website": "npm run dev --workspace website",
     "build:website": "npm run build --workspace website",
     "build": "npm run build:desktop && npm run build:website",
     "format": "prettier --write ."
