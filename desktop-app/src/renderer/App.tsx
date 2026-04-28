@@ -1142,7 +1142,6 @@ const BranchTags = ({
   const worktreesForCommit = worktrees.filter(
     (worktree) => worktree.head === commitSha,
   );
-  const hasHead = refs.some((ref) => readIsHeadRef(ref));
   const normalRefs = refs.filter((ref) => ref !== "HEAD");
   const orderedRefs = [
     ...normalRefs.filter(
@@ -1161,17 +1160,12 @@ const BranchTags = ({
     isLocalBranchOfName[localBranch] = true;
   }
 
-  if (!hasHead && orderedRefs.length === 0 && worktreesForCommit.length === 0) {
+  if (orderedRefs.length === 0 && worktreesForCommit.length === 0) {
     return null;
   }
 
   return (
     <div className="commit-label-list">
-      {hasHead ? (
-        <Badge className="commit-ref commit-ref-head" variant="secondary">
-          <span>HEAD</span>
-        </Badge>
-      ) : null}
       {worktreesForCommit.map((worktree) => (
         <Badge
           asChild
@@ -1366,20 +1360,23 @@ const ChatRobotTags = ({
             key={threadGroup.key}
           >
             {shouldShowSameBranchTooltip ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span
-                    aria-label="These chats are on the same branch and share the same changes."
-                    className="commit-thread-group-background-tooltip"
-                  />
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>
-                    These chats are on the same branch and share the same
-                    changes.
-                  </p>
-                </TooltipContent>
-              </Tooltip>
+              // This provider keeps same-branch tooltip delay separate from the row action tooltip delay.
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span
+                      aria-label="These chats are on the same branch and share the same changes."
+                      className="commit-thread-group-background-tooltip"
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>
+                      These chats are on the same branch and share the same
+                      changes.
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             ) : null}
             {threadGroup.threads.map((thread) => {
               const title = threadTitle(thread);
@@ -1882,6 +1879,8 @@ const CommitHistory = ({
   gitChangesOfCwd,
   pathLauncher,
   refreshDashboard,
+  refreshDashboardAfterUserGitUpdate,
+  runUserGitUpdate,
   showErrorMessage,
   rememberBranchTagChange,
 }: {
@@ -1894,6 +1893,12 @@ const CommitHistory = ({
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   pathLauncher: PathLauncher;
   refreshDashboard: () => Promise<void>;
+  refreshDashboardAfterUserGitUpdate: (
+    finishUserGitUpdate: () => void,
+  ) => Promise<void>;
+  runUserGitUpdate: (
+    updateGit: (finishUserGitUpdate: () => void) => Promise<void>,
+  ) => Promise<void>;
   showErrorMessage: (message: string) => void;
   rememberBranchTagChange: (branchTagChange: GitBranchTagChange) => void;
 }) => {
@@ -2546,14 +2551,19 @@ const CommitHistory = ({
     });
     finishBranchPointerDrag();
   };
-  const refreshDashboardThenShowGitError = async (
-    gitErrorMessage: string | null,
+  // User Git updates keep the header spinner visible until the dashboard read has shown the new Git state.
+  const runUserGitUpdateThenRefreshDashboard = async (
+    updateGit: () => Promise<string | null>,
   ) => {
-    if (gitErrorMessage !== null) {
-      showErrorMessage(gitErrorMessage);
-    }
+    await runUserGitUpdate(async (finishUserGitUpdate) => {
+      const gitErrorMessage = await updateGit();
 
-    await refreshDashboard();
+      if (gitErrorMessage !== null) {
+        showErrorMessage(gitErrorMessage);
+      }
+
+      await refreshDashboardAfterUserGitUpdate(finishUserGitUpdate);
+    });
   };
   const openBranchDeleteModal = (
     event: MouseEvent<HTMLButtonElement>,
@@ -2618,20 +2628,22 @@ const CommitHistory = ({
     }
 
     const request = branchCreateTarget;
-    let gitErrorMessage: string | null = null;
 
-    try {
-      await window.molttree.createGitBranch({
-        path: request.path,
-        branch: branchName.trim(),
-      });
-      closeBranchCreateModal();
-    } catch (error) {
-      gitErrorMessage =
-        error instanceof Error ? error.message : "Failed to create branch.";
-    } finally {
-      await refreshDashboardThenShowGitError(gitErrorMessage);
-    }
+    await runUserGitUpdateThenRefreshDashboard(async () => {
+      try {
+        await window.molttree.createGitBranch({
+          path: request.path,
+          branch: branchName.trim(),
+        });
+        closeBranchCreateModal();
+      } catch (error) {
+        return error instanceof Error
+          ? error.message
+          : "Failed to create branch.";
+      }
+
+      return null;
+    });
   };
   const submitCommitMessage = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -2641,36 +2653,38 @@ const CommitHistory = ({
     }
 
     const request = commitMessageTarget;
-    let gitErrorMessage: string | null = null;
 
-    try {
-      const newSha = await window.molttree.commitAllGitChanges({
-        path: request.path,
-        message: commitMessage.trim(),
-      });
+    await runUserGitUpdateThenRefreshDashboard(async () => {
+      try {
+        const newSha = await window.molttree.commitAllGitChanges({
+          path: request.path,
+          message: commitMessage.trim(),
+        });
 
-      if (request.branchTarget !== null) {
-        await window.molttree.moveGitBranch({
-          repoRoot,
-          branch: request.branchTarget.branch,
-          oldSha: request.branchTarget.oldSha,
-          newSha,
-        });
-        rememberBranchTagChange({
-          repoRoot,
-          branch: request.branchTarget.branch,
-          oldSha: request.branchTarget.oldSha,
-          newSha,
-        });
+        if (request.branchTarget !== null) {
+          await window.molttree.moveGitBranch({
+            repoRoot,
+            branch: request.branchTarget.branch,
+            oldSha: request.branchTarget.oldSha,
+            newSha,
+          });
+          rememberBranchTagChange({
+            repoRoot,
+            branch: request.branchTarget.branch,
+            oldSha: request.branchTarget.oldSha,
+            newSha,
+          });
+        }
+
+        closeCommitMessageModal();
+      } catch (error) {
+        return error instanceof Error
+          ? error.message
+          : "Failed to commit changes.";
       }
 
-      closeCommitMessageModal();
-    } catch (error) {
-      gitErrorMessage =
-        error instanceof Error ? error.message : "Failed to commit changes.";
-    } finally {
-      await refreshDashboardThenShowGitError(gitErrorMessage);
-    }
+      return null;
+    });
   };
   const deleteBranchTag = async () => {
     if (branchToDelete === null) {
@@ -2679,26 +2693,28 @@ const CommitHistory = ({
 
     const branchDeleteTarget = branchToDelete;
     closeBranchDeleteModal();
-    let gitErrorMessage: string | null = null;
 
-    try {
-      await window.molttree.deleteGitBranch({
-        repoRoot,
-        branch: branchDeleteTarget.branch,
-        oldSha: branchDeleteTarget.oldSha,
-      });
-      rememberBranchTagChange({
-        repoRoot,
-        branch: branchDeleteTarget.branch,
-        oldSha: branchDeleteTarget.oldSha,
-        newSha: null,
-      });
-    } catch (error) {
-      gitErrorMessage =
-        error instanceof Error ? error.message : "Failed to delete branch.";
-    } finally {
-      await refreshDashboardThenShowGitError(gitErrorMessage);
-    }
+    await runUserGitUpdateThenRefreshDashboard(async () => {
+      try {
+        await window.molttree.deleteGitBranch({
+          repoRoot,
+          branch: branchDeleteTarget.branch,
+          oldSha: branchDeleteTarget.oldSha,
+        });
+        rememberBranchTagChange({
+          repoRoot,
+          branch: branchDeleteTarget.branch,
+          oldSha: branchDeleteTarget.oldSha,
+          newSha: null,
+        });
+      } catch (error) {
+        return error instanceof Error
+          ? error.message
+          : "Failed to delete branch.";
+      }
+
+      return null;
+    });
   };
   const openCodePath = async (path: string) => {
     try {
@@ -2737,19 +2753,21 @@ const CommitHistory = ({
 
     const request = branchMergeConfirmation;
     closeBranchMergeConfirmationModal();
-    let mergeErrorMessage: string | null = null;
 
-    try {
-      await window.molttree.mergeGitBranch({
-        repoRoot,
-        branch: request.branch,
-      });
-    } catch (error) {
-      mergeErrorMessage =
-        error instanceof Error ? error.message : "Failed to start merge.";
-    } finally {
-      await refreshDashboardThenShowGitError(mergeErrorMessage);
-    }
+    await runUserGitUpdateThenRefreshDashboard(async () => {
+      try {
+        await window.molttree.mergeGitBranch({
+          repoRoot,
+          branch: request.branch,
+        });
+      } catch (error) {
+        return error instanceof Error
+          ? error.message
+          : "Failed to start merge.";
+      }
+
+      return null;
+    });
   };
   const moveBranchPointer = async () => {
     if (branchPointerMove === null) {
@@ -2758,42 +2776,45 @@ const CommitHistory = ({
 
     const request = branchPointerMove;
     closeBranchPointerMoveModal();
-    let gitErrorMessage: string | null = null;
 
-    try {
-      await window.molttree.moveGitBranch({
-        repoRoot: request.repoRoot,
-        branch: request.branch,
-        oldSha: request.oldSha,
-        newSha: request.newSha,
-      });
-      rememberBranchTagChange({
-        repoRoot: request.repoRoot,
-        branch: request.branch,
-        oldSha: request.oldSha,
-        newSha: request.newSha,
-      });
-    } catch (error) {
-      gitErrorMessage =
-        error instanceof Error ? error.message : "Failed to move branch.";
-    } finally {
-      await refreshDashboardThenShowGitError(gitErrorMessage);
-    }
+    await runUserGitUpdateThenRefreshDashboard(async () => {
+      try {
+        await window.molttree.moveGitBranch({
+          repoRoot: request.repoRoot,
+          branch: request.branch,
+          oldSha: request.oldSha,
+          newSha: request.newSha,
+        });
+        rememberBranchTagChange({
+          repoRoot: request.repoRoot,
+          branch: request.branch,
+          oldSha: request.oldSha,
+          newSha: request.newSha,
+        });
+      } catch (error) {
+        return error instanceof Error
+          ? error.message
+          : "Failed to move branch.";
+      }
+
+      return null;
+    });
   };
   const openRowAfterDoubleClick = async (row: CommitGraphRow) => {
-    let gitErrorMessage: string | null = null;
+    await runUserGitUpdateThenRefreshDashboard(async () => {
+      try {
+        await window.molttree.checkoutGitCommit({
+          repoRoot,
+          sha: row.commit.sha,
+        });
+      } catch (error) {
+        return error instanceof Error
+          ? error.message
+          : "Failed to switch HEAD.";
+      }
 
-    try {
-      await window.molttree.checkoutGitCommit({
-        repoRoot,
-        sha: row.commit.sha,
-      });
-    } catch (error) {
-      gitErrorMessage =
-        error instanceof Error ? error.message : "Failed to switch HEAD.";
-    } finally {
-      await refreshDashboardThenShowGitError(gitErrorMessage);
-    }
+      return null;
+    });
   };
 
   return (
@@ -3239,6 +3260,8 @@ const RepoSection = ({
   repoHeaderControls,
   pathLauncher,
   refreshDashboard,
+  refreshDashboardAfterUserGitUpdate,
+  runUserGitUpdate,
   showErrorMessage,
   rememberBranchTagChange,
 }: {
@@ -3248,6 +3271,12 @@ const RepoSection = ({
   repoHeaderControls: ReactElement;
   pathLauncher: PathLauncher;
   refreshDashboard: () => Promise<void>;
+  refreshDashboardAfterUserGitUpdate: (
+    finishUserGitUpdate: () => void,
+  ) => Promise<void>;
+  runUserGitUpdate: (
+    updateGit: (finishUserGitUpdate: () => void) => Promise<void>,
+  ) => Promise<void>;
   showErrorMessage: (message: string) => void;
   rememberBranchTagChange: (branchTagChange: GitBranchTagChange) => void;
 }) => {
@@ -3266,6 +3295,10 @@ const RepoSection = ({
           gitChangesOfCwd={gitChangesOfCwd}
           pathLauncher={pathLauncher}
           refreshDashboard={refreshDashboard}
+          refreshDashboardAfterUserGitUpdate={
+            refreshDashboardAfterUserGitUpdate
+          }
+          runUserGitUpdate={runUserGitUpdate}
           showErrorMessage={showErrorMessage}
           rememberBranchTagChange={rememberBranchTagChange}
         />
@@ -3291,6 +3324,8 @@ export const App = () => {
   >([]);
   const [branchTagChangeConfirmation, setBranchTagChangeConfirmation] =
     useState<BranchTagChangeConfirmation | null>(null);
+  const [userGitUpdateCount, setUserGitUpdateCount] = useState(0);
+  const userGitUpdateCountRef = useRef(0);
   const isDashboardRefreshRunningRef = useRef(false);
   const shouldRefreshDashboardAgainRef = useRef(false);
   const dashboardRefreshPromiseRef = useRef<Promise<void> | null>(null);
@@ -3320,6 +3355,22 @@ export const App = () => {
     return dashboardData.repos[0] ?? null;
   }, [dashboardData, selectedRepoRoot]);
 
+  const applyDashboardData = useCallback((nextDashboardData: DashboardData) => {
+    setDashboardData(nextDashboardData);
+    setBranchTagChanges((currentBranchTagChanges) =>
+      syncBranchTagChangesWithDashboardData({
+        branchTagChanges: currentBranchTagChanges,
+        dashboardData: nextDashboardData,
+      }),
+    );
+
+    if (nextDashboardData.gitErrors.length > 0) {
+      setSuccessMessage(null);
+      setDashboardErrorMessage(nextDashboardData.gitErrors.join("\n"));
+    } else {
+      setDashboardErrorMessage(null);
+    }
+  }, []);
   const refreshDashboard = useCallback(async () => {
     if (isDashboardRefreshRunningRef.current) {
       shouldRefreshDashboardAgainRef.current = true;
@@ -3341,21 +3392,15 @@ export const App = () => {
 
           try {
             const nextDashboardData = await window.molttree.readDashboard();
-            setDashboardData(nextDashboardData);
-            setBranchTagChanges((currentBranchTagChanges) =>
-              syncBranchTagChangesWithDashboardData({
-                branchTagChanges: currentBranchTagChanges,
-                dashboardData: nextDashboardData,
-              }),
-            );
 
-            if (nextDashboardData.gitErrors.length > 0) {
-              setSuccessMessage(null);
-              setDashboardErrorMessage(nextDashboardData.gitErrors.join("\n"));
-            } else {
-              setDashboardErrorMessage(null);
+            if (userGitUpdateCountRef.current === 0) {
+              applyDashboardData(nextDashboardData);
             }
           } catch (error) {
+            if (userGitUpdateCountRef.current > 0) {
+              continue;
+            }
+
             const message =
               error instanceof Error
                 ? error.message
@@ -3373,7 +3418,29 @@ export const App = () => {
 
     dashboardRefreshPromiseRef.current = dashboardRefreshPromise;
     await dashboardRefreshPromise;
-  }, []);
+  }, [applyDashboardData]);
+  const refreshDashboardAfterUserGitUpdate = useCallback(
+    async (finishUserGitUpdate: () => void) => {
+      setIsLoading(true);
+
+      try {
+        const nextDashboardData = await window.molttree.readDashboard();
+        finishUserGitUpdate();
+        applyDashboardData(nextDashboardData);
+      } catch (error) {
+        finishUserGitUpdate();
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Failed to read dashboard data.";
+        setSuccessMessage(null);
+        setDashboardErrorMessage(message);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [applyDashboardData],
+  );
   const showErrorMessage = useCallback((message: string) => {
     setSuccessMessage(null);
     toast.error("Error", {
@@ -3381,6 +3448,31 @@ export const App = () => {
       duration: Infinity,
     });
   }, []);
+  // User Git updates use this wrapper so the header spinner is tied to action results, not background polling.
+  const runUserGitUpdate = useCallback(
+    async (updateGit: (finishUserGitUpdate: () => void) => Promise<void>) => {
+      let didFinishUserGitUpdate = false;
+      const finishUserGitUpdate = () => {
+        if (didFinishUserGitUpdate) {
+          return;
+        }
+
+        didFinishUserGitUpdate = true;
+        userGitUpdateCountRef.current -= 1;
+        setUserGitUpdateCount(userGitUpdateCountRef.current);
+      };
+
+      userGitUpdateCountRef.current += 1;
+      setUserGitUpdateCount(userGitUpdateCountRef.current);
+
+      try {
+        await updateGit(finishUserGitUpdate);
+      } finally {
+        finishUserGitUpdate();
+      }
+    },
+    [],
+  );
   const rememberBranchTagChange = useCallback(
     (nextBranchTagChange: GitBranchTagChange) => {
       setBranchTagChanges((currentBranchTagChanges) => {
@@ -3423,6 +3515,10 @@ export const App = () => {
     void refreshDashboard();
 
     const dashboardRefreshIntervalId = window.setInterval(() => {
+      if (userGitUpdateCountRef.current > 0) {
+        return;
+      }
+
       void refreshDashboard();
     }, DASHBOARD_REFRESH_INTERVAL_MS);
 
@@ -3534,34 +3630,36 @@ export const App = () => {
 
     closeBranchTagChangeModal();
 
-    try {
-      switch (action) {
-        case "push":
-          await window.molttree.pushGitBranchTagChanges(changes);
-          break;
-        case "pull":
-          await window.molttree.resetGitBranchTagChanges(changes);
-          break;
-        case "reset":
-          await window.molttree.resetGitBranchTagChanges(changes);
-          break;
-      }
+    await runUserGitUpdate(async (finishUserGitUpdate) => {
+      try {
+        switch (action) {
+          case "push":
+            await window.molttree.pushGitBranchTagChanges(changes);
+            break;
+          case "pull":
+            await window.molttree.resetGitBranchTagChanges(changes);
+            break;
+          case "reset":
+            await window.molttree.resetGitBranchTagChanges(changes);
+            break;
+        }
 
-      setBranchTagChanges((currentBranchTagChanges) =>
-        currentBranchTagChanges.filter(
-          (branchTagChange) => branchTagChange.repoRoot !== repoRoot,
-        ),
-      );
-      setSuccessMessage(branchTagChangeActionText.successMessage);
-    } catch (error) {
-      const gitErrorMessage =
-        error instanceof Error
-          ? error.message
-          : "Failed to apply branch tag changes.";
-      showErrorMessage(gitErrorMessage);
-    } finally {
-      await refreshDashboard();
-    }
+        setBranchTagChanges((currentBranchTagChanges) =>
+          currentBranchTagChanges.filter(
+            (branchTagChange) => branchTagChange.repoRoot !== repoRoot,
+          ),
+        );
+        setSuccessMessage(branchTagChangeActionText.successMessage);
+      } catch (error) {
+        const gitErrorMessage =
+          error instanceof Error
+            ? error.message
+            : "Failed to apply branch tag changes.";
+        showErrorMessage(gitErrorMessage);
+      } finally {
+        await refreshDashboardAfterUserGitUpdate(finishUserGitUpdate);
+      }
+    });
   };
   const branchTagChangesInConfirmation =
     branchTagChangeConfirmation === null
@@ -3626,6 +3724,7 @@ export const App = () => {
     selectedRepo === null
       ? []
       : readVisibleBranchTagChangesForRepo(selectedRepo.root);
+  const isUserGitUpdateRunning = userGitUpdateCount > 0;
   const repoHeaderControls = (
     <>
       {dashboardData.repos.length === 0 ? null : (
@@ -3651,6 +3750,22 @@ export const App = () => {
           </Select>
         </div>
       )}
+      <div
+        aria-hidden={isUserGitUpdateRunning ? undefined : true}
+        aria-label="Updating Git"
+        className={cn(
+          "repo-header-refresh-status",
+          isUserGitUpdateRunning && "repo-header-refresh-status-active",
+        )}
+        role="status"
+      >
+        <LoaderCircle
+          aria-hidden="true"
+          className="repo-header-refresh-spinner"
+          size={15}
+          strokeWidth={1.8}
+        />
+      </div>
       <div className="repo-header-controls">
         <div className="path-launcher-control">
           <button
@@ -3834,6 +3949,10 @@ export const App = () => {
                 repoHeaderControls={repoHeaderControls}
                 pathLauncher={pathLauncher}
                 refreshDashboard={refreshDashboard}
+                refreshDashboardAfterUserGitUpdate={
+                  refreshDashboardAfterUserGitUpdate
+                }
+                runUserGitUpdate={runUserGitUpdate}
                 showErrorMessage={showErrorMessage}
                 rememberBranchTagChange={rememberBranchTagChange}
               />
