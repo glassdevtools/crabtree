@@ -1084,10 +1084,7 @@ textarea,
   height: 12px;
   flex: 0 0 auto;
   overflow: visible;
-}
-
-.commit-thread-chat-bubble {
-  stroke: currentColor;
+  transform: rotate(90deg);
 }
 
 .commit-thread-chat:focus {
