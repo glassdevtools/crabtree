@@ -4,8 +4,8 @@ import { Tooltip as TooltipPrimitive } from "radix-ui";
 import { cn } from "@/lib/utils";
 
 function TooltipProvider({
-  // TODO: AI-PICKED-VALUE: This delay keeps dense table hover tooltips from opening while the mouse is just passing over rows.
-  delayDuration = 900,
+  // TODO: AI-PICKED-VALUE: This delay makes hover titles appear faster while still avoiding most accidental opens when the mouse crosses dense rows.
+  delayDuration = 650,
   skipDelayDuration = 0,
   disableHoverableContent = true,
   ...props

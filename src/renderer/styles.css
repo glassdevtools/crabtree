@@ -188,36 +188,40 @@ textarea,
   }
 }
 
-.top-controls {
-  position: fixed;
-  top: 8px;
-  right: 12px;
-  z-index: 8;
+.repo-header-controls {
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-left: auto;
 }
 
 .path-launcher-control {
+  height: 28px;
   display: inline-flex;
-  align-items: stretch;
+  align-items: center;
   overflow: hidden;
-  border: 1px solid #dfe4ec;
-  border-radius: 17px;
+  border: 1px solid var(--input);
+  border-radius: min(var(--radius-md), 10px);
   background: #ffffff;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  color: #343a43;
 }
 
 .path-launcher-open {
-  width: 38px;
-  height: 34px;
+  width: 34px;
+  height: 100%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0;
   border: 0;
-  border-right: 1px solid #edf0f5;
-  background: transparent;
+  border-right: 1px solid var(--border);
+  background: #ffffff;
+}
+
+.path-launcher-open:not(:disabled):hover {
+  background: #ffffff;
 }
 
 .path-launcher-open:disabled {
@@ -225,14 +229,27 @@ textarea,
   opacity: 0.46;
 }
 
+.path-launcher-open .path-launcher-icon,
+.path-launcher-open .path-launcher-icon-image,
+.path-launcher-open .path-launcher-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
 .path-launcher-select {
-  width: 29px;
-  height: 34px;
+  width: 26px;
+  height: 100%;
+  justify-content: center;
   padding: 0;
   border: 0;
   border-radius: 0;
-  background: transparent;
+  background: #ffffff;
   box-shadow: none;
+}
+
+.path-launcher-select:hover,
+.path-launcher-select[aria-expanded="true"] {
+  background: #ffffff;
 }
 
 .path-launcher-select [data-slot="select-value"] {
@@ -240,45 +257,73 @@ textarea,
 }
 
 .path-launcher-select > svg {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
+  color: #5f6670;
 }
 
 .path-launcher-select-content {
-  width: 180px;
+  width: 160px;
 }
 
 .path-launcher-option {
-  display: inline-flex;
+  min-height: 24px;
+  display: flex;
   align-items: center;
   gap: 10px;
   font-size: 14px;
+  line-height: 1;
 }
 
 .path-launcher-icon {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #e1e5ec;
-  border-radius: 7px;
-  background: #ffffff;
   color: #343a43;
+  line-height: 0;
 }
 
 .path-launcher-icon-vscode {
   color: #0078d4;
 }
 
-.path-launcher-icon-cursor {
-  background: #62676f;
-  color: #ffffff;
+.path-launcher-icon-image {
+  width: 20px;
+  height: 20px;
+  display: block;
+  object-fit: contain;
+  vertical-align: middle;
 }
 
-.path-launcher-icon-finder {
-  background: #dbeafe;
-  color: #2573eb;
+.copy-toast {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  user-select: text;
+}
+
+.copy-toast-value {
+  min-width: 0;
+  /* TODO: AI-PICKED-VALUE: This width keeps copied paths and SHAs readable without making the toast too wide. */
+  max-width: min(340px, calc(100vw - 96px));
+  overflow: hidden;
+  color: #5f6670;
+  font-size: 12px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-sonner-toaster]
+  [data-sonner-toast][data-styled="true"]:hover
+  [data-close-button]:hover {
+  background: inherit;
+  border-color: inherit;
+  color: inherit;
 }
 
 .repo-picker {
@@ -292,16 +337,22 @@ textarea,
   font-weight: 700;
 }
 
-.repo-picker-label {
+.repo-picker-select {
+  min-width: 0;
+  /* TODO: AI-PICKED-VALUE: Fixed at 176px so the shadcn repo select stays compact in the page control row. */
+  width: 176px;
+  max-width: calc(100vw - 92px);
+  background: #ffffff;
   flex: 0 0 auto;
 }
 
-.repo-picker-select {
-  min-width: 0;
-  /* TODO: AI-PICKED-VALUE: Fixed at 176px so the shadcn repo select stays compact in the floating page control. */
-  width: 176px;
-  max-width: calc(100vw - 92px);
-  flex: 0 0 auto;
+.repo-picker-select:hover,
+.repo-picker-select[aria-expanded="true"] {
+  background: #ffffff;
+}
+
+.repo-picker-select > svg {
+  color: #5f6670;
 }
 
 .repo-picker-select [data-slot="select-value"] {
@@ -326,34 +377,42 @@ textarea,
   min-width: 0;
   min-height: 0;
   flex: 1;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
   overflow-anchor: none;
-  padding: 12px 0;
+  padding: 12px 0 0;
 }
 
 .repo-section {
-  margin-bottom: 26px;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.repo-panel {
+  min-height: 0;
+  flex: 1;
+  display: flex;
 }
 
 .repo-header {
+  min-width: 0;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
   gap: 8px;
-  padding: 0 0 10px 12px;
-}
-
-.repo-title {
-  overflow-wrap: anywhere;
-  color: #202124;
-  font-size: 17px;
-  font-weight: 760;
+  padding-bottom: 10px;
+  padding-inline: 12px;
 }
 
 .repo-actions {
+  flex: 0 0 auto;
   display: flex;
   align-items: flex-start;
   gap: 10px;
+  /* TODO: AI-PICKED-VALUE: This separates the path launcher from the branch action group without moving the settings button away from the right edge. */
+  margin-left: 16px;
 }
 
 .repo-action-control {
@@ -375,6 +434,10 @@ textarea,
   color: #343a43;
 }
 
+.repo-action-control svg circle {
+  fill: #ffffff;
+}
+
 .repo-action-control:hover:not(:disabled),
 .repo-action-control:hover:not(:disabled) svg {
   color: #0a64c9;
@@ -383,6 +446,30 @@ textarea,
 .repo-action-control:disabled {
   cursor: default;
   opacity: 0.38;
+}
+
+.repo-settings-button {
+  flex: 0 0 auto;
+}
+
+.settings-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #343a43;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.settings-select {
+  width: 160px;
+  background: #ffffff;
+}
+
+.settings-select:hover,
+.settings-select[aria-expanded="true"] {
+  background: #ffffff;
 }
 
 .title-tooltip-trigger {
@@ -394,10 +481,20 @@ textarea,
   --commit-history-grid-template-columns: 300px 260px 340px 420px 84px 150px
     170px;
   --commit-history-table-width: 1724px;
-  overflow: auto;
+  min-height: 0;
+  flex: 1;
+  overflow: visible;
   overflow-anchor: none;
   border: 1px solid #d9dee6;
   border-radius: 0;
+  background: #ffffff;
+}
+
+.commit-history-header-scroll {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  overflow: hidden;
   background: #ffffff;
 }
 
@@ -408,9 +505,6 @@ textarea,
 }
 
 .commit-history-header {
-  position: sticky;
-  top: 0;
-  z-index: 5;
   display: grid;
   grid-template-columns: var(--commit-history-grid-template-columns);
   min-width: var(--commit-history-table-width);
@@ -421,6 +515,11 @@ textarea,
   color: #5f6670;
   font-size: 11px;
   font-weight: 700;
+}
+
+.commit-history-body-scroll {
+  overflow-x: auto;
+  overflow-y: visible;
 }
 
 .commit-history-header-cell {
@@ -557,13 +656,11 @@ textarea,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  /* TODO: AI-PICKED-VALUE: This nudges the HEAD user marker left from the graph edge without moving other graph actions. */
-  margin-right: 4px;
   color: #343a43;
 }
 
 .change-summary-modal {
-  width: min(720px, calc(100vw - 32px));
+  width: min(360px, calc(100vw - 32px));
 }
 
 /* TODO: AI-PICKED-VALUE: The modal width leaves room for branch names and hash changes while matching the existing modal style. */
@@ -619,7 +716,11 @@ textarea,
 }
 
 .change-summary-modal-link {
+  width: auto;
+  height: auto;
   align-self: flex-start;
+  justify-self: start;
+  justify-content: flex-start;
   padding: 0;
   border: 0;
   background: transparent;
@@ -628,6 +729,8 @@ textarea,
   font: inherit;
   font-size: 13px;
   font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .branch-tag-change-list {
@@ -679,7 +782,7 @@ textarea,
   color: #202124;
 }
 
-.commit-history-row-branch-drop-target {
+.commit-branch-tags-cell-branch-drop-target {
   outline: 2px solid #0a84ff;
   outline-offset: -2px;
   background: #eaf1ff;
@@ -690,10 +793,7 @@ textarea,
 }
 
 /* TODO: AI-PICKED-VALUE: This gray is a subtle hover state that keeps the compact table readable without adding row lines. */
-.commit-history-row:not(
-    .commit-history-row-selected,
-    .commit-history-row-branch-drop-target
-  ):hover {
+.commit-history-row:not(.commit-history-row-selected):hover {
   background: #f3f4f6;
 }
 
@@ -704,10 +804,6 @@ textarea,
   background: #dbeafe;
 }
 
-.commit-history-row-branch-drop-target:nth-child(even) {
-  background: #eaf1ff;
-}
-
 .commit-graph-cell {
   position: relative;
   min-width: 0;
@@ -716,8 +812,16 @@ textarea,
 .commit-graph-actions {
   position: absolute;
   top: 50%;
-  right: 4px;
+  z-index: 5;
+  /* TODO: AI-PICKED-VALUE: This keeps every graph action as far from the right edge as the HEAD marker was. */
+  right: 8px;
   transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.commit-graph-thread-actions {
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -739,6 +843,25 @@ textarea,
 .commit-actors-cell,
 .commit-description-cell {
   overflow: hidden;
+}
+
+.commit-branch-tags-cell,
+.commit-actors-cell {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.commit-branch-tags-cell::-webkit-scrollbar,
+.commit-actors-cell::-webkit-scrollbar {
+  display: none;
+}
+
+.commit-branch-tags-cell .commit-label-list,
+.commit-actors-cell .commit-label-list {
+  min-width: max-content;
+  flex: 0 0 auto;
+  overflow: visible;
 }
 
 .commit-description-cell {
@@ -875,29 +998,60 @@ textarea,
 }
 
 .commit-thread-group {
-  min-height: 16px;
+  position: relative;
+  min-height: 18px;
   display: inline-flex;
   align-items: center;
   /* TODO: AI-PICKED-VALUE: This gives neighboring chat items inside a cwd group a little more breathing room without widening group breaks. */
   gap: 3px;
+  min-width: max-content;
   flex: 0 0 auto;
+  padding: 1px 3px;
+  border: 0;
+  border-radius: 5px;
+  box-sizing: border-box;
+}
+
+.commit-thread-group-highlighted {
+  background: #fff8df;
+}
+
+.commit-thread-group-background-tooltip {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+}
+
+.commit-thread-group [data-slot="button"] {
+  position: relative;
+  z-index: 1;
 }
 
 .commit-thread-chat {
-  width: 16px;
   height: 16px;
+  min-width: max-content;
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
+  gap: 3px;
+  padding: 0 4px;
+  border: 1px solid #d5b55f;
+  border-radius: 4px;
+  background: #fff4cf;
   color: #202124;
   cursor: pointer;
+  flex: 0 0 auto;
+  font-size: 10px;
+  line-height: 12px;
+  font-weight: 720;
 }
 
 .commit-thread-chat-icon {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
   overflow: visible;
 }
 
@@ -905,13 +1059,17 @@ textarea,
   stroke: currentColor;
 }
 
-.commit-thread-worktree-mark {
-  color: #4d5562;
-  fill: currentColor;
-}
-
 .commit-thread-chat:focus {
   outline: none;
+}
+
+.commit-thread-chat:hover {
+  background: #f6e8aa;
+}
+
+.commit-thread-chat-title {
+  min-width: max-content;
+  white-space: nowrap;
 }
 
 .commit-thread-change-count {
@@ -919,13 +1077,19 @@ textarea,
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  padding: 0;
+  margin: 0 2px;
+  padding: 0 2px;
   border: 0;
   background: transparent;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 10px;
   font-weight: 760;
   cursor: pointer;
+}
+
+.commit-thread-group .commit-branch-create-action,
+.commit-thread-group .commit-thread-commit-action {
+  margin: 0 2px;
 }
 
 .commit-thread-change-added {

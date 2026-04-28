@@ -1,15 +1,13 @@
 import {
-  Box,
   Check,
   CircleArrowDown,
   CircleArrowLeft,
   CircleArrowUp,
-  ExternalLink,
-  FolderOpen,
   GitBranch,
   GitCommitHorizontal,
   GitPullRequestArrow,
   LoaderCircle,
+  Settings,
   Trash2,
   User,
 } from "lucide-react";
@@ -73,7 +71,6 @@ import {
   EmptyMedia,
 } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -89,6 +86,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import cursorAppIconUrl from "./assets/cursor-app-icon.png";
+import finderAppIconUrl from "./assets/finder-app-icon.png";
 import initialLoadingImageUrl from "./assets/initial-loading.png";
 
 // The history view is a SourceTree-style row table. Git owns the commits; the renderer only assigns lanes.
@@ -98,6 +97,8 @@ const COMMIT_GRAPH_LANE_WIDTH = 14;
 const COMMIT_GRAPH_PADDING_LEFT = 16;
 const COMMIT_GRAPH_MIN_WIDTH = 96;
 const COMMIT_GRAPH_DOT_RADIUS = 4;
+// TODO: AI-PICKED-VALUE: This small center dot makes the HEAD commit distinct without hiding the commit color.
+const COMMIT_GRAPH_HEAD_CENTER_DOT_RADIUS = 1.75;
 // TODO: AI-PICKED-VALUE: This keeps graph lines readable in compact rows while making them less heavy.
 const COMMIT_GRAPH_SEGMENT_STROKE_WIDTH = 2.25;
 // TODO: AI-PICKED-VALUE: The HEAD icon is large enough to read in compact rows without taking over the graph column.
@@ -106,8 +107,6 @@ const COMMIT_GRAPH_USER_ICON_SIZE = 12;
 const COMMIT_GRAPH_USER_ICON_STROKE_WIDTH = 2.25;
 const COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO = 0;
 const COMMIT_HISTORY_HEADER_HEIGHT = 22;
-// TODO: AI-PICKED-VALUE: This gives neighboring chat title tooltips a short handoff window after the first tooltip opens.
-const CHAT_TITLE_TOOLTIP_SKIP_DELAY_MS = 350;
 // Dashboard reads touch Codex and Git, so automatic refreshes share the manual refresh path and never overlap.
 // TODO: AI-PICKED-VALUE: Refreshing every second keeps branch/worktree state current while the refresh queue prevents overlapping Git reads.
 const DASHBOARD_REFRESH_INTERVAL_MS = 1000;
@@ -289,22 +288,59 @@ const PathLauncherIcon = ({ pathLauncher }: { pathLauncher: PathLauncher }) => {
     case "vscode":
       return (
         <span className="path-launcher-icon path-launcher-icon-vscode">
-          <VscVscode aria-hidden="true" size={20} />
+          <VscVscode aria-hidden="true" className="text-current" size={20} />
         </span>
       );
     case "cursor":
       return (
         <span className="path-launcher-icon path-launcher-icon-cursor">
-          <Box aria-hidden="true" size={15} />
+          <img
+            alt=""
+            aria-hidden="true"
+            className="path-launcher-icon-image"
+            draggable={false}
+            src={cursorAppIconUrl}
+          />
         </span>
       );
     case "finder":
       return (
         <span className="path-launcher-icon path-launcher-icon-finder">
-          <FolderOpen aria-hidden="true" size={15} />
+          <img
+            alt=""
+            aria-hidden="true"
+            className="path-launcher-icon-image"
+            draggable={false}
+            src={finderAppIconUrl}
+          />
         </span>
       );
   }
+};
+
+const PathLauncherSelectItems = () => {
+  return (
+    <>
+      <SelectItem value="vscode">
+        <span className="path-launcher-option">
+          <PathLauncherIcon pathLauncher="vscode" />
+          <span>VS Code</span>
+        </span>
+      </SelectItem>
+      <SelectItem value="cursor">
+        <span className="path-launcher-option">
+          <PathLauncherIcon pathLauncher="cursor" />
+          <span>Cursor</span>
+        </span>
+      </SelectItem>
+      <SelectItem value="finder">
+        <span className="path-launcher-option">
+          <PathLauncherIcon pathLauncher="finder" />
+          <span>Finder</span>
+        </span>
+      </SelectItem>
+    </>
+  );
 };
 
 const copyTextAfterContextMenu = async ({
@@ -323,7 +359,12 @@ const copyTextAfterContextMenu = async ({
 
   try {
     await window.molttree.copyText(text);
-    toast(`Copied ${copiedLabel}!`);
+    toast(
+      <div className="copy-toast">
+        <div>{`Copied ${copiedLabel}!`}</div>
+        <div className="copy-toast-value">{text}</div>
+      </div>,
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : errorMessage;
     toast.error("Error", {
@@ -340,7 +381,7 @@ const readRepoFolderName = (repo: RepoGraph) => {
 const COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS = {
   graph: 140,
   branchTags: 272,
-  actors: 120,
+  actors: 240,
   description: 294,
   commit: 84,
   author: 150,
@@ -1192,7 +1233,7 @@ const BranchTags = ({
               void copyTextAfterContextMenu({
                 event,
                 text: refName,
-                copiedLabel: "tag",
+                copiedLabel: "tag name",
                 errorMessage: "Failed to copy branch name.",
               });
             }}
@@ -1245,6 +1286,8 @@ const ChatRobotTags = ({
   commitSha,
   localBranches,
   currentBranch,
+  branchCreateThreadGroupKey,
+  openBranchCreateModal,
   openCommitMessageModal,
   openChangeSummaryModal,
 }: {
@@ -1255,6 +1298,11 @@ const ChatRobotTags = ({
   commitSha: string;
   localBranches: string[];
   currentBranch: string | null;
+  branchCreateThreadGroupKey: string | null;
+  openBranchCreateModal: (
+    event: MouseEvent<HTMLButtonElement>,
+    branchCreateTarget: BranchCreateTarget,
+  ) => void;
   openCommitMessageModal: (
     event: MouseEvent<HTMLButtonElement>,
     commitMessageTarget: CommitMessageTarget,
@@ -1294,98 +1342,85 @@ const ChatRobotTags = ({
           threadGroup.cwd.length > 0 &&
           shouldShowChangeCount &&
           commitBranchTarget !== null;
-        return (
-          <span className="commit-thread-group" key={threadGroup.key}>
-            <TooltipProvider
-              skipDelayDuration={CHAT_TITLE_TOOLTIP_SKIP_DELAY_MS}
-            >
-              {threadGroup.threads.map((thread) => {
-                const title = threadTitle(thread);
-                const chatTooltipTitle =
-                  title.startsWith("/") ||
-                  title.startsWith("~") ||
-                  title.includes("/Users/")
-                    ? "Open chat"
-                    : title;
-                const isThreadActive = readIsThreadActive(thread);
-                const isWorktreeThread = readIsWorktreeCwd({
-                  cwd: thread.cwd,
-                  worktrees,
-                });
-                const chatIconMaskId = `commit-thread-chat-mask-${thread.id.replace(/[^A-Za-z0-9_-]/g, "-")}`;
+        const branchCreateTarget =
+          threadGroup.key === branchCreateThreadGroupKey
+            ? {
+                path: threadGroup.cwd,
+                title: threadGroup.cwd,
+              }
+            : null;
+        const shouldShowGroupBackground =
+          threadGroup.threads.length > 1 ||
+          shouldShowChangeCount ||
+          shouldShowCommitAction ||
+          branchCreateTarget !== null;
+        const shouldShowSameBranchTooltip = threadGroup.threads.length > 1;
 
-                return (
-                  <TitleTooltip
-                    title={
-                      isThreadActive
-                        ? `${chatTooltipTitle} is loading`
-                        : chatTooltipTitle
-                    }
-                    key={thread.id}
+        return (
+          <span
+            className={cn(
+              "commit-thread-group",
+              shouldShowGroupBackground && "commit-thread-group-highlighted",
+            )}
+            key={threadGroup.key}
+          >
+            {shouldShowSameBranchTooltip ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    aria-label="These chats are on the same branch and share the same changes."
+                    className="commit-thread-group-background-tooltip"
+                  />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>
+                    These chats are on the same branch and share the same
+                    changes.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
+            {threadGroup.threads.map((thread) => {
+              const title = threadTitle(thread);
+              const isThreadActive = readIsThreadActive(thread);
+
+              return (
+                <Button
+                  aria-label={
+                    isThreadActive ? `${title} is loading` : `Open ${title}`
+                  }
+                  className="commit-thread-chat"
+                  variant="ghost"
+                  size="xs"
+                  type="button"
+                  key={thread.id}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onDoubleClick={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    void openThread(thread.id);
+                  }}
+                >
+                  <svg
+                    aria-hidden="true"
+                    className="commit-thread-chat-icon"
+                    focusable="false"
+                    viewBox="0 0 512 512"
                   >
-                    <Button
-                      className="commit-thread-chat"
-                      variant="ghost"
-                      size="icon-xs"
-                      type="button"
-                      onMouseDown={(event) => event.stopPropagation()}
-                      onDoubleClick={(event) => event.stopPropagation()}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        void openThread(thread.id);
-                      }}
-                    >
-                      <svg
-                        aria-hidden="true"
-                        className="commit-thread-chat-icon"
-                        focusable="false"
-                        viewBox="0 0 512 512"
-                      >
-                        {isWorktreeThread ? (
-                          <defs>
-                            <mask id={chatIconMaskId}>
-                              <rect width="512" height="512" fill="#ffffff" />
-                              {/* TODO: AI-PICKED-VALUE: This cutout gives the composed remix mark a little extra room above the chat outline at dense row sizes. */}
-                              <ellipse
-                                cx="390"
-                                cy="376"
-                                rx="154"
-                                ry="166"
-                                fill="#000000"
-                              />
-                            </mask>
-                          </defs>
-                        ) : null}
-                        <path
-                          className="commit-thread-chat-bubble"
-                          d="M87.49 380c1.19-4.38-1.44-10.47-3.95-14.86a44.86 44.86 0 0 0-2.54-3.8 199.81 199.81 0 0 1-33-110C47.65 139.09 140.73 48 255.83 48 356.21 48 440 117.54 459.58 209.85a199 199 0 0 1 4.42 41.64c0 112.41-89.49 204.93-204.59 204.93-18.3 0-43-4.6-56.47-8.37s-26.92-8.77-30.39-10.11a31.09 31.09 0 0 0-11.12-2.07 30.71 30.71 0 0 0-12.09 2.43l-67.83 24.48a16 16 0 0 1-4.67 1.22 9.6 9.6 0 0 1-9.57-9.74 15.85 15.85 0 0 1 .6-3.29z"
-                          fill="none"
-                          mask={
-                            isWorktreeThread
-                              ? `url(#${chatIconMaskId})`
-                              : undefined
-                          }
-                          strokeLinecap="round"
-                          strokeMiterlimit={10}
-                          strokeWidth={32}
-                        />
-                        {isWorktreeThread ? (
-                          // TODO: AI-PICKED-VALUE: This transform preserves the old 90-degree rotation while placing the original Material icon in the chat corner.
-                          <g
-                            className="commit-thread-worktree-mark"
-                            transform="translate(390 390) rotate(90) scale(12) translate(-12 -12)"
-                          >
-                            <path fill="none" d="M0 0h24v24H0V0z" />
-                            <path d="m14 4 2.29 2.29-2.88 2.88 1.42 1.42 2.88-2.88L20 10V4h-6zm-4 0H4v6l2.29-2.29 4.71 4.7V20h2v-8.41l-5.29-5.3L10 4z" />
-                          </g>
-                        ) : null}
-                      </svg>
-                    </Button>
-                  </TitleTooltip>
-                );
-              })}
-            </TooltipProvider>
+                    <path
+                      className="commit-thread-chat-bubble"
+                      d="M87.49 380c1.19-4.38-1.44-10.47-3.95-14.86a44.86 44.86 0 0 0-2.54-3.8 199.81 199.81 0 0 1-33-110C47.65 139.09 140.73 48 255.83 48 356.21 48 440 117.54 459.58 209.85a199 199 0 0 1 4.42 41.64c0 112.41-89.49 204.93-204.59 204.93-18.3 0-43-4.6-56.47-8.37s-26.92-8.77-30.39-10.11a31.09 31.09 0 0 0-11.12-2.07 30.71 30.71 0 0 0-12.09 2.43l-67.83 24.48a16 16 0 0 1-4.67 1.22 9.6 9.6 0 0 1-9.57-9.74 15.85 15.85 0 0 1 .6-3.29z"
+                      fill="none"
+                      strokeLinecap="round"
+                      strokeMiterlimit={10}
+                      strokeWidth={32}
+                    />
+                  </svg>
+                  <span className="commit-thread-chat-title">{title}</span>
+                </Button>
+              );
+            })}
             {shouldShowChangeCount ? (
               <TitleTooltip title="Show changes">
                 <Button
@@ -1432,7 +1467,23 @@ const ChatRobotTags = ({
                   <Check size={10} />
                 </Button>
               </TitleTooltip>
-            ) : null}
+            ) : branchCreateTarget === null ? null : (
+              <TitleTooltip title="Add branch here">
+                <Button
+                  className="commit-branch-create-action"
+                  variant="ghost"
+                  size="icon-xs"
+                  type="button"
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onDoubleClick={(event) => event.stopPropagation()}
+                  onClick={(event) =>
+                    openBranchCreateModal(event, branchCreateTarget)
+                  }
+                >
+                  <GitBranch size={10} />
+                </Button>
+              </TitleTooltip>
+            )}
           </span>
         );
       })}
@@ -1498,6 +1549,7 @@ const CommitGraphSvg = ({
       {graph.rows.map((row) => {
         const centerX = readCommitGraphX(row.lane);
         const centerY = readCommitGraphY(row.rowIndex);
+        const isHeadRow = row.commit.refs.some((ref) => readIsHeadRef(ref));
 
         return (
           <g key={row.id}>
@@ -1507,6 +1559,14 @@ const CommitGraphSvg = ({
               r={COMMIT_GRAPH_DOT_RADIUS}
               fill={readCommitGraphColor(row.colorIndex)}
             />
+            {isHeadRow ? (
+              <circle
+                cx={centerX}
+                cy={centerY}
+                r={COMMIT_GRAPH_HEAD_CENTER_DOT_RADIUS}
+                fill="#ffffff"
+              />
+            ) : null}
           </g>
         );
       })}
@@ -1610,7 +1670,6 @@ const CommitHistoryRow = ({
           (localBranch) => localBranch !== currentBranch,
         ) ?? null);
   let mergeDisabledReason: string | null = null;
-  let branchCreateTarget: BranchCreateTarget | null = null;
   let rowClassName = "commit-history-row";
 
   if (mergeBranch !== null && isHeadClean === false) {
@@ -1618,63 +1677,50 @@ const CommitHistoryRow = ({
       "Current HEAD working tree must be clean before merging.";
   }
 
+  let branchCreateThreadGroupKey: string | null = null;
+
   if (commit.localBranches.length === 0) {
     for (const threadGroup of threadGroups) {
-      if (threadGroup.cwd.length === 0) {
-        continue;
+      if (threadGroup.cwd.length > 0) {
+        branchCreateThreadGroupKey = threadGroup.key;
+        break;
       }
-
-      branchCreateTarget = {
-        path: threadGroup.cwd,
-        title: threadGroup.cwd,
-      };
-      break;
     }
   }
 
-  const shouldShowGraphActions =
-    branchCreateTarget !== null || mergeBranch !== null || isHeadRow;
+  const shouldShowGraphActions = mergeBranch !== null || isHeadRow;
   const commitDateText = formatCommitDate(commit.date);
-
-  if (isBranchPointerDropTarget) {
-    rowClassName = `${rowClassName} commit-history-row-branch-drop-target`;
-  }
+  let branchTagsCellClassName = "commit-branch-tags-cell";
 
   if (isSelected) {
     rowClassName = `${rowClassName} commit-history-row-selected`;
+  }
+
+  if (isBranchPointerDropTarget) {
+    branchTagsCellClassName = `${branchTagsCellClassName} commit-branch-tags-cell-branch-drop-target`;
   }
 
   return (
     <div
       className={rowClassName}
       onMouseDown={selectRow}
-      onDragOver={updateBranchPointerDropTarget}
-      onDragLeave={clearBranchPointerDropTarget}
-      onDrop={finishBranchPointerDrop}
+      onDoubleClick={openRowAfterDoubleClick}
     >
-      <div
-        className="commit-graph-cell"
-        onDoubleClick={openRowAfterDoubleClick}
-      >
+      <div className="commit-graph-cell">
         {shouldShowGraphActions ? (
           <div className="commit-graph-actions">
-            {branchCreateTarget !== null ? (
-              <TitleTooltip title="Add branch here">
-                <Button
-                  className="commit-branch-create-action"
-                  variant="ghost"
-                  size="icon-xs"
-                  type="button"
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onDoubleClick={(event) => event.stopPropagation()}
-                  onClick={(event) =>
-                    openBranchCreateModal(event, branchCreateTarget)
-                  }
-                >
-                  <GitBranch size={10} />
-                </Button>
+            {isHeadRow ? (
+              <TitleTooltip title="You">
+                <span className="commit-graph-head-icon" aria-label="You">
+                  <User
+                    aria-hidden="true"
+                    size={COMMIT_GRAPH_USER_ICON_SIZE}
+                    strokeWidth={COMMIT_GRAPH_USER_ICON_STROKE_WIDTH}
+                  />
+                </span>
               </TitleTooltip>
-            ) : mergeBranch === null ? null : (
+            ) : null}
+            {mergeBranch === null ? null : (
               <TitleTooltip
                 title={
                   mergeDisabledReason === null
@@ -1700,17 +1746,6 @@ const CommitHistoryRow = ({
                 </span>
               </TitleTooltip>
             )}
-            {isHeadRow ? (
-              <TitleTooltip title="You">
-                <span className="commit-graph-head-icon" aria-label="You">
-                  <User
-                    aria-hidden="true"
-                    size={COMMIT_GRAPH_USER_ICON_SIZE}
-                    strokeWidth={COMMIT_GRAPH_USER_ICON_STROKE_WIDTH}
-                  />
-                </span>
-              </TitleTooltip>
-            ) : null}
           </div>
         ) : null}
       </div>
@@ -1723,11 +1758,18 @@ const CommitHistoryRow = ({
           commitSha={commit.sha}
           localBranches={commit.localBranches}
           currentBranch={currentBranch}
+          branchCreateThreadGroupKey={branchCreateThreadGroupKey}
+          openBranchCreateModal={openBranchCreateModal}
           openCommitMessageModal={openCommitMessageModal}
           openChangeSummaryModal={openChangeSummaryModal}
         />
       </div>
-      <div className="commit-branch-tags-cell">
+      <div
+        className={branchTagsCellClassName}
+        onDragOver={updateBranchPointerDropTarget}
+        onDragLeave={clearBranchPointerDropTarget}
+        onDrop={finishBranchPointerDrop}
+      >
         <BranchTags
           refs={commit.refs}
           worktrees={worktrees}
@@ -1750,7 +1792,7 @@ const CommitHistoryRow = ({
           void copyTextAfterContextMenu({
             event,
             text: commit.subject,
-            copiedLabel: "Description",
+            copiedLabel: "description",
             errorMessage: "Failed to copy description.",
           });
         }}
@@ -1763,7 +1805,7 @@ const CommitHistoryRow = ({
           void copyTextAfterContextMenu({
             event,
             text: commit.sha,
-            copiedLabel: "Commit SHA",
+            copiedLabel: "commit SHA",
             errorMessage: "Failed to copy commit.",
           });
         }}
@@ -1776,7 +1818,7 @@ const CommitHistoryRow = ({
           void copyTextAfterContextMenu({
             event,
             text: commit.author,
-            copiedLabel: "Author",
+            copiedLabel: "author",
             errorMessage: "Failed to copy author.",
           });
         }}
@@ -1789,7 +1831,7 @@ const CommitHistoryRow = ({
           void copyTextAfterContextMenu({
             event,
             text: commitDateText,
-            copiedLabel: "Date",
+            copiedLabel: "date",
             errorMessage: "Failed to copy date.",
           });
         }}
@@ -1857,6 +1899,7 @@ const CommitHistory = ({
   rememberBranchTagChange: (branchTagChange: GitBranchTagChange) => void;
 }) => {
   const commitHistoryRef = useRef<HTMLDivElement | null>(null);
+  const commitHistoryHeaderScrollRef = useRef<HTMLDivElement | null>(null);
   const columnResizeRef = useRef<CommitHistoryColumnResize | null>(null);
   const [columnWidths, setColumnWidths] = useState<CommitHistoryColumnWidths>(
     COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS,
@@ -2531,11 +2574,11 @@ const CommitHistory = ({
   const refreshDashboardThenShowGitError = async (
     gitErrorMessage: string | null,
   ) => {
-    await refreshDashboard();
-
     if (gitErrorMessage !== null) {
       showErrorMessage(gitErrorMessage);
     }
+
+    await refreshDashboard();
   };
   const openBranchDeleteModal = (
     event: MouseEvent<HTMLButtonElement>,
@@ -2781,137 +2824,155 @@ const CommitHistory = ({
   return (
     <>
       <Card className="commit-history gap-0 py-0 ring-0" ref={commitHistoryRef}>
-        <div className="commit-history-header">
-          <div className="commit-history-header-cell commit-history-graph-title">
-            <span>Graph</span>
-            <Resizable
-              axis="x"
-              width={graphWidth}
-              height={COMMIT_HISTORY_HEADER_HEIGHT}
-              minConstraints={[graphMinimumWidth, COMMIT_HISTORY_HEADER_HEIGHT]}
-              maxConstraints={[graphMaxWidth, COMMIT_HISTORY_HEADER_HEIGHT]}
-              resizeHandles={["e"]}
-              handle={(resizeHandle, ref) => (
-                <span
-                  className={`commit-history-panel-resize react-resizable-handle react-resizable-handle-${resizeHandle}`}
-                  ref={ref}
+        <div
+          className="commit-history-header-scroll"
+          ref={commitHistoryHeaderScrollRef}
+        >
+          <div className="commit-history-header">
+            <div className="commit-history-header-cell commit-history-graph-title">
+              <span>Graph</span>
+              <Resizable
+                axis="x"
+                width={graphWidth}
+                height={COMMIT_HISTORY_HEADER_HEIGHT}
+                minConstraints={[
+                  graphMinimumWidth,
+                  COMMIT_HISTORY_HEADER_HEIGHT,
+                ]}
+                maxConstraints={[graphMaxWidth, COMMIT_HISTORY_HEADER_HEIGHT]}
+                resizeHandles={["e"]}
+                handle={(resizeHandle, ref) => (
+                  <span
+                    className={`commit-history-panel-resize react-resizable-handle react-resizable-handle-${resizeHandle}`}
+                    ref={ref}
+                  />
+                )}
+                onResize={(_event, data) => resizeGraphColumn(data)}
+              >
+                <div
+                  className="commit-history-graph-resize-surface"
+                  aria-hidden="true"
                 />
-              )}
-              onResize={(_event, data) => resizeGraphColumn(data)}
-            >
-              <div
-                className="commit-history-graph-resize-surface"
-                aria-hidden="true"
+              </Resizable>
+            </div>
+            <div className="commit-history-header-cell">
+              <Button
+                className="commit-history-header-toggle"
+                variant="ghost"
+                size="xs"
+                type="button"
+                aria-pressed={shouldShowChatOnly}
+                onClick={() =>
+                  setShouldShowChatOnly((currentShouldShowChatOnly) => {
+                    return !currentShouldShowChatOnly;
+                  })
+                }
+              >
+                Chats
+              </Button>
+              <CommitHistoryColumnResizeHandle
+                columnKey="actors"
+                startColumnResize={startColumnResize}
+                updateColumnResize={updateColumnResize}
+                finishColumnResize={finishColumnResize}
               />
-            </Resizable>
-          </div>
-          <div className="commit-history-header-cell">
-            <Button
-              className="commit-history-header-toggle"
-              variant="ghost"
-              size="xs"
-              type="button"
-              aria-pressed={shouldShowChatOnly}
-              onClick={() =>
-                setShouldShowChatOnly((currentShouldShowChatOnly) => {
-                  return !currentShouldShowChatOnly;
-                })
-              }
-            >
-              Chats
-            </Button>
-            <CommitHistoryColumnResizeHandle
-              columnKey="actors"
-              startColumnResize={startColumnResize}
-              updateColumnResize={updateColumnResize}
-              finishColumnResize={finishColumnResize}
-            />
-          </div>
-          <div className="commit-history-header-cell">
-            <span>Branch Tags</span>
-            <CommitHistoryColumnResizeHandle
-              columnKey="branchTags"
-              startColumnResize={startColumnResize}
-              updateColumnResize={updateColumnResize}
-              finishColumnResize={finishColumnResize}
-            />
-          </div>
-          <div className="commit-history-header-cell">
-            <span>Description</span>
-            <CommitHistoryColumnResizeHandle
-              columnKey="description"
-              startColumnResize={startColumnResize}
-              updateColumnResize={updateColumnResize}
-              finishColumnResize={finishColumnResize}
-            />
-          </div>
-          <div className="commit-history-header-cell">
-            <span>Commit</span>
-            <CommitHistoryColumnResizeHandle
-              columnKey="commit"
-              startColumnResize={startColumnResize}
-              updateColumnResize={updateColumnResize}
-              finishColumnResize={finishColumnResize}
-            />
-          </div>
-          <div className="commit-history-header-cell">
-            <span>Author</span>
-            <CommitHistoryColumnResizeHandle
-              columnKey="author"
-              startColumnResize={startColumnResize}
-              updateColumnResize={updateColumnResize}
-              finishColumnResize={finishColumnResize}
-            />
-          </div>
-          <div className="commit-history-header-cell">
-            <span>Date</span>
-            <CommitHistoryColumnResizeHandle
-              columnKey="date"
-              startColumnResize={startColumnResize}
-              updateColumnResize={updateColumnResize}
-              finishColumnResize={finishColumnResize}
-            />
+            </div>
+            <div className="commit-history-header-cell">
+              <span>Branch Tags</span>
+              <CommitHistoryColumnResizeHandle
+                columnKey="branchTags"
+                startColumnResize={startColumnResize}
+                updateColumnResize={updateColumnResize}
+                finishColumnResize={finishColumnResize}
+              />
+            </div>
+            <div className="commit-history-header-cell">
+              <span>Description</span>
+              <CommitHistoryColumnResizeHandle
+                columnKey="description"
+                startColumnResize={startColumnResize}
+                updateColumnResize={updateColumnResize}
+                finishColumnResize={finishColumnResize}
+              />
+            </div>
+            <div className="commit-history-header-cell">
+              <span>Commit</span>
+              <CommitHistoryColumnResizeHandle
+                columnKey="commit"
+                startColumnResize={startColumnResize}
+                updateColumnResize={updateColumnResize}
+                finishColumnResize={finishColumnResize}
+              />
+            </div>
+            <div className="commit-history-header-cell">
+              <span>Author</span>
+              <CommitHistoryColumnResizeHandle
+                columnKey="author"
+                startColumnResize={startColumnResize}
+                updateColumnResize={updateColumnResize}
+                finishColumnResize={finishColumnResize}
+              />
+            </div>
+            <div className="commit-history-header-cell">
+              <span>Date</span>
+              <CommitHistoryColumnResizeHandle
+                columnKey="date"
+                startColumnResize={startColumnResize}
+                updateColumnResize={updateColumnResize}
+                finishColumnResize={finishColumnResize}
+              />
+            </div>
           </div>
         </div>
-        <div className="commit-history-body">
-          <CommitGraphSvg graph={visibleGraph} graphWidth={graphWidth} />
-          {visibleGraph.rows.map((row) => (
-            <CommitHistoryRow
-              key={row.id}
-              row={row}
-              repoRoot={repoRoot}
-              worktrees={worktrees}
-              currentBranch={currentBranch}
-              defaultBranch={defaultBranch}
-              isHeadClean={isHeadClean}
-              threadOfId={threadOfId}
-              gitChangesOfCwd={gitChangesOfCwd}
-              isBranchPointerDropTarget={
-                branchPointerDropTargetRowId === row.id
-              }
-              isSelected={selectedCommitRowId === row.id}
-              isHeadAncestor={isHeadAncestorOfSha[row.commit.sha] === true}
-              isAfterHead={isAfterHeadOfSha[row.commit.sha] === true}
-              isBranchDeleteSafeOfBranch={isBranchDeleteSafeOfBranch}
-              selectRow={() => setSelectedCommitRowId(row.id)}
-              updateBranchPointerDropTarget={(event) =>
-                updateBranchPointerDropTarget({ event, row })
-              }
-              clearBranchPointerDropTarget={clearBranchPointerDropTarget}
-              finishBranchPointerDrop={(event) =>
-                finishBranchPointerDrop({ event, row })
-              }
-              openRowAfterDoubleClick={() => openRowAfterDoubleClick(row)}
-              openBranchDeleteModal={openBranchDeleteModal}
-              openBranchCreateModal={openBranchCreateModal}
-              openCommitMessageModal={openCommitMessageModal}
-              openChangeSummaryModal={openChangeSummaryModal}
-              openBranchMergeModal={openBranchMergeModal}
-              openCodePath={openCodePath}
-              startBranchPointerDrag={startBranchPointerDrag}
-              finishBranchPointerDrag={finishBranchPointerDrag}
-            />
-          ))}
+        <div
+          className="commit-history-body-scroll"
+          onScroll={(event) => {
+            if (commitHistoryHeaderScrollRef.current !== null) {
+              commitHistoryHeaderScrollRef.current.scrollLeft =
+                event.currentTarget.scrollLeft;
+            }
+          }}
+        >
+          <div className="commit-history-body">
+            <CommitGraphSvg graph={visibleGraph} graphWidth={graphWidth} />
+            {visibleGraph.rows.map((row) => (
+              <CommitHistoryRow
+                key={row.id}
+                row={row}
+                repoRoot={repoRoot}
+                worktrees={worktrees}
+                currentBranch={currentBranch}
+                defaultBranch={defaultBranch}
+                isHeadClean={isHeadClean}
+                threadOfId={threadOfId}
+                gitChangesOfCwd={gitChangesOfCwd}
+                isBranchPointerDropTarget={
+                  branchPointerDropTargetRowId === row.id
+                }
+                isSelected={selectedCommitRowId === row.id}
+                isHeadAncestor={isHeadAncestorOfSha[row.commit.sha] === true}
+                isAfterHead={isAfterHeadOfSha[row.commit.sha] === true}
+                isBranchDeleteSafeOfBranch={isBranchDeleteSafeOfBranch}
+                selectRow={() => setSelectedCommitRowId(row.id)}
+                updateBranchPointerDropTarget={(event) =>
+                  updateBranchPointerDropTarget({ event, row })
+                }
+                clearBranchPointerDropTarget={clearBranchPointerDropTarget}
+                finishBranchPointerDrop={(event) =>
+                  finishBranchPointerDrop({ event, row })
+                }
+                openRowAfterDoubleClick={() => openRowAfterDoubleClick(row)}
+                openBranchDeleteModal={openBranchDeleteModal}
+                openBranchCreateModal={openBranchCreateModal}
+                openCommitMessageModal={openCommitMessageModal}
+                openChangeSummaryModal={openChangeSummaryModal}
+                openBranchMergeModal={openBranchMergeModal}
+                openCodePath={openCodePath}
+                startBranchPointerDrag={startBranchPointerDrag}
+                finishBranchPointerDrag={finishBranchPointerDrag}
+              />
+            ))}
+          </div>
         </div>
         <Dialog
           open={branchCreateTarget !== null}
@@ -2929,7 +2990,7 @@ const CommitHistory = ({
                 <DialogHeader>
                   <DialogTitle>Create Branch</DialogTitle>
                   <DialogDescription>
-                    Create a branch for {branchCreateTarget.title}.
+                    Create a branch tag for this commit.
                   </DialogDescription>
                 </DialogHeader>
                 <Input
@@ -2971,9 +3032,7 @@ const CommitHistory = ({
               <form className="grid gap-4" onSubmit={submitCommitMessage}>
                 <DialogHeader>
                   <DialogTitle>Commit Changes</DialogTitle>
-                  <DialogDescription>
-                    Commit changes for {commitMessageTarget.title}.
-                  </DialogDescription>
+                  <DialogDescription>Enter a commit message.</DialogDescription>
                 </DialogHeader>
                 <Input
                   autoFocus
@@ -3010,12 +3069,9 @@ const CommitHistory = ({
           }}
         >
           {changeSummaryTarget === null ? null : (
-            <DialogContent className="change-summary-modal sm:max-w-[720px]">
+            <DialogContent className="change-summary-modal">
               <DialogHeader>
                 <DialogTitle>Change Summary</DialogTitle>
-                <DialogDescription className="[overflow-wrap:anywhere]">
-                  {changeSummaryTarget.title}
-                </DialogDescription>
               </DialogHeader>
               <div className="change-summary-breakdown">
                 <div
@@ -3206,89 +3262,24 @@ const RepoSection = ({
   repo,
   threadOfId,
   gitChangesOfCwd,
-  repoBranchTagChanges,
+  repoHeaderControls,
   pathLauncher,
   refreshDashboard,
   showErrorMessage,
   rememberBranchTagChange,
-  openBranchTagChangeModal,
 }: {
   repo: RepoGraph;
   threadOfId: { [id: string]: CodexThread };
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
-  repoBranchTagChanges: GitBranchTagChange[];
+  repoHeaderControls: ReactElement;
   pathLauncher: PathLauncher;
   refreshDashboard: () => Promise<void>;
   showErrorMessage: (message: string) => void;
   rememberBranchTagChange: (branchTagChange: GitBranchTagChange) => void;
-  openBranchTagChangeModal: (
-    action: BranchTagChangeAction,
-    repoRoot: string,
-  ) => void;
 }) => {
-  const repoFolderName = readRepoFolderName(repo);
-
-  const openRepoPath = async () => {
-    try {
-      await window.molttree.openPath({
-        path: repo.root,
-        launcher: pathLauncher,
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to open repo.";
-      showErrorMessage(message);
-    }
-  };
-
   return (
     <section className="repo-section">
-      <div className="repo-header">
-        <div className="repo-title">{repoFolderName}</div>
-        <div className="repo-actions">
-          <button
-            className="repo-action-control"
-            type="button"
-            aria-label="Revert branches"
-            onClick={() => openBranchTagChangeModal("reset", repo.root)}
-            disabled={repoBranchTagChanges.length === 0}
-          >
-            <CircleArrowLeft aria-hidden="true" size={18} />
-            <span>Revert</span>
-          </button>
-          <button
-            className="repo-action-control"
-            type="button"
-            aria-label="Pull branches"
-            onClick={() => openBranchTagChangeModal("pull", repo.root)}
-            disabled={repoBranchTagChanges.length === 0}
-          >
-            <CircleArrowDown aria-hidden="true" size={18} />
-            <span>Pull</span>
-          </button>
-          <button
-            className="repo-action-control"
-            type="button"
-            aria-label="Push branches"
-            onClick={() => openBranchTagChangeModal("push", repo.root)}
-            disabled={repoBranchTagChanges.length === 0}
-          >
-            <CircleArrowUp aria-hidden="true" size={18} />
-            <span>Push</span>
-          </button>
-          <button
-            className="repo-action-control"
-            type="button"
-            aria-label="Open repo"
-            onClick={() => {
-              void openRepoPath();
-            }}
-          >
-            <ExternalLink aria-hidden="true" size={18} />
-            <span>Repo</span>
-          </button>
-        </div>
-      </div>
+      <div className="repo-header">{repoHeaderControls}</div>
 
       <div className="repo-panel">
         <CommitHistory
@@ -3315,6 +3306,7 @@ export const App = () => {
   );
   const [selectedRepoRoot, setSelectedRepoRoot] = useState<string | null>(null);
   const [pathLauncher, setPathLauncher] = useState<PathLauncher>("vscode");
+  const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [dashboardErrorMessage, setDashboardErrorMessage] = useState<
     string | null
@@ -3567,7 +3559,6 @@ export const App = () => {
     }
 
     closeBranchTagChangeModal();
-    let gitErrorMessage: string | null = null;
 
     try {
       switch (action) {
@@ -3589,16 +3580,13 @@ export const App = () => {
       );
       setSuccessMessage(branchTagChangeActionText.successMessage);
     } catch (error) {
-      gitErrorMessage =
+      const gitErrorMessage =
         error instanceof Error
           ? error.message
           : "Failed to apply branch tag changes.";
+      showErrorMessage(gitErrorMessage);
     } finally {
       await refreshDashboard();
-
-      if (gitErrorMessage !== null) {
-        showErrorMessage(gitErrorMessage);
-      }
     }
   };
   const branchTagChangesInConfirmation =
@@ -3652,94 +3640,159 @@ export const App = () => {
       showErrorMessage(message);
     }
   };
+  const changePathLauncher = (value: string) => {
+    const nextPathLauncher = readPathLauncher(value);
+
+    if (nextPathLauncher !== null) {
+      setPathLauncher(nextPathLauncher);
+    }
+  };
+  const selectedRepoBranchTagChanges =
+    selectedRepo === null
+      ? []
+      : readVisibleBranchTagChangesForRepo(selectedRepo.root);
+  const repoHeaderControls = (
+    <>
+      {dashboardData.repos.length === 0 ? null : (
+        <div className="repo-picker">
+          <Select
+            value={selectedRepo?.root ?? ""}
+            onValueChange={setSelectedRepoRoot}
+          >
+            <SelectTrigger
+              className="repo-picker-select"
+              id="repo-picker-select"
+              size="sm"
+            >
+              <SelectValue placeholder="Select repo" />
+            </SelectTrigger>
+            <SelectContent align="end" className="repo-picker-select-content">
+              {dashboardData.repos.map((repo) => (
+                <SelectItem value={repo.root} key={repo.root}>
+                  {readRepoFolderName(repo)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+      <div className="repo-header-controls">
+        <div className="path-launcher-control">
+          <button
+            aria-label="Open selected repo"
+            className="path-launcher-open"
+            type="button"
+            disabled={selectedRepo === null}
+            onClick={() => {
+              void openSelectedRepoPath();
+            }}
+          >
+            <PathLauncherIcon pathLauncher={pathLauncher} />
+          </button>
+          <Select value={pathLauncher} onValueChange={changePathLauncher}>
+            <SelectTrigger
+              aria-label="Choose app for opening paths"
+              className="path-launcher-select"
+              size="sm"
+            />
+            <SelectContent align="end" className="path-launcher-select-content">
+              <PathLauncherSelectItems />
+            </SelectContent>
+          </Select>
+        </div>
+        {selectedRepo === null ? null : (
+          <div className="repo-actions">
+            <button
+              className="repo-action-control"
+              type="button"
+              aria-label="Revert branches"
+              onClick={() =>
+                openBranchTagChangeModal("reset", selectedRepo.root)
+              }
+              disabled={selectedRepoBranchTagChanges.length === 0}
+            >
+              <CircleArrowLeft
+                aria-hidden="true"
+                size={18}
+                strokeWidth={1.75}
+              />
+              <span>Revert</span>
+            </button>
+            <button
+              className="repo-action-control"
+              type="button"
+              aria-label="Pull branches"
+              onClick={() =>
+                openBranchTagChangeModal("pull", selectedRepo.root)
+              }
+              disabled={selectedRepoBranchTagChanges.length === 0}
+            >
+              <CircleArrowDown
+                aria-hidden="true"
+                size={18}
+                strokeWidth={1.75}
+              />
+              <span>Pull</span>
+            </button>
+            <button
+              className="repo-action-control"
+              type="button"
+              aria-label="Push branches"
+              onClick={() =>
+                openBranchTagChangeModal("push", selectedRepo.root)
+              }
+              disabled={selectedRepoBranchTagChanges.length === 0}
+            >
+              <CircleArrowUp aria-hidden="true" size={18} strokeWidth={1.75} />
+              <span>Push</span>
+            </button>
+          </div>
+        )}
+        <TitleTooltip title="Settings">
+          <button
+            aria-label="Settings"
+            className="repo-action-control repo-settings-button"
+            type="button"
+            onClick={() => setIsSettingsDialogOpen(true)}
+          >
+            <Settings aria-hidden="true" size={18} strokeWidth={1.75} />
+            <span>Settings</span>
+          </button>
+        </TitleTooltip>
+      </div>
+    </>
+  );
 
   return (
     <TooltipProvider>
       <main className="app-shell">
-        <div className="top-controls">
-          <div className="path-launcher-control">
-            <button
-              aria-label="Open selected repo"
-              className="path-launcher-open"
-              type="button"
-              disabled={selectedRepo === null}
-              onClick={() => {
-                void openSelectedRepoPath();
-              }}
-            >
-              <PathLauncherIcon pathLauncher={pathLauncher} />
-            </button>
-            <Select
-              value={pathLauncher}
-              onValueChange={(value) => {
-                const nextPathLauncher = readPathLauncher(value);
-
-                if (nextPathLauncher !== null) {
-                  setPathLauncher(nextPathLauncher);
-                }
-              }}
-            >
-              <SelectTrigger
-                aria-label="Choose app for opening paths"
-                className="path-launcher-select"
-                size="sm"
-              />
-              <SelectContent
-                align="end"
-                className="path-launcher-select-content"
-              >
-                <SelectItem value="vscode">
-                  <span className="path-launcher-option">
-                    <PathLauncherIcon pathLauncher="vscode" />
-                    <span>VS Code</span>
-                  </span>
-                </SelectItem>
-                <SelectItem value="cursor">
-                  <span className="path-launcher-option">
-                    <PathLauncherIcon pathLauncher="cursor" />
-                    <span>Cursor</span>
-                  </span>
-                </SelectItem>
-                <SelectItem value="finder">
-                  <span className="path-launcher-option">
-                    <PathLauncherIcon pathLauncher="finder" />
-                    <span>Finder</span>
-                  </span>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {dashboardData.repos.length === 0 ? null : (
-            <div className="repo-picker">
-              <Label className="repo-picker-label" htmlFor="repo-picker-select">
-                Repo
-              </Label>
-              <Select
-                value={selectedRepo?.root ?? ""}
-                onValueChange={setSelectedRepoRoot}
-              >
-                <SelectTrigger
-                  className="repo-picker-select"
-                  id="repo-picker-select"
-                  size="sm"
-                >
-                  <SelectValue placeholder="Select repo" />
+        <Dialog
+          open={isSettingsDialogOpen}
+          onOpenChange={setIsSettingsDialogOpen}
+        >
+          <DialogContent className="settings-dialog sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Settings</DialogTitle>
+              <DialogDescription className="sr-only">
+                Configure local app settings.
+              </DialogDescription>
+            </DialogHeader>
+            <label className="settings-field">
+              <span>Open paths with</span>
+              <Select value={pathLauncher} onValueChange={changePathLauncher}>
+                <SelectTrigger className="settings-select" size="sm">
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent
                   align="end"
-                  className="repo-picker-select-content"
+                  className="path-launcher-select-content"
                 >
-                  {dashboardData.repos.map((repo) => (
-                    <SelectItem value={repo.root} key={repo.root}>
-                      {readRepoFolderName(repo)}
-                    </SelectItem>
-                  ))}
+                  <PathLauncherSelectItems />
                 </SelectContent>
               </Select>
-            </div>
-          )}
-        </div>
+            </label>
+          </DialogContent>
+        </Dialog>
 
         <AlertDialog
           open={branchTagChangeConfirmation !== null}
@@ -3803,14 +3856,11 @@ export const App = () => {
                 repo={selectedRepo}
                 threadOfId={threadOfId}
                 gitChangesOfCwd={dashboardData.gitChangesOfCwd}
-                repoBranchTagChanges={readVisibleBranchTagChangesForRepo(
-                  selectedRepo.root,
-                )}
+                repoHeaderControls={repoHeaderControls}
                 pathLauncher={pathLauncher}
                 refreshDashboard={refreshDashboard}
                 showErrorMessage={showErrorMessage}
                 rememberBranchTagChange={rememberBranchTagChange}
-                openBranchTagChangeModal={openBranchTagChangeModal}
               />
             )}
             {dashboardData.repos.length === 0 && !isLoading && (

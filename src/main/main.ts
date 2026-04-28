@@ -63,7 +63,7 @@ const createMainWindow = () => {
     minWidth: MAIN_WINDOW_MIN_WIDTH,
     minHeight: MAIN_WINDOW_MIN_HEIGHT,
     title: "MoltTree",
-    backgroundColor: "#f6f4ef",
+    backgroundColor: "#f4f6f8",
     webPreferences: {
       preload: join(__dirname, "../preload/preload.js"),
       contextIsolation: true,
