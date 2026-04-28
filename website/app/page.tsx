@@ -15,9 +15,9 @@ const HomePage = () => {
       </nav>
 
       <section className="hero" aria-labelledby="hero-title">
-        <ClientDownloadLink className="heroArt" ariaLabel="Download">
+        <div className="heroArt">
           <Image src={originalLobsterTreeIcon} alt="MoltTree icon" preload />
-        </ClientDownloadLink>
+        </div>
 
         <h1 id="hero-title">MoltTree</h1>
         <p className="description">
