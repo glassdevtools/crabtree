@@ -1,4 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="540" height="380" viewBox="0 0 540 380">
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="540"
+  height="380"
+  viewBox="0 0 540 380"
+>
   <rect width="540" height="380" fill="#eeeeee" />
-  <path d="M252 115 L306 145 L252 175 Z" fill="#686868" />
+  <path
+    d="M244 139 H281 V128 L301 145 L281 162 V151 H244 Z"
+    fill="#555555"
+    shape-rendering="crispEdges"
+  />
 </svg>
