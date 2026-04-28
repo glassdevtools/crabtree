@@ -327,6 +327,7 @@ const readGitBranchTagChanges = async ({
     ],
   });
   const remoteShaOfBranch: { [branch: string]: string } = {};
+  const localShaOfBranch: { [branch: string]: string } = {};
   const branchTagChanges: GitBranchTagChange[] = [];
   const originPrefix = "origin/";
 
@@ -364,6 +365,7 @@ const readGitBranchTagChanges = async ({
       continue;
     }
 
+    localShaOfBranch[branch] = localSha;
     const remoteSha = remoteShaOfBranch[branch];
 
     if (remoteSha === undefined || remoteSha === localSha) {
@@ -375,6 +377,25 @@ const readGitBranchTagChanges = async ({
       branch,
       oldSha: remoteSha,
       newSha: localSha,
+    });
+  }
+
+  for (const branch of Object.keys(remoteShaOfBranch)) {
+    if (localShaOfBranch[branch] !== undefined) {
+      continue;
+    }
+
+    const remoteSha = remoteShaOfBranch[branch];
+
+    if (remoteSha === undefined) {
+      continue;
+    }
+
+    branchTagChanges.push({
+      repoRoot: repoSeed.root,
+      branch,
+      oldSha: remoteSha,
+      newSha: null,
     });
   }
 
