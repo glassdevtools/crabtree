@@ -325,14 +325,6 @@ textarea,
   vertical-align: middle;
 }
 
-.copy-toast {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  user-select: text;
-}
-
 .copy-toast-value {
   min-width: 0;
   /* TODO: AI-PICKED-VALUE: This width keeps copied paths and SHAs readable without making the toast too wide. */
@@ -342,7 +334,20 @@ textarea,
   font-size: 12px;
   line-height: 1.25;
   text-overflow: ellipsis;
+  user-select: text;
   white-space: nowrap;
+}
+
+.toast-status-icon {
+  display: block;
+}
+
+.toast-status-icon-success {
+  color: var(--success-text);
+}
+
+.toast-status-icon-error {
+  color: var(--error-text);
 }
 
 [data-sonner-toaster]
