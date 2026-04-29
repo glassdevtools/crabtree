@@ -1063,6 +1063,7 @@ textarea,
   z-index: 0;
   border-radius: inherit;
   background: #fff8df;
+  background-clip: content-box;
   pointer-events: none;
 }
 
