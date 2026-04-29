@@ -500,12 +500,35 @@ textarea,
   opacity: 0.38;
 }
 
-.repo-version-label {
-  flex: 0 0 auto;
+/* TODO: AI-PICKED-VALUE: The modal width fits the About header and version row without making the window feel empty. */
+.about-modal {
+  width: min(320px, calc(100vw - 32px));
+}
+
+.about-modal-fields {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.about-modal-field {
+  display: grid;
+  grid-template-columns: 82px 1fr;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.about-modal-field dt {
+  color: #202124;
+  font-weight: 700;
+}
+
+.about-modal-field dd {
+  margin: 0;
   color: #5f6670;
-  font-size: 11px;
-  font-weight: 650;
-  line-height: 1;
+  font-weight: 550;
 }
 
 .title-tooltip-trigger {
@@ -1051,7 +1074,7 @@ textarea,
   min-height: 18px;
   display: inline-flex;
   align-items: center;
-  gap: 0;
+  gap: 3px;
   min-width: max-content;
   flex: 0 0 auto;
   padding: 0;
@@ -1089,8 +1112,8 @@ textarea,
 }
 
 .commit-thread-chat-icon {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   flex: 0 0 auto;
   overflow: visible;
   color: #5f6670;
@@ -1118,8 +1141,8 @@ textarea,
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  margin: 0;
-  padding: 0 4px;
+  margin: 0 2px;
+  padding: 0 2px;
   border: 0;
   background: transparent;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -1130,7 +1153,7 @@ textarea,
 
 .commit-thread-group .commit-branch-create-action,
 .commit-thread-group .commit-thread-commit-action {
-  margin: 0;
+  margin: 0 2px;
 }
 
 .commit-thread-change-added {

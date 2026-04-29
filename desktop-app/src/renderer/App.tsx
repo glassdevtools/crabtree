@@ -2,6 +2,7 @@ import {
   CircleArrowDown,
   CircleArrowLeft,
   CircleArrowUp,
+  Info,
   LoaderCircle,
   Trash2,
 } from "lucide-react";
@@ -1529,7 +1530,7 @@ const ChatRobotTags = ({
                     <MdOutlineCallSplit
                       aria-hidden="true"
                       className="commit-thread-chat-icon commit-ref-worktree-icon"
-                      size={12}
+                      size={10}
                     />
                   ) : (
                     <GoDotFill
@@ -3822,6 +3823,7 @@ export const App = () => {
   >([]);
   const [branchTagChangeConfirmation, setBranchTagChangeConfirmation] =
     useState<BranchTagChangeConfirmation | null>(null);
+  const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [userGitUpdateCount, setUserGitUpdateCount] = useState(0);
   const [userGitUpdateDescription, setUserGitUpdateDescription] = useState("");
   const userGitUpdateCountRef = useRef(0);
@@ -4304,55 +4306,69 @@ export const App = () => {
             </SelectContent>
           </Select>
         </div>
-        {selectedRepo === null ? null : (
-          <div className="repo-actions">
-            <button
-              className="repo-action-control"
-              type="button"
-              aria-label="Revert branches"
-              onClick={() =>
-                openBranchTagChangeModal("reset", selectedRepo.root)
-              }
-              disabled={selectedRepoBranchTagChanges.length === 0}
-            >
-              <CircleArrowLeft
-                aria-hidden="true"
-                size={18}
-                strokeWidth={1.75}
-              />
-              <span>Revert</span>
-            </button>
-            <button
-              className="repo-action-control"
-              type="button"
-              aria-label="Pull branches"
-              onClick={() =>
-                openBranchTagChangeModal("pull", selectedRepo.root)
-              }
-              disabled={selectedRepoBranchTagChanges.length === 0}
-            >
-              <CircleArrowDown
-                aria-hidden="true"
-                size={18}
-                strokeWidth={1.75}
-              />
-              <span>Pull</span>
-            </button>
-            <button
-              className="repo-action-control"
-              type="button"
-              aria-label="Push branches"
-              onClick={() =>
-                openBranchTagChangeModal("push", selectedRepo.root)
-              }
-              disabled={selectedRepoBranchTagChanges.length === 0}
-            >
-              <CircleArrowUp aria-hidden="true" size={18} strokeWidth={1.75} />
-              <span>Push</span>
-            </button>
-          </div>
-        )}
-        <span className="repo-version-label">v{packageInfo.version}</span>
+        <div className="repo-actions">
+          {selectedRepo === null ? null : (
+            <>
+              <button
+                className="repo-action-control"
+                type="button"
+                aria-label="Revert branches"
+                onClick={() =>
+                  openBranchTagChangeModal("reset", selectedRepo.root)
+                }
+                disabled={selectedRepoBranchTagChanges.length === 0}
+              >
+                <CircleArrowLeft
+                  aria-hidden="true"
+                  size={18}
+                  strokeWidth={1.75}
+                />
+                <span>Revert</span>
+              </button>
+              <button
+                className="repo-action-control"
+                type="button"
+                aria-label="Pull branches"
+                onClick={() =>
+                  openBranchTagChangeModal("pull", selectedRepo.root)
+                }
+                disabled={selectedRepoBranchTagChanges.length === 0}
+              >
+                <CircleArrowDown
+                  aria-hidden="true"
+                  size={18}
+                  strokeWidth={1.75}
+                />
+                <span>Pull</span>
+              </button>
+              <button
+                className="repo-action-control"
+                type="button"
+                aria-label="Push branches"
+                onClick={() =>
+                  openBranchTagChangeModal("push", selectedRepo.root)
+                }
+                disabled={selectedRepoBranchTagChanges.length === 0}
+              >
+                <CircleArrowUp
+                  aria-hidden="true"
+                  size={18}
+                  strokeWidth={1.75}
+                />
+                <span>Push</span>
+              </button>
+            </>
+          )}
+          <button
+            aria-label="Open About"
+            className="repo-action-control"
+            type="button"
+            onClick={() => setIsAboutModalOpen(true)}
+          >
+            <Info aria-hidden="true" size={18} strokeWidth={1.75} />
+            <span>About</span>
+          </button>
+        </div>
       </div>
     </>
   );
@@ -4405,6 +4421,19 @@ export const App = () => {
             </AlertDialogContent>
           )}
         </AlertDialog>
+        <Dialog open={isAboutModalOpen} onOpenChange={setIsAboutModalOpen}>
+          <DialogContent aria-describedby={undefined} className="about-modal">
+            <DialogHeader>
+              <DialogTitle>About MoltTree</DialogTitle>
+            </DialogHeader>
+            <dl className="about-modal-fields">
+              <div className="about-modal-field">
+                <dt>Version:</dt>
+                <dd>v{packageInfo.version}</dd>
+              </div>
+            </dl>
+          </DialogContent>
+        </Dialog>
 
         {dashboardData.warnings.length > 0 && (
           <Alert className="warning-band">
