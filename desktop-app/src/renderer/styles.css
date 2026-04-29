@@ -191,6 +191,43 @@ textarea,
   }
 }
 
+/* TODO: AI-PICKED-VALUE: These toast dimensions keep Git updates prominent without changing the neutral shadcn-style surface. */
+[data-sonner-toast][data-styled="true"].git-update-toast-shell {
+  width: min(360px, calc(100vw - 32px));
+  padding: 14px 16px;
+  border-color: var(--border);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+}
+
+[data-sonner-toast][data-styled="true"].git-update-toast-shell [data-icon] {
+  width: 20px;
+  height: 20px;
+  margin-right: 8px;
+}
+
+[data-sonner-toast][data-styled="true"].git-update-toast-shell [data-title] {
+  color: var(--popover-foreground);
+  font-weight: 600;
+}
+
+[data-sonner-toast][data-styled="true"].git-update-toast-shell
+  [data-description] {
+  color: var(--muted-foreground);
+}
+
+[data-sonner-toast][data-styled="true"].git-update-toast-shell
+  .sonner-loading-wrapper {
+  --size: 17px;
+  color: var(--muted-foreground);
+}
+
+[data-sonner-toast][data-styled="true"].git-update-toast-shell
+  .sonner-loading-bar {
+  background: var(--muted-foreground);
+}
+
 .repo-header-controls {
   min-width: 0;
   display: flex;
@@ -198,30 +235,6 @@ textarea,
   justify-content: flex-end;
   gap: 14px;
   margin-left: auto;
-}
-
-.repo-header-refresh-status {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 20px;
-  height: 28px;
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  transform: translate(-50%, -50%);
-  color: #68717d;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.repo-header-refresh-status-active {
-  opacity: 1;
-}
-
-.repo-header-refresh-status-active .repo-header-refresh-spinner {
-  animation: initial-loading-spin 900ms linear infinite;
 }
 
 .path-launcher-control {

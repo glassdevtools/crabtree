@@ -118,6 +118,7 @@ const COMMIT_HISTORY_HEADER_HEIGHT = 22;
 const DASHBOARD_REFRESH_INTERVAL_MS = 1000;
 // TODO: AI-PICKED-VALUE: Four seconds is long enough to read a short success toast without requiring manual dismissal.
 const SUCCESS_MESSAGE_TIMEOUT_MS = 4000;
+const USER_GIT_UPDATE_TOAST_ID = "user-git-update";
 const COMMIT_GRAPH_COLORS = [
   "#c53a13",
   "#0a84ff",
@@ -239,6 +240,7 @@ const readBranchTagChangeActionText = (
         message:
           "Are you sure you want to push branch tag changes for this repo?",
         buttonText: "Push",
+        loadingDescription: "Pushing branch tags",
         successMessage: "Branch tag changes pushed.",
       };
     case "pull":
@@ -247,6 +249,7 @@ const readBranchTagChangeActionText = (
         message:
           "Are you sure you want to pull branch tag changes from origin for this repo?",
         buttonText: "Pull",
+        loadingDescription: "Pulling branch tags",
         successMessage: "Branch tag changes pulled.",
       };
     case "reset":
@@ -255,6 +258,7 @@ const readBranchTagChangeActionText = (
         message:
           "Are you sure you want to revert branch tag changes for this repo to match origin?",
         buttonText: "Revert",
+        loadingDescription: "Reverting branch tags",
         successMessage: "Branch tag changes reverted.",
       };
   }
@@ -495,6 +499,7 @@ type BranchTagChangeActionText = {
   title: string;
   message: string;
   buttonText: string;
+  loadingDescription: string;
   successMessage: string;
 };
 
@@ -1258,7 +1263,7 @@ const ChatRobotTags = ({
   commitSha,
   localBranches,
   currentBranch,
-  branchCreateThreadGroupKey,
+  shouldShowBranchCreateActions,
   openBranchCreateModal,
   openCommitMessageModal,
   openChangeSummaryModal,
@@ -1270,7 +1275,7 @@ const ChatRobotTags = ({
   commitSha: string;
   localBranches: string[];
   currentBranch: string | null;
-  branchCreateThreadGroupKey: string | null;
+  shouldShowBranchCreateActions: boolean;
   openBranchCreateModal: (
     event: MouseEvent<HTMLButtonElement>,
     branchCreateTarget: BranchCreateTarget,
@@ -1314,7 +1319,7 @@ const ChatRobotTags = ({
           shouldShowChangeCount &&
           commitBranchTarget !== null;
         const branchCreateTarget =
-          threadGroup.key === branchCreateThreadGroupKey
+          shouldShowBranchCreateActions && threadGroup.cwd.length > 0
             ? {
                 path: threadGroup.cwd,
                 title: threadGroup.cwd,
@@ -1648,17 +1653,7 @@ const CommitHistoryRow = ({
       "Current HEAD working tree must be clean before merging.";
   }
 
-  let branchCreateThreadGroupKey: string | null = null;
-
-  if (commit.localBranches.length === 0) {
-    for (const threadGroup of threadGroups) {
-      if (threadGroup.cwd.length > 0) {
-        branchCreateThreadGroupKey = threadGroup.key;
-        break;
-      }
-    }
-  }
-
+  const shouldShowBranchCreateActions = commit.localBranches.length === 0;
   const shouldShowGraphActions = mergeBranch !== null || isHeadRow;
   const commitDateText = formatCommitDate(commit.date);
   let branchTagsCellClassName = "commit-branch-tags-cell";
@@ -1730,7 +1725,7 @@ const CommitHistoryRow = ({
           commitSha={commit.sha}
           localBranches={commit.localBranches}
           currentBranch={currentBranch}
-          branchCreateThreadGroupKey={branchCreateThreadGroupKey}
+          shouldShowBranchCreateActions={shouldShowBranchCreateActions}
           openBranchCreateModal={openBranchCreateModal}
           openCommitMessageModal={openCommitMessageModal}
           openChangeSummaryModal={openChangeSummaryModal}
@@ -1874,6 +1869,7 @@ const CommitHistory = ({
     finishUserGitUpdate: () => void,
   ) => Promise<boolean>;
   runUserGitUpdate: (
+    userGitUpdateDescription: string,
     updateGit: (finishUserGitUpdate: () => void) => Promise<void>,
   ) => Promise<void>;
   showErrorMessage: (message: string) => void;
@@ -2528,19 +2524,23 @@ const CommitHistory = ({
     });
     finishBranchPointerDrag();
   };
-  // User Git updates keep the header spinner visible until the dashboard read has shown the new Git state.
+  // User Git updates keep the visible update status open until the dashboard read has shown the new Git state.
   const runUserGitUpdateThenRefreshDashboard = async (
+    userGitUpdateDescription: string,
     updateGit: () => Promise<string | null>,
   ) => {
-    await runUserGitUpdate(async (finishUserGitUpdate) => {
-      const gitErrorMessage = await updateGit();
+    await runUserGitUpdate(
+      userGitUpdateDescription,
+      async (finishUserGitUpdate) => {
+        const gitErrorMessage = await updateGit();
 
-      await refreshDashboardAfterUserGitUpdate(finishUserGitUpdate);
+        await refreshDashboardAfterUserGitUpdate(finishUserGitUpdate);
 
-      if (gitErrorMessage !== null) {
-        showErrorMessage(gitErrorMessage);
-      }
-    });
+        if (gitErrorMessage !== null) {
+          showErrorMessage(gitErrorMessage);
+        }
+      },
+    );
   };
   const openBranchDeleteModal = (
     event: MouseEvent<HTMLButtonElement>,
@@ -2606,7 +2606,7 @@ const CommitHistory = ({
 
     const request = branchCreateTarget;
 
-    await runUserGitUpdateThenRefreshDashboard(async () => {
+    await runUserGitUpdateThenRefreshDashboard("Creating branch", async () => {
       try {
         await window.molttree.createGitBranch({
           path: request.path,
@@ -2631,41 +2631,44 @@ const CommitHistory = ({
 
     const request = commitMessageTarget;
 
-    await runUserGitUpdateThenRefreshDashboard(async () => {
-      try {
-        const newSha = await window.molttree.commitAllGitChanges({
-          path: request.path,
-          message: commitMessage.trim(),
-        });
+    await runUserGitUpdateThenRefreshDashboard(
+      "Committing changes",
+      async () => {
+        try {
+          const newSha = await window.molttree.commitAllGitChanges({
+            path: request.path,
+            message: commitMessage.trim(),
+          });
 
-        if (request.branchTarget !== null) {
-          try {
-            await window.molttree.moveGitBranch({
-              repoRoot,
-              branch: request.branchTarget.branch,
-              oldSha: request.branchTarget.oldSha,
-              newSha,
-            });
-            rememberBranchTagChange({
-              repoRoot,
-              branch: request.branchTarget.branch,
-              oldSha: request.branchTarget.oldSha,
-              newSha,
-            });
-          } catch {
-            // The commit already succeeded, so a stale branch tag should not turn it into an error.
+          if (request.branchTarget !== null) {
+            try {
+              await window.molttree.moveGitBranch({
+                repoRoot,
+                branch: request.branchTarget.branch,
+                oldSha: request.branchTarget.oldSha,
+                newSha,
+              });
+              rememberBranchTagChange({
+                repoRoot,
+                branch: request.branchTarget.branch,
+                oldSha: request.branchTarget.oldSha,
+                newSha,
+              });
+            } catch {
+              // The commit already succeeded, so a stale branch tag should not turn it into an error.
+            }
           }
+
+          closeCommitMessageModal();
+        } catch (error) {
+          return error instanceof Error
+            ? error.message
+            : "Failed to commit changes.";
         }
 
-        closeCommitMessageModal();
-      } catch (error) {
-        return error instanceof Error
-          ? error.message
-          : "Failed to commit changes.";
-      }
-
-      return null;
-    });
+        return null;
+      },
+    );
   };
   const deleteBranchTag = async () => {
     if (branchToDelete === null) {
@@ -2675,7 +2678,7 @@ const CommitHistory = ({
     const branchDeleteTarget = branchToDelete;
     closeBranchDeleteModal();
 
-    await runUserGitUpdateThenRefreshDashboard(async () => {
+    await runUserGitUpdateThenRefreshDashboard("Deleting branch", async () => {
       try {
         await window.molttree.deleteGitBranch({
           repoRoot,
@@ -2735,7 +2738,7 @@ const CommitHistory = ({
     const request = branchMergeConfirmation;
     closeBranchMergeConfirmationModal();
 
-    await runUserGitUpdateThenRefreshDashboard(async () => {
+    await runUserGitUpdateThenRefreshDashboard("Merging branch", async () => {
       try {
         await window.molttree.mergeGitBranch({
           repoRoot,
@@ -2758,7 +2761,7 @@ const CommitHistory = ({
     const request = branchPointerMove;
     closeBranchPointerMoveModal();
 
-    await runUserGitUpdateThenRefreshDashboard(async () => {
+    await runUserGitUpdateThenRefreshDashboard("Moving branch", async () => {
       try {
         await window.molttree.moveGitBranch({
           repoRoot: request.repoRoot,
@@ -2782,20 +2785,28 @@ const CommitHistory = ({
     });
   };
   const openRowAfterDoubleClick = async (row: CommitGraphRow) => {
-    await runUserGitUpdateThenRefreshDashboard(async () => {
-      try {
-        await window.molttree.checkoutGitCommit({
-          repoRoot,
-          sha: row.commit.sha,
-        });
-      } catch (error) {
-        return error instanceof Error
-          ? error.message
-          : "Failed to switch HEAD.";
-      }
+    const gitCheckoutDescription =
+      row.commit.localBranches.length > 0
+        ? "Switching branch"
+        : "Switching commit";
 
-      return null;
-    });
+    await runUserGitUpdateThenRefreshDashboard(
+      gitCheckoutDescription,
+      async () => {
+        try {
+          await window.molttree.checkoutGitCommit({
+            repoRoot,
+            sha: row.commit.sha,
+          });
+        } catch (error) {
+          return error instanceof Error
+            ? error.message
+            : "Failed to switch HEAD.";
+        }
+
+        return null;
+      },
+    );
   };
 
   return (
@@ -3256,6 +3267,7 @@ const RepoSection = ({
     finishUserGitUpdate: () => void,
   ) => Promise<boolean>;
   runUserGitUpdate: (
+    userGitUpdateDescription: string,
     updateGit: (finishUserGitUpdate: () => void) => Promise<void>,
   ) => Promise<void>;
   showErrorMessage: (message: string) => void;
@@ -3307,6 +3319,7 @@ export const App = () => {
   const [branchTagChangeConfirmation, setBranchTagChangeConfirmation] =
     useState<BranchTagChangeConfirmation | null>(null);
   const [userGitUpdateCount, setUserGitUpdateCount] = useState(0);
+  const [userGitUpdateDescription, setUserGitUpdateDescription] = useState("");
   const userGitUpdateCountRef = useRef(0);
   const isDashboardRefreshRunningRef = useRef(false);
   const shouldRefreshDashboardAgainRef = useRef(false);
@@ -3429,9 +3442,12 @@ export const App = () => {
     setSuccessMessage(null);
     setErrorMessage(message);
   }, []);
-  // User Git updates use this wrapper so the header spinner is tied to action results, not background polling.
+  // User Git updates use this wrapper so the loading toast is tied to action results, not background polling.
   const runUserGitUpdate = useCallback(
-    async (updateGit: (finishUserGitUpdate: () => void) => Promise<void>) => {
+    async (
+      userGitUpdateDescription: string,
+      updateGit: (finishUserGitUpdate: () => void) => Promise<void>,
+    ) => {
       let didFinishUserGitUpdate = false;
       const finishUserGitUpdate = () => {
         if (didFinishUserGitUpdate) {
@@ -3439,10 +3455,16 @@ export const App = () => {
         }
 
         didFinishUserGitUpdate = true;
-        userGitUpdateCountRef.current -= 1;
-        setUserGitUpdateCount(userGitUpdateCountRef.current);
+        const nextUserGitUpdateCount = userGitUpdateCountRef.current - 1;
+        userGitUpdateCountRef.current = nextUserGitUpdateCount;
+        setUserGitUpdateCount(nextUserGitUpdateCount);
+
+        if (nextUserGitUpdateCount === 0) {
+          setUserGitUpdateDescription("");
+        }
       };
 
+      setUserGitUpdateDescription(userGitUpdateDescription);
       userGitUpdateCountRef.current += 1;
       setUserGitUpdateCount(userGitUpdateCountRef.current);
 
@@ -3576,6 +3598,23 @@ export const App = () => {
     };
   }, [successMessage]);
 
+  useEffect(() => {
+    if (userGitUpdateCount === 0) {
+      toast.dismiss(USER_GIT_UPDATE_TOAST_ID);
+      return;
+    }
+
+    toast.loading("Updating", {
+      className: "git-update-toast-shell",
+      closeButton: false,
+      description: userGitUpdateDescription,
+      dismissible: false,
+      duration: Infinity,
+      id: USER_GIT_UPDATE_TOAST_ID,
+      position: "top-center",
+    });
+  }, [userGitUpdateCount, userGitUpdateDescription]);
+
   const readVisibleBranchTagChangesForRepo = (repoRoot: string) => {
     const repo =
       dashboardData === null
@@ -3623,48 +3662,51 @@ export const App = () => {
 
     closeBranchTagChangeModal();
 
-    await runUserGitUpdate(async (finishUserGitUpdate) => {
-      let gitSuccessMessage: string | null = null;
-      let gitErrorMessage: string | null = null;
+    await runUserGitUpdate(
+      branchTagChangeActionText.loadingDescription,
+      async (finishUserGitUpdate) => {
+        let gitSuccessMessage: string | null = null;
+        let gitErrorMessage: string | null = null;
 
-      try {
-        switch (action) {
-          case "push":
-            await window.molttree.pushGitBranchTagChanges(changes);
-            break;
-          case "pull":
-            await window.molttree.resetGitBranchTagChanges(changes);
-            break;
-          case "reset":
-            await window.molttree.resetGitBranchTagChanges(changes);
-            break;
+        try {
+          switch (action) {
+            case "push":
+              await window.molttree.pushGitBranchTagChanges(changes);
+              break;
+            case "pull":
+              await window.molttree.resetGitBranchTagChanges(changes);
+              break;
+            case "reset":
+              await window.molttree.resetGitBranchTagChanges(changes);
+              break;
+          }
+
+          setBranchTagChanges((currentBranchTagChanges) =>
+            currentBranchTagChanges.filter(
+              (branchTagChange) => branchTagChange.repoRoot !== repoRoot,
+            ),
+          );
+          gitSuccessMessage = branchTagChangeActionText.successMessage;
+        } catch (error) {
+          gitErrorMessage =
+            error instanceof Error
+              ? error.message
+              : "Failed to apply branch tag changes.";
         }
 
-        setBranchTagChanges((currentBranchTagChanges) =>
-          currentBranchTagChanges.filter(
-            (branchTagChange) => branchTagChange.repoRoot !== repoRoot,
-          ),
-        );
-        gitSuccessMessage = branchTagChangeActionText.successMessage;
-      } catch (error) {
-        gitErrorMessage =
-          error instanceof Error
-            ? error.message
-            : "Failed to apply branch tag changes.";
-      }
+        const didRefreshDashboard =
+          await refreshDashboardAfterUserGitUpdate(finishUserGitUpdate);
 
-      const didRefreshDashboard =
-        await refreshDashboardAfterUserGitUpdate(finishUserGitUpdate);
+        if (gitErrorMessage !== null) {
+          showErrorMessage(gitErrorMessage);
+          return;
+        }
 
-      if (gitErrorMessage !== null) {
-        showErrorMessage(gitErrorMessage);
-        return;
-      }
-
-      if (didRefreshDashboard && gitSuccessMessage !== null) {
-        setSuccessMessage(gitSuccessMessage);
-      }
-    });
+        if (didRefreshDashboard && gitSuccessMessage !== null) {
+          setSuccessMessage(gitSuccessMessage);
+        }
+      },
+    );
   };
   const branchTagChangesInConfirmation =
     branchTagChangeConfirmation === null
@@ -3729,7 +3771,6 @@ export const App = () => {
     selectedRepo === null
       ? []
       : readVisibleBranchTagChangesForRepo(selectedRepo.root);
-  const isUserGitUpdateRunning = userGitUpdateCount > 0;
   const repoHeaderControls = (
     <>
       {dashboardData.repos.length === 0 ? null : (
@@ -3755,22 +3796,6 @@ export const App = () => {
           </Select>
         </div>
       )}
-      <div
-        aria-hidden={isUserGitUpdateRunning ? undefined : true}
-        aria-label="Updating Git"
-        className={cn(
-          "repo-header-refresh-status",
-          isUserGitUpdateRunning && "repo-header-refresh-status-active",
-        )}
-        role="status"
-      >
-        <LoaderCircle
-          aria-hidden="true"
-          className="repo-header-refresh-spinner"
-          size={15}
-          strokeWidth={1.8}
-        />
-      </div>
       <div className="repo-header-controls">
         <div className="path-launcher-control">
           <button
