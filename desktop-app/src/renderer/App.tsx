@@ -119,8 +119,6 @@ const COMMIT_HISTORY_HEADER_HEIGHT = 22;
 // Dashboard reads touch Codex and Git, so automatic refreshes share the manual refresh path and never overlap.
 // TODO: AI-PICKED-VALUE: Refreshing every second keeps branch/worktree state current while the refresh queue prevents overlapping Git reads.
 const DASHBOARD_REFRESH_INTERVAL_MS = 1000;
-// TODO: AI-PICKED-VALUE: One second is long enough for success confirmations that do not need manual dismissal.
-const SUCCESS_MESSAGE_TIMEOUT_MS = 1000;
 const TOAST_POSITION = "bottom-center";
 const USER_GIT_UPDATE_TOAST_ID = "user-git-update";
 const MERGE_BRANCH_BUTTON_TITLE = "Merge this into HEAD";
@@ -383,7 +381,6 @@ const copyTextAfterContextMenu = async ({
     toast.success("Copied!", {
       closeButton: false,
       description: <div className="copy-toast-value">{text}</div>,
-      duration: SUCCESS_MESSAGE_TIMEOUT_MS,
       position: TOAST_POSITION,
     });
   } catch (error) {
@@ -4060,7 +4057,6 @@ export const App = () => {
   const showSuccessMessage = useCallback((message: string) => {
     toast.success(message, {
       closeButton: false,
-      duration: SUCCESS_MESSAGE_TIMEOUT_MS,
       position: TOAST_POSITION,
     });
   }, []);
