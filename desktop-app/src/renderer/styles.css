@@ -850,11 +850,9 @@ textarea,
 }
 
 /* TODO: AI-PICKED-VALUE: This gray is a subtle hover state that keeps the compact table readable without adding row lines. */
-.commit-history-row:not(.commit-history-row-selected):hover,
-.commit-history-row-branch-drop-target:not(.commit-history-row-selected),
-.commit-history-row-branch-drop-target:not(
-    .commit-history-row-selected
-  ):nth-child(even) {
+.commit-history-row:hover,
+.commit-history-row-branch-drop-target,
+.commit-history-row-branch-drop-target:nth-child(even) {
   border-radius: 5px;
   background: #f3f4f6;
 }
@@ -866,13 +864,6 @@ textarea,
 .commit-branch-tags-cell-branch-drop-target {
   /* TODO: AI-PICKED-VALUE: This restores the blue branch-drop affordance without replacing the gray row highlight. */
   box-shadow: inset 0 0 0 2px #0a84ff;
-}
-
-/* TODO: AI-PICKED-VALUE: This blue is intentionally brighter than the branch tag blue so the selected row is obvious without adding a line. */
-.commit-history-row-selected,
-.commit-history-row-selected:nth-child(even) {
-  border-radius: 5px;
-  background: #dbeafe;
 }
 
 .commit-graph-cell {

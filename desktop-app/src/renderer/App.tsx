@@ -119,8 +119,8 @@ const COMMIT_HISTORY_HEADER_HEIGHT = 22;
 // Dashboard reads touch Codex and Git, so automatic refreshes share the manual refresh path and never overlap.
 // TODO: AI-PICKED-VALUE: Refreshing every second keeps branch/worktree state current while the refresh queue prevents overlapping Git reads.
 const DASHBOARD_REFRESH_INTERVAL_MS = 1000;
-// TODO: AI-PICKED-VALUE: Four seconds is long enough to read a short success toast without requiring manual dismissal.
-const SUCCESS_MESSAGE_TIMEOUT_MS = 4000;
+// TODO: AI-PICKED-VALUE: One second is long enough for success confirmations that do not need manual dismissal.
+const SUCCESS_MESSAGE_TIMEOUT_MS = 1000;
 const TOAST_POSITION = "top-center";
 const USER_GIT_UPDATE_TOAST_ID = "user-git-update";
 const MERGE_BRANCH_BUTTON_TITLE = "Merge this into HEAD";
@@ -380,6 +380,12 @@ const copyTextAfterContextMenu = async ({
 
   try {
     await window.molttree.copyText(text);
+    toast.success("Copied!", {
+      closeButton: false,
+      description: <div className="copy-toast-value">{text}</div>,
+      duration: SUCCESS_MESSAGE_TIMEOUT_MS,
+      position: TOAST_POSITION,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : errorMessage;
     toast.error("Error", {
@@ -1648,11 +1654,9 @@ const CommitHistoryRow = ({
   threadOfId,
   gitChangesOfCwd,
   isBranchPointerDropTarget,
-  isSelected,
   shouldOwnMainWorktreeHead,
   isBranchMergeableOfBranch,
   isBranchDeleteSafeOfBranch,
-  selectRow,
   updateBranchPointerDropTarget,
   clearBranchPointerDropTarget,
   finishBranchPointerDrop,
@@ -1677,11 +1681,9 @@ const CommitHistoryRow = ({
   threadOfId: { [id: string]: CodexThread };
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   isBranchPointerDropTarget: boolean;
-  isSelected: boolean;
   shouldOwnMainWorktreeHead: boolean;
   isBranchMergeableOfBranch: { [branch: string]: boolean };
   isBranchDeleteSafeOfBranch: { [branch: string]: boolean };
-  selectRow: () => void;
   updateBranchPointerDropTarget: (event: DragEvent<HTMLDivElement>) => void;
   clearBranchPointerDropTarget: (event: DragEvent<HTMLDivElement>) => void;
   finishBranchPointerDrop: (event: DragEvent<HTMLDivElement>) => void;
@@ -1994,10 +1996,6 @@ const CommitHistoryRow = ({
   const commitDateText = formatCommitDate(commit.date);
   let branchTagsCellClassName = "commit-branch-tags-cell";
 
-  if (isSelected) {
-    rowClassName = `${rowClassName} commit-history-row-selected`;
-  }
-
   if (isBranchPointerDropTarget) {
     rowClassName = `${rowClassName} commit-history-row-branch-drop-target`;
     branchTagsCellClassName = `${branchTagsCellClassName} commit-branch-tags-cell-branch-drop-target`;
@@ -2011,7 +2009,6 @@ const CommitHistoryRow = ({
   return (
     <div
       className={rowClassName}
-      onMouseDown={selectRow}
       onDoubleClick={row.isCommitRow ? openRowAfterDoubleClick : undefined}
       onDragOver={updateBranchPointerDropTarget}
       onDragLeave={clearBranchPointerDropTarget}
@@ -2307,9 +2304,6 @@ const CommitHistory = ({
     COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS,
   );
   const [shouldShowChatOnly, setShouldShowChatOnly] = useState(false);
-  const [selectedCommitRowId, setSelectedCommitRowId] = useState<string | null>(
-    null,
-  );
   const branchPointerDragRef = useRef<BranchPointerDrag | null>(null);
   const [branchCreateTarget, setBranchCreateTarget] =
     useState<BranchCreateTarget | null>(null);
@@ -2738,20 +2732,6 @@ const CommitHistory = ({
 
     return null;
   }, [mainWorktreePath, visibleGraph.rows, worktrees]);
-
-  useEffect(() => {
-    if (selectedCommitRowId === null) {
-      return;
-    }
-
-    for (const row of visibleGraph.rows) {
-      if (row.id === selectedCommitRowId) {
-        return;
-      }
-    }
-
-    setSelectedCommitRowId(null);
-  }, [selectedCommitRowId, visibleGraph.rows]);
 
   const graphMinimumWidth = readCommitGraphWidth({
     laneCount: visibleGraph.laneCount,
@@ -3495,13 +3475,11 @@ const CommitHistory = ({
                 isBranchPointerDropTarget={
                   branchPointerDropTargetRowId === row.id
                 }
-                isSelected={selectedCommitRowId === row.id}
                 shouldOwnMainWorktreeHead={
                   mainWorktreeHeadOwnerRowId === row.id
                 }
                 isBranchMergeableOfBranch={isBranchMergeableOfBranch}
                 isBranchDeleteSafeOfBranch={isBranchDeleteSafeOfBranch}
-                selectRow={() => setSelectedCommitRowId(row.id)}
                 updateBranchPointerDropTarget={(event) =>
                   updateBranchPointerDropTarget({ event, row })
                 }
@@ -3585,7 +3563,7 @@ const CommitHistory = ({
             <DialogContent className="sm:max-w-sm">
               <form className="grid gap-4" onSubmit={submitCommitMessage}>
                 <DialogHeader>
-                  <DialogTitle>Commit Changes</DialogTitle>
+                  <DialogTitle>Commit</DialogTitle>
                   <DialogDescription>Enter a commit message.</DialogDescription>
                 </DialogHeader>
                 <Input
@@ -4018,6 +3996,7 @@ export const App = () => {
   );
   const showSuccessMessage = useCallback((message: string) => {
     toast.success(message, {
+      closeButton: false,
       duration: SUCCESS_MESSAGE_TIMEOUT_MS,
       position: TOAST_POSITION,
     });
