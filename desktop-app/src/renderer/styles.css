@@ -345,6 +345,47 @@ textarea,
   white-space: nowrap;
 }
 
+/* Toast status icons align with the title line so long descriptions do not pull them down. */
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] {
+  align-items: flex-start;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-icon] {
+  margin-top: 1.75px;
+}
+
+/* Promise toast results should replace the loading icon without a second animation. */
+[data-sonner-toaster]
+  [data-sonner-toast][data-promise="true"][data-type="success"]
+  [data-icon]
+  > svg,
+[data-sonner-toaster]
+  [data-sonner-toast][data-promise="true"][data-type="error"]
+  [data-icon]
+  > svg {
+  opacity: 1;
+  transform: none;
+  animation: none;
+}
+
+[data-sonner-toaster]
+  [data-sonner-toast][data-promise="true"][data-type="success"]
+  .sonner-loading-wrapper[data-visible="false"],
+[data-sonner-toaster]
+  [data-sonner-toast][data-promise="true"][data-type="error"]
+  .sonner-loading-wrapper[data-visible="false"],
+[data-sonner-toaster]
+  [data-sonner-toast][data-promise="true"][data-type="success"]
+  .sonner-loader[data-visible="false"],
+[data-sonner-toaster]
+  [data-sonner-toast][data-promise="true"][data-type="error"]
+  .sonner-loader[data-visible="false"] {
+  opacity: 0;
+  transform: none;
+  animation: none;
+  transition: none;
+}
+
 [data-sonner-toaster]
   [data-sonner-toast][data-styled="true"]:hover
   [data-close-button]:hover {
