@@ -1042,6 +1042,7 @@ textarea,
 
 .commit-thread-group-highlighted {
   background: #fff8df;
+  background-clip: content-box;
 }
 
 .commit-thread-group-background-tooltip {
