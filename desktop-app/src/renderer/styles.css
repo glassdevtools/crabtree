@@ -500,28 +500,12 @@ textarea,
   opacity: 0.38;
 }
 
-.repo-settings-button {
+.repo-version-label {
   flex: 0 0 auto;
-}
-
-.settings-field {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  color: #343a43;
-  font-size: 13px;
+  color: #5f6670;
+  font-size: 11px;
   font-weight: 650;
-}
-
-.settings-select {
-  width: 160px;
-  background: #ffffff;
-}
-
-.settings-select:hover,
-.settings-select[aria-expanded="true"] {
-  background: #ffffff;
+  line-height: 1;
 }
 
 .title-tooltip-trigger {
@@ -713,6 +697,19 @@ textarea,
 
 .branch-pointer-move-modal {
   width: 560px;
+}
+
+.branch-name-preview {
+  margin: -8px 0 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.branch-name-preview code {
+  color: var(--foreground);
+  font-family: inherit;
+  font-weight: 650;
 }
 
 .branch-merge-preview-message {

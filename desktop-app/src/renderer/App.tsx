@@ -2,15 +2,16 @@ import {
   CircleArrowDown,
   CircleArrowLeft,
   CircleArrowUp,
-  GitBranch,
-  GitCommitHorizontal,
-  GitPullRequestArrow,
   LoaderCircle,
-  Settings,
   Trash2,
 } from "lucide-react";
 import { GoDotFill } from "react-icons/go";
-import { LuGitCommitVertical } from "react-icons/lu";
+import {
+  LuCheck,
+  LuGitBranchPlus,
+  LuGitCommitHorizontal,
+  LuGitPullRequestArrow,
+} from "react-icons/lu";
 import { MdOutlineCallSplit } from "react-icons/md";
 import { VscVscode } from "react-icons/vsc";
 import { Resizable } from "react-resizable";
@@ -95,6 +96,7 @@ import {
   readIsWorktreeCwd,
 } from "./threadGroups";
 import type { ThreadGroup } from "./threadGroups";
+import packageInfo from "../../package.json";
 
 // The history view is a SourceTree-style row table. Git owns the commits; the renderer only assigns lanes.
 // TODO: AI-PICKED-VALUE: These graph sizes and colors are initial SourceTree-like choices for dense commit rows.
@@ -121,6 +123,9 @@ const SUCCESS_MESSAGE_TIMEOUT_MS = 4000;
 const TOAST_POSITION = "top-center";
 const USER_GIT_UPDATE_TOAST_ID = "user-git-update";
 const MERGE_BRANCH_BUTTON_TITLE = "Merge this into HEAD";
+const COMMIT_GRAPH_ACTION_ICON_SIZE = 10;
+// TODO: AI-PICKED-VALUE: A light stroke makes the graph actions read as buttons instead of status markers.
+const COMMIT_GRAPH_ACTION_ICON_STROKE_WIDTH = 2;
 const COMMIT_GRAPH_COLORS = [
   "#c53a13",
   "#0a84ff",
@@ -147,6 +152,10 @@ const readTotalGitChangeSummary = (changeSummary: GitChangeSummary) => {
     added: changeSummary.staged.added + changeSummary.unstaged.added,
     removed: changeSummary.staged.removed + changeSummary.unstaged.removed,
   };
+};
+
+const readCreatedBranchName = (branchName: string) => {
+  return branchName.trim().replace(/[^A-Za-z0-9._/-]+/g, "-");
 };
 
 const readBranchTagChangesForRepo = ({
@@ -1998,7 +2007,10 @@ const CommitHistoryRow = ({
                         })
                       }
                     >
-                      <LuGitCommitVertical size={10} />
+                      <LuCheck
+                        size={COMMIT_GRAPH_ACTION_ICON_SIZE}
+                        strokeWidth={COMMIT_GRAPH_ACTION_ICON_STROKE_WIDTH}
+                      />
                     </Button>
                   </TitleTooltip>
                 ) : actionBranchCreateTarget === null ? null : (
@@ -2014,7 +2026,10 @@ const CommitHistoryRow = ({
                         openBranchCreateModal(event, actionBranchCreateTarget)
                       }
                     >
-                      <GitBranch size={10} />
+                      <LuGitBranchPlus
+                        size={COMMIT_GRAPH_ACTION_ICON_SIZE}
+                        strokeWidth={COMMIT_GRAPH_ACTION_ICON_STROKE_WIDTH}
+                      />
                     </Button>
                   </TitleTooltip>
                 )}
@@ -2042,7 +2057,10 @@ const CommitHistoryRow = ({
                       openBranchMergeModal(event, mergeBranch)
                     }
                   >
-                    <GitPullRequestArrow size={10} />
+                    <LuGitPullRequestArrow
+                      size={COMMIT_GRAPH_ACTION_ICON_SIZE}
+                      strokeWidth={COMMIT_GRAPH_ACTION_ICON_STROKE_WIDTH}
+                    />
                   </Button>
                 </span>
               </TitleTooltip>
@@ -2242,6 +2260,9 @@ const CommitHistory = ({
   const [branchCreateTarget, setBranchCreateTarget] =
     useState<BranchCreateTarget | null>(null);
   const [branchName, setBranchName] = useState("");
+  const createdBranchName = readCreatedBranchName(branchName);
+  const shouldShowBranchNamePreview =
+    branchName.trim().length > 0 && createdBranchName !== branchName.trim();
   const [commitMessageTarget, setCommitMessageTarget] =
     useState<CommitMessageTarget | null>(null);
   const [commitMessage, setCommitMessage] = useState("");
@@ -3016,7 +3037,7 @@ const CommitHistory = ({
         try {
           await window.molttree.createGitBranch({
             path: request.path,
-            branch: branchName.trim(),
+            branch: createdBranchName,
           });
           closeBranchCreateModal();
         } catch (error) {
@@ -3329,7 +3350,7 @@ const CommitHistory = ({
               />
             </div>
             <div className="commit-history-header-cell">
-              <span>Code locations</span>
+              <span>Code Locations</span>
               <CommitHistoryColumnResizeHandle
                 columnKey="codeLocations"
                 startColumnResize={startColumnResize}
@@ -3450,6 +3471,11 @@ const CommitHistory = ({
                   value={branchName}
                   onChange={(event) => setBranchName(event.target.value)}
                 />
+                {shouldShowBranchNamePreview ? (
+                  <p className="branch-name-preview">
+                    Branch name will become: <code>{createdBranchName}</code>
+                  </p>
+                ) : null}
                 <DialogFooter>
                   <Button
                     type="button"
@@ -3460,7 +3486,7 @@ const CommitHistory = ({
                   </Button>
                   <Button
                     type="submit"
-                    disabled={branchName.trim().length === 0}
+                    disabled={createdBranchName.length === 0}
                   >
                     Create
                   </Button>
@@ -3559,16 +3585,16 @@ const CommitHistory = ({
                   </span>
                 </div>
               </div>
-              <Button
-                className="change-summary-modal-link"
-                variant="link"
-                type="button"
-                onClick={() => {
-                  void openCodePath(changeSummaryTarget.path);
-                }}
-              >
-                Open repo
-              </Button>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    void openCodePath(changeSummaryTarget.path);
+                  }}
+                >
+                  Open Repository
+                </Button>
+              </DialogFooter>
             </DialogContent>
           )}
         </Dialog>
@@ -3605,7 +3631,7 @@ const CommitHistory = ({
             </AlertDialogContent>
           )}
         </AlertDialog>
-        <AlertDialog
+        <Dialog
           open={branchMergeConfirmation !== null}
           onOpenChange={(isOpen) => {
             if (isOpen) {
@@ -3616,13 +3642,13 @@ const CommitHistory = ({
           }}
         >
           {branchMergeConfirmation === null ? null : (
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Merge Branches</AlertDialogTitle>
-                <AlertDialogDescription>
+            <DialogContent className="sm:max-w-sm">
+              <DialogHeader>
+                <DialogTitle>Merge Branch</DialogTitle>
+                <DialogDescription>
                   Merge {branchMergeConfirmation.branch} into HEAD?
-                </AlertDialogDescription>
-              </AlertDialogHeader>
+                </DialogDescription>
+              </DialogHeader>
               <div className="branch-merge-preview-message">
                 <span className="commit-thread-change-added">
                   +{branchMergeConfirmation.preview.added}
@@ -3644,17 +3670,21 @@ const CommitHistory = ({
                   .
                 </span>
               </div>
-              <AlertDialogFooter>
-                <AlertDialogCancel onClick={closeBranchMergeConfirmationModal}>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={closeBranchMergeConfirmationModal}
+                >
                   Cancel
-                </AlertDialogCancel>
-                <AlertDialogAction onClick={confirmBranchMerge}>
+                </Button>
+                <Button type="button" onClick={confirmBranchMerge}>
                   Merge
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
+                </Button>
+              </DialogFooter>
+            </DialogContent>
           )}
-        </AlertDialog>
+        </Dialog>
         <AlertDialog
           open={branchPointerMove !== null}
           onOpenChange={(isOpen) => {
@@ -3783,7 +3813,6 @@ export const App = () => {
   );
   const [selectedRepoRoot, setSelectedRepoRoot] = useState<string | null>(null);
   const [pathLauncher, setPathLauncher] = useState<PathLauncher>("vscode");
-  const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [dashboardErrorMessage, setDashboardErrorMessage] = useState<
     string | null
@@ -4323,17 +4352,7 @@ export const App = () => {
             </button>
           </div>
         )}
-        <TitleTooltip title="Settings">
-          <button
-            aria-label="Settings"
-            className="repo-action-control repo-settings-button"
-            type="button"
-            onClick={() => setIsSettingsDialogOpen(true)}
-          >
-            <Settings aria-hidden="true" size={18} strokeWidth={1.75} />
-            <span>Settings</span>
-          </button>
-        </TitleTooltip>
+        <span className="repo-version-label">v{packageInfo.version}</span>
       </div>
     </>
   );
@@ -4341,34 +4360,6 @@ export const App = () => {
   return (
     <TooltipProvider>
       <main className="app-shell">
-        <Dialog
-          open={isSettingsDialogOpen}
-          onOpenChange={setIsSettingsDialogOpen}
-        >
-          <DialogContent className="settings-dialog sm:max-w-sm">
-            <DialogHeader>
-              <DialogTitle>Settings</DialogTitle>
-              <DialogDescription className="sr-only">
-                Configure local app settings.
-              </DialogDescription>
-            </DialogHeader>
-            <label className="settings-field">
-              <span>Open paths with</span>
-              <Select value={pathLauncher} onValueChange={changePathLauncher}>
-                <SelectTrigger className="settings-select" size="sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent
-                  align="end"
-                  className="path-launcher-select-content"
-                >
-                  <PathLauncherSelectItems />
-                </SelectContent>
-              </Select>
-            </label>
-          </DialogContent>
-        </Dialog>
-
         <AlertDialog
           open={branchTagChangeConfirmation !== null}
           onOpenChange={(isOpen) => {
@@ -4447,7 +4438,7 @@ export const App = () => {
               <Empty className="empty-state">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
-                    <GitCommitHorizontal size={22} />
+                    <LuGitCommitHorizontal size={22} />
                   </EmptyMedia>
                   <EmptyDescription>
                     No Git repos found from Codex thread working directories.
