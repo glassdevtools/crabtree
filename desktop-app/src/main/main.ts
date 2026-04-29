@@ -10,8 +10,10 @@ import type {
   GitCommitChangesRequest,
   GitCreateBranchRequest,
   GitDeleteBranchRequest,
+  GitDetachWorktreeBranchRequest,
   GitMergeBranchRequest,
   GitMoveBranchRequest,
+  GitSwitchBranchRequest,
   OpenPathRequest,
   PathLauncher,
 } from "../shared/types";
@@ -24,12 +26,14 @@ import {
   commitAllGitChanges,
   createGitBranch,
   deleteGitBranch,
+  detachGitWorktreeBranch,
   mergeGitBranch,
   moveGitBranch,
   previewGitMerge,
   pushGitBranchTagChanges,
   resetGitBranchTagChanges,
   stageGitChanges,
+  switchGitBranch,
   unstageGitChanges,
 } from "./gitActions";
 
@@ -296,6 +300,69 @@ const readGitMoveBranchRequest = (value: unknown) => {
   return gitMoveBranchRequest;
 };
 
+const readGitSwitchBranchRequest = (value: unknown) => {
+  if (!isObject(value)) {
+    throw new Error("gitSwitchBranchRequest must be an object.");
+  }
+
+  if (
+    typeof value.repoRoot !== "string" ||
+    value.repoRoot.length === 0 ||
+    typeof value.path !== "string" ||
+    value.path.length === 0 ||
+    typeof value.branch !== "string" ||
+    value.branch.trim().length === 0 ||
+    typeof value.oldSha !== "string" ||
+    value.oldSha.length === 0 ||
+    typeof value.newSha !== "string" ||
+    value.newSha.length === 0
+  ) {
+    throw new Error(
+      "gitSwitchBranchRequest needs a repo root, path, branch, old sha, and new sha.",
+    );
+  }
+
+  const gitSwitchBranchRequest: GitSwitchBranchRequest = {
+    repoRoot: value.repoRoot,
+    path: value.path,
+    branch: value.branch.trim(),
+    oldSha: value.oldSha,
+    newSha: value.newSha,
+  };
+
+  return gitSwitchBranchRequest;
+};
+
+const readGitDetachWorktreeBranchRequest = (value: unknown) => {
+  if (!isObject(value)) {
+    throw new Error("gitDetachWorktreeBranchRequest must be an object.");
+  }
+
+  if (
+    typeof value.repoRoot !== "string" ||
+    value.repoRoot.length === 0 ||
+    typeof value.path !== "string" ||
+    value.path.length === 0 ||
+    typeof value.branch !== "string" ||
+    value.branch.trim().length === 0 ||
+    typeof value.sha !== "string" ||
+    value.sha.length === 0
+  ) {
+    throw new Error(
+      "gitDetachWorktreeBranchRequest needs a repo root, path, branch, and sha.",
+    );
+  }
+
+  const gitDetachWorktreeBranchRequest: GitDetachWorktreeBranchRequest = {
+    repoRoot: value.repoRoot,
+    path: value.path,
+    branch: value.branch.trim(),
+    sha: value.sha,
+  };
+
+  return gitDetachWorktreeBranchRequest;
+};
+
 const readGitCheckoutCommitRequest = (value: unknown) => {
   if (!isObject(value)) {
     throw new Error("gitCheckoutCommitRequest must be an object.");
@@ -490,6 +557,19 @@ ipcMain.handle("git:moveBranch", async (_event, value: unknown) => {
   const gitMoveBranchRequest = readGitMoveBranchRequest(value);
 
   await moveGitBranch(gitMoveBranchRequest);
+});
+
+ipcMain.handle("git:switchBranch", async (_event, value: unknown) => {
+  const gitSwitchBranchRequest = readGitSwitchBranchRequest(value);
+
+  await switchGitBranch(gitSwitchBranchRequest);
+});
+
+ipcMain.handle("git:detachWorktreeBranch", async (_event, value: unknown) => {
+  const gitDetachWorktreeBranchRequest =
+    readGitDetachWorktreeBranchRequest(value);
+
+  await detachGitWorktreeBranch(gitDetachWorktreeBranchRequest);
 });
 
 ipcMain.handle("git:checkoutCommit", async (_event, value: unknown) => {

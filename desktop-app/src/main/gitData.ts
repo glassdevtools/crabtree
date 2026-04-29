@@ -97,20 +97,37 @@ const readDefaultBranch = async ({ root }: { root: string }) => {
   return originHead;
 };
 
+const readMainWorktreePath = async ({ root }: { root: string }) => {
+  const { stdout } = await runGit({
+    cwd: root,
+    args: ["worktree", "list", "--porcelain"],
+  });
+  const prefix = "worktree ";
+
+  for (const line of stdout.split("\n")) {
+    if (line.startsWith(prefix)) {
+      return line.slice(prefix.length);
+    }
+  }
+
+  throw new Error("Git worktree list did not include a main worktree.");
+};
+
 const readRepoSeedForThread = async ({ thread }: { thread: CodexThread }) => {
   if (thread.cwd.length === 0) {
     return null;
   }
 
-  const root = await readNullableGitText({
+  const threadRoot = await readNullableGitText({
     cwd: thread.cwd,
     args: ["rev-parse", "--show-toplevel"],
   });
 
-  if (root === null) {
+  if (threadRoot === null) {
     return null;
   }
 
+  const root = await readMainWorktreePath({ root: threadRoot });
   const originUrl = await readNullableGitText({
     cwd: root,
     args: ["config", "--get", "remote.origin.url"],
@@ -184,6 +201,7 @@ const readWorktrees = async ({
     args: ["worktree", "list", "--porcelain"],
   });
   const worktrees: GitWorktree[] = [];
+  let mainWorktreePath: string | null = null;
   let path: string | null = null;
   let head: string | null = null;
   let branch: string | null = null;
@@ -197,6 +215,7 @@ const readWorktrees = async ({
 
     if (!didReadMainWorktree) {
       didReadMainWorktree = true;
+      mainWorktreePath = path;
       return;
     }
 
@@ -243,7 +262,11 @@ const readWorktrees = async ({
 
   pushWorktree();
 
-  return worktrees;
+  if (mainWorktreePath === null) {
+    throw new Error("Git worktree list did not include a main worktree.");
+  }
+
+  return { mainWorktreePath, worktrees };
 };
 
 const splitRefs = (value: string) => {
@@ -417,6 +440,8 @@ export const readGitChangesOfCwd = async ({
     .filter((cwd) => cwd.length > 0);
 
   for (const repo of repos) {
+    cwds.push(repo.root);
+
     for (const worktree of repo.worktrees) {
       cwds.push(worktree.path);
     }
@@ -659,7 +684,7 @@ export const readRepoGraphs = async ({
     );
 
     try {
-      const worktrees = await readWorktrees({
+      const { mainWorktreePath, worktrees } = await readWorktrees({
         repoSeed,
         threads: threadsInRepo,
       });
@@ -677,6 +702,7 @@ export const readRepoGraphs = async ({
       repos.push({
         key: repoSeed.key,
         root: repoSeed.root,
+        mainWorktreePath,
         originUrl: repoSeed.originUrl,
         currentBranch: repoSeed.currentBranch,
         defaultBranch: repoSeed.defaultBranch,

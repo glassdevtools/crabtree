@@ -25,7 +25,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
           />
         ),
       }}
-      position="bottom-right"
+      position="top-center"
       {...props}
     />
   );

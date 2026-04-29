@@ -5,9 +5,11 @@ import type {
   GitCommitChangesRequest,
   GitCreateBranchRequest,
   GitDeleteBranchRequest,
+  GitDetachWorktreeBranchRequest,
   GitMergeBranchRequest,
   GitMergePreview,
   GitMoveBranchRequest,
+  GitSwitchBranchRequest,
 } from "../shared/types";
 
 const FIELD_SEPARATOR = "\u001f";
@@ -341,7 +343,7 @@ export const createGitBranch = async ({
     path,
     args: ["check-ref-format", "--branch", branch],
   });
-  await runGitCommandForPath({ path, args: ["branch", branch] });
+  await runGitCommandForPath({ path, args: ["switch", "-c", branch] });
 };
 
 // Branch deletion needs an old sha because deleting a stale branch can hide commits the user did not mean to touch.
@@ -597,6 +599,134 @@ export const moveGitBranch = async ({
   await runGitCommandForPath({
     path: worktreePath,
     args: ["reset", "--keep", targetSha],
+  });
+};
+
+export const switchGitBranch = async ({
+  repoRoot,
+  path,
+  branch,
+  oldSha,
+  newSha,
+}: GitSwitchBranchRequest) => {
+  await runGitCommandForPath({
+    path: repoRoot,
+    args: ["check-ref-format", "--branch", branch],
+  });
+  const branchRef = `refs/heads/${branch}`;
+  const worktreePath = await readGitTextForPath({
+    path,
+    args: ["rev-parse", "--show-toplevel"],
+  });
+  const branchHead = await readGitTextForPath({
+    path: repoRoot,
+    args: ["rev-parse", "--verify", branchRef],
+  });
+  const expectedOldSha = await readGitTextForPath({
+    path: repoRoot,
+    args: ["rev-parse", "--verify", `${oldSha}^{commit}`],
+  });
+  const targetSha = await readGitTextForPath({
+    path: repoRoot,
+    args: ["rev-parse", "--verify", `${newSha}^{commit}`],
+  });
+
+  if (branchHead !== expectedOldSha && branchHead !== targetSha) {
+    throw new Error("Branch moved. Refresh and try again.");
+  }
+
+  const checkedOutWorktreePath = await readGitWorktreePathForBranch({
+    repoRoot,
+    branch,
+  });
+
+  if (
+    checkedOutWorktreePath !== null &&
+    checkedOutWorktreePath !== worktreePath
+  ) {
+    throw new Error("Branch is checked out in another worktree.");
+  }
+
+  if (branchHead !== targetSha) {
+    await ensureOldShaStaysVisibleAfterRefChange({
+      repoRoot,
+      oldSha: expectedOldSha,
+      changedRef: branchRef,
+      replacementSha: targetSha,
+      changedLocalBranch: branch,
+      rootRefs: ["refs/heads", "refs/remotes", "refs/tags"],
+      shouldIncludeWorktreeHeads: true,
+      message:
+        "Moving this branch would hide commits from the graph. Move or tag another branch first.",
+    });
+
+    if (checkedOutWorktreePath === worktreePath) {
+      await runGitCommandForPath({
+        path: worktreePath,
+        args: ["reset", "--keep", targetSha],
+      });
+      return;
+    }
+
+    await runGitCommandForPath({
+      path: repoRoot,
+      args: [
+        "update-ref",
+        "-m",
+        `MoltTree: move ${branch}`,
+        branchRef,
+        targetSha,
+        expectedOldSha,
+      ],
+    });
+  }
+
+  await runGitCommandForPath({ path: worktreePath, args: ["switch", branch] });
+};
+
+export const detachGitWorktreeBranch = async ({
+  repoRoot,
+  path,
+  branch,
+  sha,
+}: GitDetachWorktreeBranchRequest) => {
+  await runGitCommandForPath({
+    path: repoRoot,
+    args: ["check-ref-format", "--branch", branch],
+  });
+  const worktreePath = await readGitTextForPath({
+    path,
+    args: ["rev-parse", "--show-toplevel"],
+  });
+  const checkedOutWorktreePath = await readGitWorktreePathForBranch({
+    repoRoot,
+    branch,
+  });
+
+  if (checkedOutWorktreePath !== worktreePath) {
+    throw new Error("Branch moved. Refresh and try again.");
+  }
+
+  const expectedSha = await readGitTextForPath({
+    path: repoRoot,
+    args: ["rev-parse", "--verify", `${sha}^{commit}`],
+  });
+  const branchHead = await readGitTextForPath({
+    path: repoRoot,
+    args: ["rev-parse", "--verify", `refs/heads/${branch}`],
+  });
+  const worktreeHead = await readGitTextForPath({
+    path: worktreePath,
+    args: ["rev-parse", "HEAD"],
+  });
+
+  if (branchHead !== expectedSha || worktreeHead !== expectedSha) {
+    throw new Error("Branch moved. Refresh and try again.");
+  }
+
+  await runGitCommandForPath({
+    path: worktreePath,
+    args: ["switch", "--detach", expectedSha],
   });
 };
 

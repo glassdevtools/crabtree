@@ -2,15 +2,17 @@ import {
   CircleArrowDown,
   CircleArrowLeft,
   CircleArrowUp,
-  CircleUser,
-  GitBranch,
-  GitCommitHorizontal,
-  GitPullRequestArrow,
+  Info,
   LoaderCircle,
-  Settings,
   Trash2,
 } from "lucide-react";
-import { IoCheckmarkSharp } from "react-icons/io5";
+import { GoDotFill } from "react-icons/go";
+import {
+  LuCheck,
+  LuGitBranchPlus,
+  LuGitCommitHorizontal,
+  LuGitPullRequestArrow,
+} from "react-icons/lu";
 import { MdOutlineCallSplit } from "react-icons/md";
 import { VscVscode } from "react-icons/vsc";
 import { Resizable } from "react-resizable";
@@ -95,6 +97,7 @@ import {
   readIsWorktreeCwd,
 } from "./threadGroups";
 import type { ThreadGroup } from "./threadGroups";
+import packageInfo from "../../package.json";
 
 // The history view is a SourceTree-style row table. Git owns the commits; the renderer only assigns lanes.
 // TODO: AI-PICKED-VALUE: These graph sizes and colors are initial SourceTree-like choices for dense commit rows.
@@ -103,22 +106,27 @@ const COMMIT_GRAPH_LANE_WIDTH = 14;
 const COMMIT_GRAPH_PADDING_LEFT = 16;
 const COMMIT_GRAPH_MIN_WIDTH = 96;
 const COMMIT_GRAPH_DOT_RADIUS = 4;
-// TODO: AI-PICKED-VALUE: This small center dot makes the HEAD commit distinct without hiding the commit color.
-const COMMIT_GRAPH_HEAD_CENTER_DOT_RADIUS = 1.75;
+// TODO: AI-PICKED-VALUE: This slightly larger outer dot makes the HEAD commit distinct without adding another icon.
+const COMMIT_GRAPH_HEAD_DOT_RADIUS = 4.75;
+// TODO: AI-PICKED-VALUE: This center dot makes the HEAD commit distinct without hiding the commit color.
+const COMMIT_GRAPH_HEAD_CENTER_DOT_RADIUS = 2.25;
 // TODO: AI-PICKED-VALUE: This keeps graph lines readable in compact rows while making them less heavy.
 const COMMIT_GRAPH_SEGMENT_STROKE_WIDTH = 2.25;
-// TODO: AI-PICKED-VALUE: The HEAD icon is large enough to read in compact rows without taking over the graph column.
-const COMMIT_GRAPH_HEAD_ICON_SIZE = 12;
-// TODO: AI-PICKED-VALUE: This stroke weight keeps the HEAD icon visibly bolder than the graph lines.
-const COMMIT_GRAPH_HEAD_ICON_STROKE_WIDTH = 2.25;
+// TODO: AI-PICKED-VALUE: This neutral gray makes changed cwd rows read as working-tree state instead of Git history.
+const COMMIT_GRAPH_CWD_CHANGE_COLOR = "#8b929c";
 const COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO = 0;
 const COMMIT_HISTORY_HEADER_HEIGHT = 22;
 // Dashboard reads touch Codex and Git, so automatic refreshes share the manual refresh path and never overlap.
 // TODO: AI-PICKED-VALUE: Refreshing every second keeps branch/worktree state current while the refresh queue prevents overlapping Git reads.
 const DASHBOARD_REFRESH_INTERVAL_MS = 1000;
-// TODO: AI-PICKED-VALUE: Four seconds is long enough to read a short success toast without requiring manual dismissal.
-const SUCCESS_MESSAGE_TIMEOUT_MS = 4000;
+// TODO: AI-PICKED-VALUE: One second is long enough for success confirmations that do not need manual dismissal.
+const SUCCESS_MESSAGE_TIMEOUT_MS = 1000;
+const TOAST_POSITION = "top-center";
 const USER_GIT_UPDATE_TOAST_ID = "user-git-update";
+const MERGE_BRANCH_BUTTON_TITLE = "Merge this into HEAD";
+const COMMIT_GRAPH_ACTION_ICON_SIZE = 10;
+// TODO: AI-PICKED-VALUE: A light stroke makes the graph actions read as buttons instead of status markers.
+const COMMIT_GRAPH_ACTION_ICON_STROKE_WIDTH = 2;
 const COMMIT_GRAPH_COLORS = [
   "#c53a13",
   "#0a84ff",
@@ -145,6 +153,10 @@ const readTotalGitChangeSummary = (changeSummary: GitChangeSummary) => {
     added: changeSummary.staged.added + changeSummary.unstaged.added,
     removed: changeSummary.staged.removed + changeSummary.unstaged.removed,
   };
+};
+
+const readCreatedBranchName = (branchName: string) => {
+  return branchName.trim().replace(/[^A-Za-z0-9._/-]+/g, "-");
 };
 
 const readBranchTagChangesForRepo = ({
@@ -357,12 +369,10 @@ const PathLauncherSelectItems = () => {
 const copyTextAfterContextMenu = async ({
   event,
   text,
-  copiedLabel,
   errorMessage,
 }: {
   event: MouseEvent<Element>;
   text: string;
-  copiedLabel: string;
   errorMessage: string;
 }) => {
   event.preventDefault();
@@ -370,14 +380,17 @@ const copyTextAfterContextMenu = async ({
 
   try {
     await window.molttree.copyText(text);
-    toast.success(`Copied ${copiedLabel}!`, {
+    toast.success("Copied!", {
+      closeButton: false,
       description: <div className="copy-toast-value">{text}</div>,
       duration: SUCCESS_MESSAGE_TIMEOUT_MS,
+      position: TOAST_POSITION,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : errorMessage;
     toast.error("Error", {
       description: message,
+      position: TOAST_POSITION,
     });
   }
 };
@@ -389,8 +402,9 @@ const readRepoFolderName = (repo: RepoGraph) => {
 // TODO: AI-PICKED-VALUE: These column widths match the current table layout closely enough while making drag resizing concrete.
 const COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS = {
   graph: 140,
-  branchTags: 272,
-  actors: 240,
+  branchTags: 408,
+  codeLocations: 160,
+  actors: 480,
   description: 294,
   commit: 84,
   author: 150,
@@ -399,6 +413,7 @@ const COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS = {
 // TODO: AI-PICKED-VALUE: These smaller resize limits keep columns usable while allowing the page to compress much further.
 const COMMIT_HISTORY_MIN_COLUMN_WIDTHS = {
   branchTags: 120,
+  codeLocations: 96,
   actors: 44,
   description: 120,
   commit: 52,
@@ -408,6 +423,7 @@ const COMMIT_HISTORY_MIN_COLUMN_WIDTHS = {
 const COMMIT_HISTORY_MIN_DETAILS_WIDTH =
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.actors +
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.branchTags +
+  COMMIT_HISTORY_MIN_COLUMN_WIDTHS.codeLocations +
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.description +
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.commit +
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.author +
@@ -415,6 +431,7 @@ const COMMIT_HISTORY_MIN_DETAILS_WIDTH =
 
 type CommitHistoryColumnKey =
   | "branchTags"
+  | "codeLocations"
   | "actors"
   | "description"
   | "commit"
@@ -424,6 +441,7 @@ type CommitHistoryColumnKey =
 type CommitHistoryColumnWidths = {
   graph: number;
   branchTags: number;
+  codeLocations: number;
   actors: number;
   description: number;
   commit: number;
@@ -441,6 +459,7 @@ type CommitHistoryColumnResize = {
 
 type BranchPointerDrag = {
   repoRoot: string;
+  sourcePath: string | null;
   branch: string;
   oldSha: string;
   oldShortSha: string;
@@ -449,6 +468,8 @@ type BranchPointerDrag = {
 
 type BranchPointerMove = {
   repoRoot: string;
+  sourcePath: string | null;
+  targetPath: string | null;
   branch: string;
   oldSha: string;
   oldShortSha: string;
@@ -510,8 +531,10 @@ type CommitGraphRow = {
   id: string;
   commit: GitCommit;
   threadIds: string[];
+  threadGroup: ThreadGroup | null;
+  isCommitRow: boolean;
   lane: number;
-  colorIndex: number;
+  color: string;
   rowIndex: number;
 };
 
@@ -521,6 +544,7 @@ type CommitGraphItem = {
   sha: string;
   parents: string[];
   threadIds: string[];
+  changedThreadGroups: ThreadGroup[];
 };
 
 type CommitGraphLane = {
@@ -533,7 +557,7 @@ type CommitGraphSegment = {
   toLane: number;
   fromRowIndex: number;
   toRowIndex: number;
-  colorIndex: number;
+  color: string;
   isMergeSegment: boolean;
 };
 
@@ -601,7 +625,7 @@ const readCommitGraphWidth = ({ laneCount }: { laneCount: number }) => {
 const readCommitGridTemplateColumns = (
   columnWidths: CommitHistoryColumnWidths,
 ) => {
-  return `${columnWidths.graph}px ${columnWidths.actors}px ${columnWidths.branchTags}px ${columnWidths.description}px ${columnWidths.commit}px ${columnWidths.author}px ${columnWidths.date}px`;
+  return `${columnWidths.graph}px ${columnWidths.actors}px ${columnWidths.branchTags}px ${columnWidths.codeLocations}px ${columnWidths.description}px ${columnWidths.commit}px ${columnWidths.author}px ${columnWidths.date}px`;
 };
 
 const readCommitHistoryTableWidth = (
@@ -610,6 +634,7 @@ const readCommitHistoryTableWidth = (
   return (
     columnWidths.graph +
     columnWidths.branchTags +
+    columnWidths.codeLocations +
     columnWidths.actors +
     columnWidths.description +
     columnWidths.commit +
@@ -630,6 +655,8 @@ const replaceCommitHistoryColumnWidth = ({
   switch (columnKey) {
     case "branchTags":
       return { ...columnWidths, branchTags: width };
+    case "codeLocations":
+      return { ...columnWidths, codeLocations: width };
     case "actors":
       return { ...columnWidths, actors: width };
     case "description":
@@ -676,9 +703,20 @@ const readIsHeadRef = (ref: string) => {
   return ref === "HEAD" || ref.startsWith("HEAD -> ");
 };
 
-const createCommitGraph = (commits: GitCommit[]) => {
+const createCommitGraph = ({
+  commits,
+  threadOfId,
+  worktrees,
+  gitChangesOfCwd,
+}: {
+  commits: GitCommit[];
+  threadOfId: { [id: string]: CodexThread };
+  worktrees: GitWorktree[];
+  gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
+}) => {
   const graphItems: CommitGraphItem[] = [];
   const commitOfSha: { [sha: string]: GitCommit } = {};
+  const firstParentChildCountOfSha: { [sha: string]: number } = {};
   const colorIndexOfSha: { [sha: string]: number } = {};
   const lanes: CommitGraphLane[] = [];
   const rows: CommitGraphRow[] = [];
@@ -688,39 +726,74 @@ const createCommitGraph = (commits: GitCommit[]) => {
 
   for (const commit of commits) {
     commitOfSha[commit.sha] = commit;
+    const firstParent = commit.parents[0];
+
+    if (firstParent !== undefined) {
+      firstParentChildCountOfSha[firstParent] =
+        (firstParentChildCountOfSha[firstParent] ?? 0) + 1;
+    }
   }
 
-  const readEarliestLaneColorSeedSha = ({
-    sha,
-    lanesToCheck,
-    parentLanes,
-  }: {
-    sha: string;
-    lanesToCheck: CommitGraphLane[];
-    parentLanes: CommitGraphLane[];
-  }) => {
-    const isBoundarySha: { [sha: string]: boolean } = {};
+  let headSha: string | null = null;
+
+  for (const commit of commits) {
+    if (commit.refs.some((ref) => readIsHeadRef(ref))) {
+      headSha = commit.sha;
+      break;
+    }
+  }
+
+  const displayedThreadIdsOfSha: { [sha: string]: string[] } = {};
+
+  for (const commit of commits) {
+    displayedThreadIdsOfSha[commit.sha] = [];
+  }
+
+  for (const commit of commits) {
+    for (const threadId of commit.threadIds) {
+      const thread = threadOfId[threadId];
+
+      if (thread === undefined) {
+        continue;
+      }
+
+      const displaySha =
+        headSha !== null && !readIsWorktreeCwd({ cwd: thread.cwd, worktrees })
+          ? headSha
+          : commit.sha;
+      const displayedThreadIds = displayedThreadIdsOfSha[displaySha];
+
+      if (displayedThreadIds === undefined) {
+        continue;
+      }
+
+      displayedThreadIds.push(thread.id);
+    }
+  }
+
+  const readIsThreadGroupChanged = (threadGroup: ThreadGroup) => {
+    const gitChangeSummary = gitChangesOfCwd[threadGroup.cwd];
+
+    return (
+      gitChangeSummary !== undefined &&
+      !readIsGitChangeSummaryEmpty(gitChangeSummary)
+    );
+  };
+
+  const readEarliestLaneColorSeedSha = ({ sha }: { sha: string }) => {
     const isSeenSha: { [sha: string]: boolean } = {};
     let colorSeedSha = sha;
 
-    for (const laneItem of lanesToCheck) {
-      isBoundarySha[laneItem.sha] = true;
-    }
-
-    for (const laneItem of parentLanes) {
-      isBoundarySha[laneItem.sha] = true;
-    }
-
-    // Use the oldest commit available for this line before it joins another active line, so newer commits do not repaint the lane.
+    // Use the oldest visible commit in this first-parent line segment, so newer commits do not repaint the lane.
     while (true) {
       const commit = commitOfSha[colorSeedSha];
       const firstParent = commit?.parents[0];
 
-      if (
-        firstParent === undefined ||
-        isBoundarySha[firstParent] === true ||
-        isSeenSha[firstParent] === true
-      ) {
+      if (firstParent === undefined || isSeenSha[firstParent] === true) {
+        return colorSeedSha;
+      }
+
+      if ((firstParentChildCountOfSha[firstParent] ?? 0) > 1) {
         return colorSeedSha;
       }
 
@@ -738,11 +811,7 @@ const createCommitGraph = (commits: GitCommit[]) => {
     lanesToCheck: CommitGraphLane[];
     parentLanes: CommitGraphLane[];
   }) => {
-    const colorSeedSha = readEarliestLaneColorSeedSha({
-      sha,
-      lanesToCheck,
-      parentLanes,
-    });
+    const colorSeedSha = readEarliestLaneColorSeedSha({ sha });
     const preferredColorIndex = readCommitGraphColorIndex(colorSeedSha);
     const isColorIndexUsed: { [colorIndex: number]: boolean } = {};
 
@@ -773,12 +842,36 @@ const createCommitGraph = (commits: GitCommit[]) => {
   };
 
   for (const commit of commits) {
+    const commitThreadIds = displayedThreadIdsOfSha[commit.sha] ?? [];
+    const threads = commitThreadIds
+      .map((threadId) => threadOfId[threadId])
+      .filter((thread): thread is CodexThread => thread !== undefined);
+    const threadGroups = readDisplayedThreadGroups({
+      threads,
+      worktrees,
+      gitChangesOfCwd,
+    });
+    const changedThreadGroups: ThreadGroup[] = [];
+    const unchangedThreadIds: string[] = [];
+
+    for (const threadGroup of threadGroups) {
+      if (readIsThreadGroupChanged(threadGroup)) {
+        changedThreadGroups.push(threadGroup);
+        continue;
+      }
+
+      for (const thread of threadGroup.threads) {
+        unchangedThreadIds.push(thread.id);
+      }
+    }
+
     graphItems.push({
       id: `commit:${commit.sha}`,
       commit,
       sha: commit.sha,
       parents: commit.parents,
-      threadIds: commit.threadIds,
+      threadIds: unchangedThreadIds,
+      changedThreadGroups,
     });
   }
 
@@ -787,10 +880,10 @@ const createCommitGraph = (commits: GitCommit[]) => {
     toLane,
     fromRowIndex,
     toRowIndex,
-    colorIndex,
+    color,
     isMergeSegment,
   }: CommitGraphSegment) => {
-    const key = `${fromLane}:${toLane}:${fromRowIndex}:${toRowIndex}:${colorIndex}:${isMergeSegment}`;
+    const key = `${fromLane}:${toLane}:${fromRowIndex}:${toRowIndex}:${color}:${isMergeSegment}`;
 
     if (isSegmentAddedOfKey[key] === true) {
       return;
@@ -802,14 +895,40 @@ const createCommitGraph = (commits: GitCommit[]) => {
       toLane,
       fromRowIndex,
       toRowIndex,
-      colorIndex,
+      color,
       isMergeSegment,
     });
   };
 
-  // Commits are the only graph rows; chat and HEAD markers are row labels so they do not change lane assignment.
+  const addPassthroughSegmentsForThreadGroupRow = ({
+    rowIndex,
+    skippedLane,
+  }: {
+    rowIndex: number;
+    skippedLane: number | null;
+  }) => {
+    for (let laneIndex = 0; laneIndex < lanes.length; laneIndex += 1) {
+      const laneItem = lanes[laneIndex];
+
+      if (laneIndex === skippedLane) {
+        continue;
+      }
+
+      addSegment({
+        fromLane: laneIndex,
+        toLane: laneIndex,
+        fromRowIndex: rowIndex,
+        toRowIndex: rowIndex + 1,
+        color: readCommitGraphColor(laneItem.colorIndex),
+        isMergeSegment: false,
+      });
+    }
+  };
+
+  // Changed cwd groups become their own graph rows because they represent working-tree state above their base commit.
   for (const graphItem of graphItems) {
     let lane = lanes.findIndex((laneItem) => laneItem.sha === graphItem.sha);
+    const shouldShowCommitLaneThroughChangedThreadGroups = lane !== -1;
 
     if (lane === -1) {
       let colorIndex = colorIndexOfSha[graphItem.sha];
@@ -828,13 +947,55 @@ const createCommitGraph = (commits: GitCommit[]) => {
     }
 
     const commitLane = lanes[lane];
+    for (
+      let threadGroupIndex = 0;
+      threadGroupIndex < graphItem.changedThreadGroups.length;
+      threadGroupIndex += 1
+    ) {
+      const threadGroup = graphItem.changedThreadGroups[threadGroupIndex];
+      const rowIndex = rows.length;
+      const threadGroupLane = lanes.length + threadGroupIndex;
+      const skippedPassthroughLane =
+        shouldShowCommitLaneThroughChangedThreadGroups || threadGroupIndex > 0
+          ? null
+          : lane;
+      rows.push({
+        id: `${graphItem.id}:thread-group:${threadGroup.key}`,
+        commit: graphItem.commit,
+        threadIds: threadGroup.threads.map((thread) => thread.id),
+        threadGroup,
+        isCommitRow: false,
+        lane: threadGroupLane,
+        color: COMMIT_GRAPH_CWD_CHANGE_COLOR,
+        rowIndex,
+      });
+      addPassthroughSegmentsForThreadGroupRow({
+        rowIndex,
+        skippedLane: skippedPassthroughLane,
+      });
+      addSegment({
+        fromLane: threadGroupLane,
+        toLane: lane,
+        fromRowIndex: rowIndex,
+        toRowIndex: rowIndex + 1,
+        color: readCommitGraphColor(commitLane.colorIndex),
+        isMergeSegment: false,
+      });
+      laneCount = Math.max(
+        laneCount,
+        lanes.length + graphItem.changedThreadGroups.length,
+      );
+    }
+
     const rowIndex = rows.length;
     rows.push({
       id: graphItem.id,
       commit: graphItem.commit,
       threadIds: graphItem.threadIds,
+      threadGroup: null,
+      isCommitRow: true,
       lane,
-      colorIndex: commitLane.colorIndex,
+      color: readCommitGraphColor(commitLane.colorIndex),
       rowIndex,
     });
     colorIndexOfSha[graphItem.sha] = commitLane.colorIndex;
@@ -914,7 +1075,7 @@ const createCommitGraph = (commits: GitCommit[]) => {
         toLane: nextLaneIndex,
         fromRowIndex: rowIndex,
         toRowIndex: rowIndex + 1,
-        colorIndex: laneItem.colorIndex,
+        color: readCommitGraphColor(laneItem.colorIndex),
         isMergeSegment: false,
       });
     }
@@ -938,10 +1099,11 @@ const createCommitGraph = (commits: GitCommit[]) => {
         toLane: nextLaneIndex,
         fromRowIndex: rowIndex,
         toRowIndex: rowIndex + 1,
-        colorIndex:
+        color: readCommitGraphColor(
           parentColorIndex === undefined
             ? commitLane.colorIndex
             : parentColorIndex,
+        ),
         isMergeSegment: parentIndex > 0,
       });
     }
@@ -983,6 +1145,38 @@ const readIsLocalBranch = ({
   }
 
   return false;
+};
+
+const readIsCwdInsidePath = ({ cwd, path }: { cwd: string; path: string }) => {
+  return cwd === path || cwd.startsWith(`${path}/`);
+};
+
+const readBranchPointerRowPath = ({
+  row,
+  repoRoot,
+  worktrees,
+}: {
+  row: CommitGraphRow;
+  repoRoot: string;
+  worktrees: GitWorktree[];
+}) => {
+  if (row.threadGroup === null || row.threadGroup.cwd.length === 0) {
+    return null;
+  }
+
+  for (const worktree of worktrees) {
+    if (
+      readIsCwdInsidePath({ cwd: row.threadGroup.cwd, path: worktree.path })
+    ) {
+      return worktree.path;
+    }
+  }
+
+  if (readIsCwdInsidePath({ cwd: row.threadGroup.cwd, path: repoRoot })) {
+    return repoRoot;
+  }
+
+  return row.threadGroup.cwd;
 };
 
 const readCommitBranchTarget = ({
@@ -1049,42 +1243,42 @@ const readCommitBranchTarget = ({
 
 const BranchTags = ({
   refs,
-  worktrees,
   localBranches,
   currentBranch,
   defaultBranch,
   commitSha,
   commitShortSha,
   commitSubject,
+  branchPointerSourcePath,
   isBranchDeleteSafeOfBranch,
   openBranchDeleteModal,
-  openCodePath,
   startBranchPointerDrag,
   finishBranchPointerDrag,
 }: {
   refs: string[];
-  worktrees: GitWorktree[];
   localBranches: string[];
   currentBranch: string | null;
   defaultBranch: string | null;
   commitSha: string;
   commitShortSha: string;
   commitSubject: string;
+  branchPointerSourcePath: string | null;
   isBranchDeleteSafeOfBranch: { [branch: string]: boolean };
   openBranchDeleteModal: (
     event: MouseEvent<HTMLButtonElement>,
     branch: string,
     oldSha: string,
   ) => void;
-  openCodePath: (path: string) => Promise<void>;
   startBranchPointerDrag: ({
     event,
+    sourcePath,
     branch,
     oldSha,
     oldShortSha,
     oldSubject,
   }: {
     event: DragEvent<HTMLElement>;
+    sourcePath: string | null;
     branch: string;
     oldSha: string;
     oldShortSha: string;
@@ -1092,10 +1286,6 @@ const BranchTags = ({
   }) => void;
   finishBranchPointerDrag: () => void;
 }) => {
-  const worktreesForCommit = worktrees.filter(
-    (worktree) => worktree.head === commitSha,
-  );
-  const hasHead = refs.some((ref) => readIsHeadRef(ref));
   const normalRefs = refs.filter((ref) => ref !== "HEAD");
   const orderedRefs = [
     ...normalRefs.filter(
@@ -1114,48 +1304,12 @@ const BranchTags = ({
     isLocalBranchOfName[localBranch] = true;
   }
 
-  if (!hasHead && orderedRefs.length === 0 && worktreesForCommit.length === 0) {
+  if (orderedRefs.length === 0) {
     return null;
   }
 
   return (
     <div className="commit-label-list">
-      {worktreesForCommit.map((worktree) => (
-        <Badge
-          asChild
-          className="commit-ref commit-ref-head commit-ref-worktree"
-          variant="secondary"
-          key={worktree.path}
-        >
-          <Button
-            variant="ghost"
-            size="xs"
-            type="button"
-            onMouseDown={(event) => event.stopPropagation()}
-            onDoubleClick={(event) => event.stopPropagation()}
-            onContextMenu={(event) => {
-              void copyTextAfterContextMenu({
-                event,
-                text: worktree.path,
-                copiedLabel: "path",
-                errorMessage: "Failed to copy path.",
-              });
-            }}
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              void openCodePath(worktree.path);
-            }}
-          >
-            <MdOutlineCallSplit
-              aria-hidden="true"
-              className="commit-ref-worktree-icon"
-              size={10}
-            />
-            <span>Worktree</span>
-          </Button>
-        </Badge>
-      ))}
       {orderedRefs.map((ref) => {
         const refName = cleanRefName(ref);
         const isLocalBranch = isLocalBranchOfName[refName] === true;
@@ -1190,7 +1344,6 @@ const BranchTags = ({
               void copyTextAfterContextMenu({
                 event,
                 text: refName,
-                copiedLabel: "tag name",
                 errorMessage: "Failed to copy branch name.",
               });
             }}
@@ -1201,6 +1354,7 @@ const BranchTags = ({
 
               startBranchPointerDrag({
                 event,
+                sourcePath: branchPointerSourcePath,
                 branch: refName,
                 oldSha: commitSha,
                 oldShortSha: commitShortSha,
@@ -1235,42 +1389,100 @@ const BranchTags = ({
   );
 };
 
+const CodeLocations = ({
+  refs,
+  worktreesForRow,
+  mainWorktreePath,
+  openCodePath,
+}: {
+  refs: string[];
+  worktreesForRow: GitWorktree[];
+  mainWorktreePath: string;
+  openCodePath: (path: string) => Promise<void>;
+}) => {
+  const hasHead = refs.some((ref) => readIsHeadRef(ref));
+
+  if (!hasHead && worktreesForRow.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="commit-label-list">
+      {hasHead ? (
+        <Badge
+          asChild
+          className="commit-ref commit-ref-head commit-ref-clickable"
+          variant="secondary"
+        >
+          <Button
+            variant="ghost"
+            size="xs"
+            type="button"
+            onMouseDown={(event) => event.stopPropagation()}
+            onDoubleClick={(event) => event.stopPropagation()}
+            onContextMenu={(event) => {
+              void copyTextAfterContextMenu({
+                event,
+                text: mainWorktreePath,
+                errorMessage: "Failed to copy path.",
+              });
+            }}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              void openCodePath(mainWorktreePath);
+            }}
+          >
+            <span>HEAD</span>
+          </Button>
+        </Badge>
+      ) : null}
+      {worktreesForRow.map((worktree) => (
+        <Badge
+          asChild
+          className="commit-ref commit-ref-head commit-ref-clickable commit-ref-worktree"
+          variant="secondary"
+          key={worktree.path}
+        >
+          <Button
+            variant="ghost"
+            size="xs"
+            type="button"
+            onMouseDown={(event) => event.stopPropagation()}
+            onDoubleClick={(event) => event.stopPropagation()}
+            onContextMenu={(event) => {
+              void copyTextAfterContextMenu({
+                event,
+                text: worktree.path,
+                errorMessage: "Failed to copy path.",
+              });
+            }}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              void openCodePath(worktree.path);
+            }}
+          >
+            <MdOutlineCallSplit
+              aria-hidden="true"
+              className="commit-ref-worktree-icon"
+              size={10}
+            />
+            <span>Worktree</span>
+          </Button>
+        </Badge>
+      ))}
+    </div>
+  );
+};
+
 const ChatRobotTags = ({
   threadGroups,
-  gitChangesOfCwd,
   worktrees,
-  repoRoot,
-  commitSha,
-  localBranches,
-  currentBranch,
-  shouldShowBranchCreateActions,
-  openBranchCreateModal,
-  openCommitMessageModal,
-  openChangeSummaryModal,
-  showSuccessMessage,
   showErrorMessage,
 }: {
   threadGroups: ThreadGroup[];
-  gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   worktrees: GitWorktree[];
-  repoRoot: string;
-  commitSha: string;
-  localBranches: string[];
-  currentBranch: string | null;
-  shouldShowBranchCreateActions: boolean;
-  openBranchCreateModal: (
-    event: MouseEvent<HTMLButtonElement>,
-    branchCreateTarget: BranchCreateTarget,
-  ) => void;
-  openCommitMessageModal: (
-    event: MouseEvent<HTMLButtonElement>,
-    commitMessageTarget: CommitMessageTarget,
-  ) => void;
-  openChangeSummaryModal: (
-    event: MouseEvent<HTMLButtonElement>,
-    changeSummaryTarget: ChangeSummaryTarget,
-  ) => void;
-  showSuccessMessage: (message: string) => void;
   showErrorMessage: (message: string) => void;
 }) => {
   if (threadGroups.length === 0) {
@@ -1280,7 +1492,6 @@ const ChatRobotTags = ({
   const openThread = async (threadId: string) => {
     try {
       await window.molttree.openCodexThread(threadId);
-      showSuccessMessage("Opened chat.");
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to open chat.";
@@ -1291,69 +1502,13 @@ const ChatRobotTags = ({
   return (
     <div className="commit-label-list commit-thread-group-list">
       {threadGroups.map((threadGroup) => {
-        const storedChangeSummary = gitChangesOfCwd[threadGroup.cwd];
-        const changeSummary = storedChangeSummary ?? EMPTY_GIT_CHANGE_SUMMARY;
-        const totalChangeSummary = readTotalGitChangeSummary(changeSummary);
-        const isChangeSummaryEmpty = readIsGitChangeSummaryEmpty(changeSummary);
-        const shouldShowChangeCount =
-          storedChangeSummary !== undefined && !isChangeSummaryEmpty;
-        const commitBranchTarget = readCommitBranchTarget({
-          cwd: threadGroup.cwd,
-          groupThreads: threadGroup.threads,
-          repoRoot,
-          currentBranch,
-          localBranches,
-          commitSha,
-        });
-        const shouldShowCommitAction =
-          threadGroup.cwd.length > 0 &&
-          shouldShowChangeCount &&
-          commitBranchTarget !== null;
-        const branchCreateTarget =
-          shouldShowBranchCreateActions && threadGroup.cwd.length > 0
-            ? {
-                path: threadGroup.cwd,
-                title: threadGroup.cwd,
-              }
-            : null;
-        const shouldShowGroupBackground =
-          threadGroup.threads.length > 1 ||
-          shouldShowChangeCount ||
-          shouldShowCommitAction ||
-          branchCreateTarget !== null;
-        const shouldShowSameBranchTooltip = threadGroup.threads.length > 1;
         const isThreadGroupWorktree = readIsWorktreeCwd({
           cwd: threadGroup.cwd,
           worktrees,
         });
 
         return (
-          <span
-            className={cn(
-              "commit-thread-group",
-              shouldShowGroupBackground && "commit-thread-group-highlighted",
-            )}
-            key={threadGroup.key}
-          >
-            {shouldShowSameBranchTooltip ? (
-              // This provider keeps same-branch tooltip delay separate from the row action tooltip delay.
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span
-                      aria-label="These chats are on the same branch and share the same changes."
-                      className="commit-thread-group-background-tooltip"
-                    />
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>
-                      These chats are on the same branch and share the same
-                      changes.
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            ) : null}
+          <span className="commit-thread-group" key={threadGroup.key}>
             {threadGroup.threads.map((thread) => {
               const title = threadTitle(thread);
               const isThreadActive = readIsThreadActive(thread);
@@ -1376,6 +1531,7 @@ const ChatRobotTags = ({
                     void openThread(thread.id);
                   }}
                 >
+                  <span className="commit-thread-chat-title">{title}</span>
                   {isThreadGroupWorktree ? (
                     <MdOutlineCallSplit
                       aria-hidden="true"
@@ -1389,72 +1545,16 @@ const ChatRobotTags = ({
                       className="commit-thread-chat-loading-icon"
                       size={10}
                     />
-                  ) : null}
-                  <span className="commit-thread-chat-title">{title}</span>
+                  ) : isThreadGroupWorktree ? null : (
+                    <GoDotFill
+                      aria-hidden="true"
+                      className="commit-thread-chat-icon"
+                      size={9}
+                    />
+                  )}
                 </Button>
               );
             })}
-            {shouldShowChangeCount ? (
-              <Button
-                className="commit-thread-change-count"
-                variant="ghost"
-                size="xs"
-                type="button"
-                onMouseDown={(event) => event.stopPropagation()}
-                onDoubleClick={(event) => event.stopPropagation()}
-                onClick={(event) =>
-                  openChangeSummaryModal(event, {
-                    path: threadGroup.cwd,
-                    title: threadGroup.cwd,
-                    changeSummary,
-                  })
-                }
-              >
-                <span className="commit-thread-change-added">
-                  +{totalChangeSummary.added}
-                </span>
-                <span className="commit-thread-change-removed">
-                  -{totalChangeSummary.removed}
-                </span>
-              </Button>
-            ) : null}
-            {shouldShowCommitAction ? (
-              <TitleTooltip title="Commit">
-                <Button
-                  className="commit-thread-commit-action"
-                  variant="ghost"
-                  size="icon-xs"
-                  type="button"
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onDoubleClick={(event) => event.stopPropagation()}
-                  onClick={(event) =>
-                    openCommitMessageModal(event, {
-                      path: threadGroup.cwd,
-                      title: threadGroup.cwd,
-                      branchTarget: commitBranchTarget,
-                    })
-                  }
-                >
-                  <IoCheckmarkSharp size={13} />
-                </Button>
-              </TitleTooltip>
-            ) : branchCreateTarget === null ? null : (
-              <TitleTooltip title="Add branch here">
-                <Button
-                  className="commit-branch-create-action"
-                  variant="ghost"
-                  size="icon-xs"
-                  type="button"
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onDoubleClick={(event) => event.stopPropagation()}
-                  onClick={(event) =>
-                    openBranchCreateModal(event, branchCreateTarget)
-                  }
-                >
-                  <GitBranch size={10} />
-                </Button>
-              </TitleTooltip>
-            )}
           </span>
         );
       })}
@@ -1506,10 +1606,10 @@ const CommitGraphSvg = ({
 
         return (
           <path
-            key={`${segment.fromRowIndex}-${segment.toRowIndex}-${segment.fromLane}-${segment.toLane}-${segment.colorIndex}-${segment.isMergeSegment}`}
+            key={`${segment.fromRowIndex}-${segment.toRowIndex}-${segment.fromLane}-${segment.toLane}-${segment.color}-${segment.isMergeSegment}`}
             d={path}
             fill="none"
-            stroke={readCommitGraphColor(segment.colorIndex)}
+            stroke={segment.color}
             strokeWidth={COMMIT_GRAPH_SEGMENT_STROKE_WIDTH}
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -1520,15 +1620,20 @@ const CommitGraphSvg = ({
       {graph.rows.map((row) => {
         const centerX = readCommitGraphX(row.lane);
         const centerY = readCommitGraphY(row.rowIndex);
-        const isHeadRow = row.commit.refs.some((ref) => readIsHeadRef(ref));
+        const isHeadRow =
+          row.isCommitRow && row.commit.refs.some((ref) => readIsHeadRef(ref));
 
         return (
           <g key={row.id}>
             <circle
               cx={centerX}
               cy={centerY}
-              r={COMMIT_GRAPH_DOT_RADIUS}
-              fill={readCommitGraphColor(row.colorIndex)}
+              r={
+                isHeadRow
+                  ? COMMIT_GRAPH_HEAD_DOT_RADIUS
+                  : COMMIT_GRAPH_DOT_RADIUS
+              }
+              fill={row.color}
             />
             {isHeadRow ? (
               <circle
@@ -1548,6 +1653,7 @@ const CommitGraphSvg = ({
 const CommitHistoryRow = ({
   row,
   repoRoot,
+  mainWorktreePath,
   worktrees,
   currentBranch,
   defaultBranch,
@@ -1555,10 +1661,9 @@ const CommitHistoryRow = ({
   threadOfId,
   gitChangesOfCwd,
   isBranchPointerDropTarget,
-  isSelected,
+  shouldOwnMainWorktreeHead,
   isBranchMergeableOfBranch,
   isBranchDeleteSafeOfBranch,
-  selectRow,
   updateBranchPointerDropTarget,
   clearBranchPointerDropTarget,
   finishBranchPointerDrop,
@@ -1569,13 +1674,13 @@ const CommitHistoryRow = ({
   openChangeSummaryModal,
   openBranchMergeModal,
   openCodePath,
-  showSuccessMessage,
   showErrorMessage,
   startBranchPointerDrag,
   finishBranchPointerDrag,
 }: {
   row: CommitGraphRow;
   repoRoot: string;
+  mainWorktreePath: string;
   worktrees: GitWorktree[];
   currentBranch: string | null;
   defaultBranch: string | null;
@@ -1583,12 +1688,11 @@ const CommitHistoryRow = ({
   threadOfId: { [id: string]: CodexThread };
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   isBranchPointerDropTarget: boolean;
-  isSelected: boolean;
+  shouldOwnMainWorktreeHead: boolean;
   isBranchMergeableOfBranch: { [branch: string]: boolean };
   isBranchDeleteSafeOfBranch: { [branch: string]: boolean };
-  selectRow: () => void;
   updateBranchPointerDropTarget: (event: DragEvent<HTMLDivElement>) => void;
-  clearBranchPointerDropTarget: () => void;
+  clearBranchPointerDropTarget: (event: DragEvent<HTMLDivElement>) => void;
   finishBranchPointerDrop: (event: DragEvent<HTMLDivElement>) => void;
   openRowAfterDoubleClick: () => void;
   openBranchDeleteModal: (
@@ -1613,16 +1717,17 @@ const CommitHistoryRow = ({
     branch: string,
   ) => void;
   openCodePath: (path: string) => Promise<void>;
-  showSuccessMessage: (message: string) => void;
   showErrorMessage: (message: string) => void;
   startBranchPointerDrag: ({
     event,
+    sourcePath,
     branch,
     oldSha,
     oldShortSha,
     oldSubject,
   }: {
     event: DragEvent<HTMLElement>;
+    sourcePath: string | null;
     branch: string;
     oldSha: string;
     oldShortSha: string;
@@ -1634,19 +1739,254 @@ const CommitHistoryRow = ({
   const threads = row.threadIds
     .map((rowThreadId) => threadOfId[rowThreadId])
     .filter((rowThread): rowThread is CodexThread => rowThread !== undefined);
-  const threadGroups = readDisplayedThreadGroups({
-    threads,
-    worktrees,
-    gitChangesOfCwd,
+  const threadGroups =
+    row.threadGroup === null
+      ? readDisplayedThreadGroups({
+          threads,
+          worktrees,
+          gitChangesOfCwd,
+        })
+      : [row.threadGroup];
+  const rowThreadIdOfId: { [threadId: string]: boolean } = {};
+
+  for (const rowThreadId of row.threadIds) {
+    rowThreadIdOfId[rowThreadId] = true;
+  }
+
+  // One dirty row for the main worktree owns HEAD and the checked-out branch instead of duplicating them on the base commit row.
+  const isMainWorktreeThreadGroupRow =
+    row.threadGroup !== null &&
+    row.threadGroup.cwd.length > 0 &&
+    readIsCwdInsidePath({
+      cwd: row.threadGroup.cwd,
+      path: mainWorktreePath,
+    }) &&
+    !readIsWorktreeCwd({ cwd: row.threadGroup.cwd, worktrees });
+  const worktreesForRow = worktrees.filter((worktree) => {
+    if (worktree.head !== commit.sha) {
+      return false;
+    }
+
+    if (row.threadGroup !== null) {
+      if (
+        readIsCwdInsidePath({
+          cwd: row.threadGroup.cwd,
+          path: worktree.path,
+        })
+      ) {
+        return true;
+      }
+
+      for (const thread of row.threadGroup.threads) {
+        if (worktree.threadIds.includes(thread.id)) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    for (const worktreeThreadId of worktree.threadIds) {
+      if (rowThreadIdOfId[worktreeThreadId] !== true) {
+        return false;
+      }
+    }
+
+    return true;
   });
-  const isHeadRow = commit.refs.some((ref) => readIsHeadRef(ref));
-  const mergeBranch = isHeadRow
-    ? null
-    : (commit.localBranches.find(
-        (localBranch) =>
-          localBranch !== currentBranch &&
-          isBranchMergeableOfBranch[localBranch] === true,
-      ) ?? null);
+  const rowWorktreePathOfPath: { [path: string]: boolean } = {};
+  const excludedLocalBranchOfName: { [branch: string]: boolean } = {};
+  const rowLocalBranches: string[] = [];
+  const isRowLocalBranchAddedOfBranch: { [branch: string]: boolean } = {};
+  let hasChangedMainWorktreeThreadGroup = false;
+
+  const pushRowLocalBranch = (branch: string) => {
+    if (isRowLocalBranchAddedOfBranch[branch] === true) {
+      return;
+    }
+
+    isRowLocalBranchAddedOfBranch[branch] = true;
+    rowLocalBranches.push(branch);
+  };
+
+  for (const worktree of worktreesForRow) {
+    rowWorktreePathOfPath[worktree.path] = true;
+  }
+
+  for (const worktree of worktrees) {
+    if (
+      worktree.head !== commit.sha ||
+      worktree.branch === null ||
+      rowWorktreePathOfPath[worktree.path] === true
+    ) {
+      continue;
+    }
+
+    excludedLocalBranchOfName[worktree.branch] = true;
+  }
+
+  if (row.threadGroup === null) {
+    for (const commitThreadId of commit.threadIds) {
+      const thread = threadOfId[commitThreadId];
+
+      if (thread === undefined) {
+        continue;
+      }
+
+      const gitChangeSummary = gitChangesOfCwd[thread.cwd];
+
+      if (
+        !hasChangedMainWorktreeThreadGroup &&
+        thread.cwd.length > 0 &&
+        gitChangeSummary !== undefined &&
+        !readIsGitChangeSummaryEmpty(gitChangeSummary) &&
+        readIsCwdInsidePath({ cwd: thread.cwd, path: mainWorktreePath }) &&
+        !readIsWorktreeCwd({ cwd: thread.cwd, worktrees })
+      ) {
+        hasChangedMainWorktreeThreadGroup = true;
+      }
+
+      if (rowThreadIdOfId[commitThreadId] === true) {
+        continue;
+      }
+
+      const threadBranch = thread.gitInfo?.branch ?? null;
+
+      if (
+        threadBranch !== null &&
+        readIsLocalBranch({
+          branch: threadBranch,
+          localBranches: commit.localBranches,
+        })
+      ) {
+        excludedLocalBranchOfName[threadBranch] = true;
+      }
+    }
+
+    if (currentBranch !== null && hasChangedMainWorktreeThreadGroup) {
+      excludedLocalBranchOfName[currentBranch] = true;
+    }
+  }
+
+  if (row.threadGroup === null) {
+    for (const localBranch of commit.localBranches) {
+      if (excludedLocalBranchOfName[localBranch] === true) {
+        continue;
+      }
+
+      pushRowLocalBranch(localBranch);
+    }
+  } else if (isMainWorktreeThreadGroupRow) {
+    if (currentBranch !== null) {
+      pushRowLocalBranch(currentBranch);
+    }
+  } else {
+    for (const worktree of worktreesForRow) {
+      if (worktree.branch !== null) {
+        pushRowLocalBranch(worktree.branch);
+      }
+    }
+
+    for (const thread of row.threadGroup.threads) {
+      const threadBranch = thread.gitInfo?.branch ?? null;
+
+      if (
+        threadBranch !== null &&
+        readIsLocalBranch({
+          branch: threadBranch,
+          localBranches: commit.localBranches,
+        })
+      ) {
+        pushRowLocalBranch(threadBranch);
+      }
+    }
+
+    if (
+      currentBranch !== null &&
+      worktreesForRow.length === 0 &&
+      readIsCwdInsidePath({ cwd: row.threadGroup.cwd, path: repoRoot })
+    ) {
+      pushRowLocalBranch(currentBranch);
+    }
+  }
+
+  const rowRefs =
+    row.threadGroup === null
+      ? commit.refs.filter((ref) => {
+          const refName = cleanRefName(ref);
+
+          if (hasChangedMainWorktreeThreadGroup && readIsHeadRef(ref)) {
+            return false;
+          }
+
+          return (
+            excludedLocalBranchOfName[refName] !== true ||
+            !readIsLocalBranch({
+              branch: refName,
+              localBranches: commit.localBranches,
+            })
+          );
+        })
+      : isMainWorktreeThreadGroupRow
+        ? shouldOwnMainWorktreeHead
+          ? currentBranch === null
+            ? ["HEAD"]
+            : [`HEAD -> ${currentBranch}`]
+          : []
+        : rowLocalBranches;
+  const rowCurrentBranch =
+    row.threadGroup !== null && !isMainWorktreeThreadGroupRow
+      ? (rowLocalBranches[0] ?? null)
+      : currentBranch;
+  const isHeadRow =
+    row.isCommitRow && rowRefs.some((ref) => readIsHeadRef(ref));
+  const actionThreadGroup = row.threadGroup;
+  const storedActionChangeSummary =
+    actionThreadGroup === null
+      ? undefined
+      : gitChangesOfCwd[actionThreadGroup.cwd];
+  const actionChangeSummary =
+    storedActionChangeSummary ?? EMPTY_GIT_CHANGE_SUMMARY;
+  const actionTotalChangeSummary =
+    readTotalGitChangeSummary(actionChangeSummary);
+  const shouldShowActionChangeCount =
+    storedActionChangeSummary !== undefined &&
+    !readIsGitChangeSummaryEmpty(actionChangeSummary);
+  const actionCommitBranchTarget =
+    actionThreadGroup === null
+      ? null
+      : readCommitBranchTarget({
+          cwd: actionThreadGroup.cwd,
+          groupThreads: actionThreadGroup.threads,
+          repoRoot,
+          currentBranch: rowCurrentBranch,
+          localBranches: rowLocalBranches,
+          commitSha: commit.sha,
+        });
+  const shouldShowActionCommit =
+    actionThreadGroup !== null &&
+    actionThreadGroup.cwd.length > 0 &&
+    shouldShowActionChangeCount &&
+    actionCommitBranchTarget !== null;
+  const shouldShowBranchCreateActions = rowLocalBranches.length === 0;
+  const actionBranchCreateTarget =
+    actionThreadGroup !== null &&
+    shouldShowBranchCreateActions &&
+    actionThreadGroup.cwd.length > 0 &&
+    shouldShowActionChangeCount
+      ? {
+          path: actionThreadGroup.cwd,
+          title: actionThreadGroup.cwd,
+        }
+      : null;
+  const mergeBranch =
+    !row.isCommitRow || isHeadRow
+      ? null
+      : (rowLocalBranches.find(
+          (localBranch) =>
+            localBranch !== currentBranch &&
+            isBranchMergeableOfBranch[localBranch] === true,
+        ) ?? null);
   let mergeDisabledReason: string | null = null;
   let rowClassName = "commit-history-row";
 
@@ -1655,44 +1995,109 @@ const CommitHistoryRow = ({
       "Current HEAD working tree must be clean before merging.";
   }
 
-  const shouldShowBranchCreateActions = commit.localBranches.length === 0;
-  const shouldShowGraphActions = mergeBranch !== null || isHeadRow;
+  const shouldShowGraphThreadActions =
+    actionThreadGroup !== null && shouldShowActionChangeCount;
+  const shouldShowGraphActions =
+    shouldShowGraphThreadActions ||
+    (row.isCommitRow && (mergeBranch !== null || isHeadRow));
   const commitDateText = formatCommitDate(commit.date);
   let branchTagsCellClassName = "commit-branch-tags-cell";
 
-  if (isSelected) {
-    rowClassName = `${rowClassName} commit-history-row-selected`;
-  }
-
   if (isBranchPointerDropTarget) {
+    rowClassName = `${rowClassName} commit-history-row-branch-drop-target`;
     branchTagsCellClassName = `${branchTagsCellClassName} commit-branch-tags-cell-branch-drop-target`;
   }
+
+  const shouldShowCodeLocations =
+    row.isCommitRow ||
+    rowRefs.some((ref) => readIsHeadRef(ref)) ||
+    worktreesForRow.length > 0;
 
   return (
     <div
       className={rowClassName}
-      onMouseDown={selectRow}
-      onDoubleClick={openRowAfterDoubleClick}
+      onDoubleClick={row.isCommitRow ? openRowAfterDoubleClick : undefined}
+      onDragOver={updateBranchPointerDropTarget}
+      onDragLeave={clearBranchPointerDropTarget}
+      onDrop={finishBranchPointerDrop}
     >
       <div className="commit-graph-cell">
         {shouldShowGraphActions ? (
           <div className="commit-graph-actions">
-            {isHeadRow ? (
-              <TitleTooltip title="HEAD">
-                <span className="commit-graph-head-icon" aria-label="HEAD">
-                  <CircleUser
-                    aria-hidden="true"
-                    size={COMMIT_GRAPH_HEAD_ICON_SIZE}
-                    strokeWidth={COMMIT_GRAPH_HEAD_ICON_STROKE_WIDTH}
-                  />
-                </span>
-              </TitleTooltip>
+            {shouldShowGraphThreadActions ? (
+              <div className="commit-graph-thread-actions">
+                <Button
+                  className="commit-thread-change-count"
+                  variant="ghost"
+                  size="xs"
+                  type="button"
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onDoubleClick={(event) => event.stopPropagation()}
+                  onClick={(event) =>
+                    openChangeSummaryModal(event, {
+                      path: actionThreadGroup.cwd,
+                      title: actionThreadGroup.cwd,
+                      changeSummary: actionChangeSummary,
+                    })
+                  }
+                >
+                  <span className="commit-thread-change-added">
+                    +{actionTotalChangeSummary.added}
+                  </span>
+                  <span className="commit-thread-change-removed">
+                    -{actionTotalChangeSummary.removed}
+                  </span>
+                </Button>
+                {shouldShowActionCommit && actionCommitBranchTarget !== null ? (
+                  <TitleTooltip title="Commit">
+                    <Button
+                      className="commit-thread-commit-action"
+                      variant="ghost"
+                      size="icon-xs"
+                      type="button"
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onDoubleClick={(event) => event.stopPropagation()}
+                      onClick={(event) =>
+                        openCommitMessageModal(event, {
+                          path: actionThreadGroup.cwd,
+                          title: actionThreadGroup.cwd,
+                          branchTarget: actionCommitBranchTarget,
+                        })
+                      }
+                    >
+                      <LuCheck
+                        size={COMMIT_GRAPH_ACTION_ICON_SIZE}
+                        strokeWidth={COMMIT_GRAPH_ACTION_ICON_STROKE_WIDTH}
+                      />
+                    </Button>
+                  </TitleTooltip>
+                ) : actionBranchCreateTarget === null ? null : (
+                  <TitleTooltip title="Add branch tag here">
+                    <Button
+                      className="commit-branch-create-action"
+                      variant="ghost"
+                      size="icon-xs"
+                      type="button"
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onDoubleClick={(event) => event.stopPropagation()}
+                      onClick={(event) =>
+                        openBranchCreateModal(event, actionBranchCreateTarget)
+                      }
+                    >
+                      <LuGitBranchPlus
+                        size={COMMIT_GRAPH_ACTION_ICON_SIZE}
+                        strokeWidth={COMMIT_GRAPH_ACTION_ICON_STROKE_WIDTH}
+                      />
+                    </Button>
+                  </TitleTooltip>
+                )}
+              </div>
             ) : null}
             {mergeBranch === null ? null : (
               <TitleTooltip
                 title={
                   mergeDisabledReason === null
-                    ? "Merge this into HEAD"
+                    ? MERGE_BRANCH_BUTTON_TITLE
                     : mergeDisabledReason
                 }
               >
@@ -1702,7 +2107,7 @@ const CommitHistoryRow = ({
                     variant="ghost"
                     size="icon-xs"
                     type="button"
-                    aria-label="Merge this into HEAD"
+                    aria-label={MERGE_BRANCH_BUTTON_TITLE}
                     disabled={mergeDisabledReason !== null}
                     onMouseDown={(event) => event.stopPropagation()}
                     onDoubleClick={(event) => event.stopPropagation()}
@@ -1710,7 +2115,10 @@ const CommitHistoryRow = ({
                       openBranchMergeModal(event, mergeBranch)
                     }
                   >
-                    <GitPullRequestArrow size={10} />
+                    <LuGitPullRequestArrow
+                      size={COMMIT_GRAPH_ACTION_ICON_SIZE}
+                      strokeWidth={COMMIT_GRAPH_ACTION_ICON_STROKE_WIDTH}
+                    />
                   </Button>
                 </span>
               </TitleTooltip>
@@ -1721,93 +2129,107 @@ const CommitHistoryRow = ({
       <div className="commit-actors-cell">
         <ChatRobotTags
           threadGroups={threadGroups}
-          gitChangesOfCwd={gitChangesOfCwd}
           worktrees={worktrees}
-          repoRoot={repoRoot}
-          commitSha={commit.sha}
-          localBranches={commit.localBranches}
-          currentBranch={currentBranch}
-          shouldShowBranchCreateActions={shouldShowBranchCreateActions}
-          openBranchCreateModal={openBranchCreateModal}
-          openCommitMessageModal={openCommitMessageModal}
-          openChangeSummaryModal={openChangeSummaryModal}
-          showSuccessMessage={showSuccessMessage}
           showErrorMessage={showErrorMessage}
         />
       </div>
-      <div
-        className={branchTagsCellClassName}
-        onDragOver={updateBranchPointerDropTarget}
-        onDragLeave={clearBranchPointerDropTarget}
-        onDrop={finishBranchPointerDrop}
-      >
-        <BranchTags
-          refs={commit.refs}
-          worktrees={worktrees}
-          localBranches={commit.localBranches}
-          currentBranch={currentBranch}
-          defaultBranch={defaultBranch}
-          commitSha={commit.sha}
-          commitShortSha={commit.shortSha}
-          commitSubject={commit.subject}
-          isBranchDeleteSafeOfBranch={isBranchDeleteSafeOfBranch}
-          openBranchDeleteModal={openBranchDeleteModal}
-          openCodePath={openCodePath}
-          startBranchPointerDrag={startBranchPointerDrag}
-          finishBranchPointerDrag={finishBranchPointerDrag}
-        />
+      <div className={branchTagsCellClassName}>
+        {row.isCommitRow || rowRefs.length > 0 || worktreesForRow.length > 0 ? (
+          <BranchTags
+            refs={rowRefs}
+            localBranches={rowLocalBranches}
+            currentBranch={rowCurrentBranch}
+            defaultBranch={defaultBranch}
+            commitSha={commit.sha}
+            commitShortSha={commit.shortSha}
+            commitSubject={commit.subject}
+            branchPointerSourcePath={readBranchPointerRowPath({
+              row,
+              repoRoot,
+              worktrees,
+            })}
+            isBranchDeleteSafeOfBranch={isBranchDeleteSafeOfBranch}
+            openBranchDeleteModal={openBranchDeleteModal}
+            startBranchPointerDrag={startBranchPointerDrag}
+            finishBranchPointerDrag={finishBranchPointerDrag}
+          />
+        ) : null}
+      </div>
+      <div className="commit-code-locations-cell">
+        {shouldShowCodeLocations ? (
+          <CodeLocations
+            refs={rowRefs}
+            worktreesForRow={worktreesForRow}
+            mainWorktreePath={mainWorktreePath}
+            openCodePath={openCodePath}
+          />
+        ) : null}
       </div>
       <div
         className="commit-description-cell"
-        onContextMenu={(event) => {
-          void copyTextAfterContextMenu({
-            event,
-            text: commit.subject,
-            copiedLabel: "description",
-            errorMessage: "Failed to copy description.",
-          });
-        }}
+        onContextMenu={
+          row.isCommitRow
+            ? (event) => {
+                void copyTextAfterContextMenu({
+                  event,
+                  text: commit.subject,
+                  errorMessage: "Failed to copy description.",
+                });
+              }
+            : undefined
+        }
       >
-        <span className="commit-subject">{commit.subject}</span>
+        {row.isCommitRow ? (
+          <span className="commit-subject">{commit.subject}</span>
+        ) : null}
       </div>
       <code
         className="commit-hash-cell"
-        onContextMenu={(event) => {
-          void copyTextAfterContextMenu({
-            event,
-            text: commit.sha,
-            copiedLabel: "commit SHA",
-            errorMessage: "Failed to copy commit.",
-          });
-        }}
+        onContextMenu={
+          row.isCommitRow
+            ? (event) => {
+                void copyTextAfterContextMenu({
+                  event,
+                  text: commit.sha,
+                  errorMessage: "Failed to copy commit.",
+                });
+              }
+            : undefined
+        }
       >
-        {commit.shortSha}
+        {row.isCommitRow ? commit.shortSha : null}
       </code>
       <div
         className="commit-author-cell"
-        onContextMenu={(event) => {
-          void copyTextAfterContextMenu({
-            event,
-            text: commit.author,
-            copiedLabel: "author",
-            errorMessage: "Failed to copy author.",
-          });
-        }}
+        onContextMenu={
+          row.isCommitRow
+            ? (event) => {
+                void copyTextAfterContextMenu({
+                  event,
+                  text: commit.author,
+                  errorMessage: "Failed to copy author.",
+                });
+              }
+            : undefined
+        }
       >
-        {commit.author}
+        {row.isCommitRow ? commit.author : null}
       </div>
       <div
         className="commit-date-cell"
-        onContextMenu={(event) => {
-          void copyTextAfterContextMenu({
-            event,
-            text: commitDateText,
-            copiedLabel: "date",
-            errorMessage: "Failed to copy date.",
-          });
-        }}
+        onContextMenu={
+          row.isCommitRow
+            ? (event) => {
+                void copyTextAfterContextMenu({
+                  event,
+                  text: commitDateText,
+                  errorMessage: "Failed to copy date.",
+                });
+              }
+            : undefined
+        }
       >
-        {commitDateText}
+        {row.isCommitRow ? commitDateText : null}
       </div>
     </div>
   );
@@ -1849,6 +2271,7 @@ const CommitHistory = ({
   worktrees,
   threadOfId,
   repoRoot,
+  mainWorktreePath,
   currentBranch,
   defaultBranch,
   gitChangesOfCwd,
@@ -1864,6 +2287,7 @@ const CommitHistory = ({
   worktrees: GitWorktree[];
   threadOfId: { [id: string]: CodexThread };
   repoRoot: string;
+  mainWorktreePath: string;
   currentBranch: string | null;
   defaultBranch: string | null;
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
@@ -1887,13 +2311,13 @@ const CommitHistory = ({
     COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS,
   );
   const [shouldShowChatOnly, setShouldShowChatOnly] = useState(false);
-  const [selectedCommitRowId, setSelectedCommitRowId] = useState<string | null>(
-    null,
-  );
   const branchPointerDragRef = useRef<BranchPointerDrag | null>(null);
   const [branchCreateTarget, setBranchCreateTarget] =
     useState<BranchCreateTarget | null>(null);
   const [branchName, setBranchName] = useState("");
+  const createdBranchName = readCreatedBranchName(branchName);
+  const shouldShowBranchNamePreview =
+    branchName.trim().length > 0 && createdBranchName !== branchName.trim();
   const [commitMessageTarget, setCommitMessageTarget] =
     useState<CommitMessageTarget | null>(null);
   const [commitMessage, setCommitMessage] = useState("");
@@ -1907,7 +2331,16 @@ const CommitHistory = ({
     useState<BranchPointerMove | null>(null);
   const [branchPointerDropTargetRowId, setBranchPointerDropTargetRowId] =
     useState<string | null>(null);
-  const graph = useMemo(() => createCommitGraph(commits), [commits]);
+  const graph = useMemo(
+    () =>
+      createCommitGraph({
+        commits,
+        threadOfId,
+        worktrees,
+        gitChangesOfCwd,
+      }),
+    [commits, gitChangesOfCwd, threadOfId, worktrees],
+  );
   const headChangeSummary = gitChangesOfCwd[repoRoot];
   const headTotalChangeSummary =
     headChangeSummary === undefined
@@ -2239,6 +2672,17 @@ const CommitHistory = ({
 
     return false;
   };
+  const readBranchPointerTarget = ({ row }: { row: CommitGraphRow }) => {
+    return {
+      sha: row.commit.sha,
+      shortSha: row.commit.shortSha,
+      subject:
+        row.threadGroup === null
+          ? row.commit.subject
+          : `Uncommitted changes in ${row.threadGroup.cwd}`,
+      path: readBranchPointerRowPath({ row, repoRoot, worktrees }),
+    };
+  };
   const visibleGraph = useMemo(() => {
     if (!shouldShowChatOnly) {
       return graph;
@@ -2276,20 +2720,25 @@ const CommitHistory = ({
       laneCount: graph.laneCount,
     };
   }, [graph, shouldShowChatOnly]);
-
-  useEffect(() => {
-    if (selectedCommitRowId === null) {
-      return;
-    }
-
+  const mainWorktreeHeadOwnerRowId = useMemo(() => {
     for (const row of visibleGraph.rows) {
-      if (row.id === selectedCommitRowId) {
-        return;
+      if (
+        row.threadGroup === null ||
+        row.threadGroup.cwd.length === 0 ||
+        !readIsCwdInsidePath({
+          cwd: row.threadGroup.cwd,
+          path: mainWorktreePath,
+        }) ||
+        readIsWorktreeCwd({ cwd: row.threadGroup.cwd, worktrees })
+      ) {
+        continue;
       }
+
+      return row.id;
     }
 
-    setSelectedCommitRowId(null);
-  }, [selectedCommitRowId, visibleGraph.rows]);
+    return null;
+  }, [mainWorktreePath, visibleGraph.rows, worktrees]);
 
   const graphMinimumWidth = readCommitGraphWidth({
     laneCount: visibleGraph.laneCount,
@@ -2408,12 +2857,14 @@ const CommitHistory = ({
   };
   const startBranchPointerDrag = ({
     event,
+    sourcePath,
     branch,
     oldSha,
     oldShortSha,
     oldSubject,
   }: {
     event: DragEvent<HTMLElement>;
+    sourcePath: string | null;
     branch: string;
     oldSha: string;
     oldShortSha: string;
@@ -2421,6 +2872,7 @@ const CommitHistory = ({
   }) => {
     const nextBranchPointerDrag = {
       repoRoot,
+      sourcePath,
       branch,
       oldSha,
       oldShortSha,
@@ -2450,9 +2902,14 @@ const CommitHistory = ({
       return;
     }
 
+    const branchPointerTarget = readBranchPointerTarget({ row });
+    const isSameBranchPointerPlace =
+      activeBranchPointerDrag.oldSha === branchPointerTarget.sha &&
+      activeBranchPointerDrag.sourcePath === branchPointerTarget.path;
+
     if (
       activeBranchPointerDrag.repoRoot !== repoRoot ||
-      activeBranchPointerDrag.oldSha === row.commit.sha
+      isSameBranchPointerPlace
     ) {
       setBranchPointerDropTargetRowId(null);
       return;
@@ -2463,7 +2920,7 @@ const CommitHistory = ({
       readIsBranchMoveSafe({
         branch: activeBranchPointerDrag.branch,
         oldSha: activeBranchPointerDrag.oldSha,
-        newSha: row.commit.sha,
+        newSha: branchPointerTarget.sha,
       })
     ) {
       event.dataTransfer.dropEffect = "move";
@@ -2474,7 +2931,16 @@ const CommitHistory = ({
     event.dataTransfer.dropEffect = "none";
     setBranchPointerDropTargetRowId(null);
   };
-  const clearBranchPointerDropTarget = () => {
+  const clearBranchPointerDropTarget = (event: DragEvent<HTMLDivElement>) => {
+    const relatedTarget = event.relatedTarget;
+
+    if (
+      relatedTarget instanceof Node &&
+      event.currentTarget.contains(relatedTarget)
+    ) {
+      return;
+    }
+
     setBranchPointerDropTargetRowId(null);
   };
   const finishBranchPointerDrop = async ({
@@ -2492,9 +2958,14 @@ const CommitHistory = ({
       return;
     }
 
+    const branchPointerTarget = readBranchPointerTarget({ row });
+    const isSameBranchPointerPlace =
+      activeBranchPointerDrag.oldSha === branchPointerTarget.sha &&
+      activeBranchPointerDrag.sourcePath === branchPointerTarget.path;
+
     if (
       activeBranchPointerDrag.repoRoot !== repoRoot ||
-      activeBranchPointerDrag.oldSha === row.commit.sha
+      isSameBranchPointerPlace
     ) {
       finishBranchPointerDrag();
       return;
@@ -2504,7 +2975,7 @@ const CommitHistory = ({
       !readIsBranchMoveSafe({
         branch: activeBranchPointerDrag.branch,
         oldSha: activeBranchPointerDrag.oldSha,
-        newSha: row.commit.sha,
+        newSha: branchPointerTarget.sha,
       })
     ) {
       showErrorMessage(
@@ -2516,13 +2987,15 @@ const CommitHistory = ({
 
     setBranchPointerMove({
       repoRoot,
+      sourcePath: activeBranchPointerDrag.sourcePath,
+      targetPath: branchPointerTarget.path,
       branch: activeBranchPointerDrag.branch,
       oldSha: activeBranchPointerDrag.oldSha,
       oldShortSha: activeBranchPointerDrag.oldShortSha,
       oldSubject: activeBranchPointerDrag.oldSubject,
-      newSha: row.commit.sha,
-      newShortSha: row.commit.shortSha,
-      newSubject: row.commit.subject,
+      newSha: branchPointerTarget.sha,
+      newShortSha: branchPointerTarget.shortSha,
+      newSubject: branchPointerTarget.subject,
       willMoveCheckedOutWorktree: readIsBranchCheckedOut(
         activeBranchPointerDrag.branch,
       ),
@@ -2624,7 +3097,7 @@ const CommitHistory = ({
         try {
           await window.molttree.createGitBranch({
             path: request.path,
-            branch: branchName.trim(),
+            branch: createdBranchName,
           });
           closeBranchCreateModal();
         } catch (error) {
@@ -2723,7 +3196,6 @@ const CommitHistory = ({
   const openCodePath = async (path: string) => {
     try {
       await window.molttree.openPath({ path, launcher: pathLauncher });
-      showSuccessMessage("Opened path.");
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to open path.";
@@ -2743,7 +3215,6 @@ const CommitHistory = ({
         branch,
       });
       setBranchMergeConfirmation({ branch, preview });
-      showSuccessMessage("Loaded merge preview.");
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to preview merge.";
@@ -2787,27 +3258,52 @@ const CommitHistory = ({
     const request = branchPointerMove;
     closeBranchPointerMoveModal();
 
+    const isDetachingBranchFromWorktree =
+      request.sourcePath !== null &&
+      request.targetPath === null &&
+      request.oldSha === request.newSha;
+
     await runUserGitUpdateThenRefreshDashboard(
-      "Moving branch",
-      "Moved branch.",
+      request.targetPath === null ? "Moving branch" : "Switching branch",
+      request.targetPath === null ? "Moved branch." : "Switched branch.",
       async () => {
         try {
-          await window.molttree.moveGitBranch({
-            repoRoot: request.repoRoot,
-            branch: request.branch,
-            oldSha: request.oldSha,
-            newSha: request.newSha,
-          });
-          rememberBranchTagChange({
-            repoRoot: request.repoRoot,
-            branch: request.branch,
-            oldSha: request.oldSha,
-            newSha: request.newSha,
-          });
+          if (isDetachingBranchFromWorktree && request.sourcePath !== null) {
+            await window.molttree.detachGitWorktreeBranch({
+              repoRoot: request.repoRoot,
+              path: request.sourcePath,
+              branch: request.branch,
+              sha: request.oldSha,
+            });
+          } else if (request.targetPath === null) {
+            await window.molttree.moveGitBranch({
+              repoRoot: request.repoRoot,
+              branch: request.branch,
+              oldSha: request.oldSha,
+              newSha: request.newSha,
+            });
+          } else {
+            await window.molttree.switchGitBranch({
+              repoRoot: request.repoRoot,
+              path: request.targetPath,
+              branch: request.branch,
+              oldSha: request.oldSha,
+              newSha: request.newSha,
+            });
+          }
+
+          if (request.oldSha !== request.newSha) {
+            rememberBranchTagChange({
+              repoRoot: request.repoRoot,
+              branch: request.branch,
+              oldSha: request.oldSha,
+              newSha: request.newSha,
+            });
+          }
         } catch (error) {
           return error instanceof Error
             ? error.message
-            : "Failed to move branch.";
+            : "Failed to update branch.";
         }
 
         return null;
@@ -2815,10 +3311,14 @@ const CommitHistory = ({
     );
   };
   const openRowAfterDoubleClick = async (row: CommitGraphRow) => {
+    if (!row.isCommitRow) {
+      return;
+    }
+
     const gitCheckoutDescription =
       row.commit.localBranches.length > 0
         ? "Switching branch"
-        : "Switching commit";
+        : "Switching to commit";
 
     await runUserGitUpdateThenRefreshDashboard(
       gitCheckoutDescription,
@@ -2839,6 +3339,12 @@ const CommitHistory = ({
       },
     );
   };
+
+  const isBranchPointerMoveDetachingWorktree =
+    branchPointerMove !== null &&
+    branchPointerMove.sourcePath !== null &&
+    branchPointerMove.targetPath === null &&
+    branchPointerMove.oldSha === branchPointerMove.newSha;
 
   return (
     <>
@@ -2882,17 +3388,10 @@ const CommitHistory = ({
                 type="button"
                 aria-pressed={shouldShowChatOnly}
                 onClick={() => {
-                  const nextShouldShowChatOnly = !shouldShowChatOnly;
-
-                  setShouldShowChatOnly(nextShouldShowChatOnly);
-                  showSuccessMessage(
-                    nextShouldShowChatOnly
-                      ? "Showing chats only."
-                      : "Showing all commits.",
-                  );
+                  setShouldShowChatOnly(!shouldShowChatOnly);
                 }}
               >
-                Chats
+                Codex Chats
               </Button>
               <CommitHistoryColumnResizeHandle
                 columnKey="actors"
@@ -2905,6 +3404,15 @@ const CommitHistory = ({
               <span>Branch Tags</span>
               <CommitHistoryColumnResizeHandle
                 columnKey="branchTags"
+                startColumnResize={startColumnResize}
+                updateColumnResize={updateColumnResize}
+                finishColumnResize={finishColumnResize}
+              />
+            </div>
+            <div className="commit-history-header-cell">
+              <span>Code Locations</span>
+              <CommitHistoryColumnResizeHandle
+                columnKey="codeLocations"
                 startColumnResize={startColumnResize}
                 updateColumnResize={updateColumnResize}
                 finishColumnResize={finishColumnResize}
@@ -2964,6 +3472,7 @@ const CommitHistory = ({
                 key={row.id}
                 row={row}
                 repoRoot={repoRoot}
+                mainWorktreePath={mainWorktreePath}
                 worktrees={worktrees}
                 currentBranch={currentBranch}
                 defaultBranch={defaultBranch}
@@ -2973,10 +3482,11 @@ const CommitHistory = ({
                 isBranchPointerDropTarget={
                   branchPointerDropTargetRowId === row.id
                 }
-                isSelected={selectedCommitRowId === row.id}
+                shouldOwnMainWorktreeHead={
+                  mainWorktreeHeadOwnerRowId === row.id
+                }
                 isBranchMergeableOfBranch={isBranchMergeableOfBranch}
                 isBranchDeleteSafeOfBranch={isBranchDeleteSafeOfBranch}
-                selectRow={() => setSelectedCommitRowId(row.id)}
                 updateBranchPointerDropTarget={(event) =>
                   updateBranchPointerDropTarget({ event, row })
                 }
@@ -2991,7 +3501,6 @@ const CommitHistory = ({
                 openChangeSummaryModal={openChangeSummaryModal}
                 openBranchMergeModal={openBranchMergeModal}
                 openCodePath={openCodePath}
-                showSuccessMessage={showSuccessMessage}
                 showErrorMessage={showErrorMessage}
                 startBranchPointerDrag={startBranchPointerDrag}
                 finishBranchPointerDrag={finishBranchPointerDrag}
@@ -3023,6 +3532,11 @@ const CommitHistory = ({
                   value={branchName}
                   onChange={(event) => setBranchName(event.target.value)}
                 />
+                {shouldShowBranchNamePreview ? (
+                  <p className="branch-name-preview">
+                    Branch name will become: <code>{createdBranchName}</code>
+                  </p>
+                ) : null}
                 <DialogFooter>
                   <Button
                     type="button"
@@ -3033,7 +3547,7 @@ const CommitHistory = ({
                   </Button>
                   <Button
                     type="submit"
-                    disabled={branchName.trim().length === 0}
+                    disabled={createdBranchName.length === 0}
                   >
                     Create
                   </Button>
@@ -3056,7 +3570,7 @@ const CommitHistory = ({
             <DialogContent className="sm:max-w-sm">
               <form className="grid gap-4" onSubmit={submitCommitMessage}>
                 <DialogHeader>
-                  <DialogTitle>Commit Changes</DialogTitle>
+                  <DialogTitle>Commit</DialogTitle>
                   <DialogDescription>Enter a commit message.</DialogDescription>
                 </DialogHeader>
                 <Input
@@ -3132,16 +3646,16 @@ const CommitHistory = ({
                   </span>
                 </div>
               </div>
-              <Button
-                className="change-summary-modal-link"
-                variant="link"
-                type="button"
-                onClick={() => {
-                  void openCodePath(changeSummaryTarget.path);
-                }}
-              >
-                Open repo
-              </Button>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    void openCodePath(changeSummaryTarget.path);
+                  }}
+                >
+                  Open Repository
+                </Button>
+              </DialogFooter>
             </DialogContent>
           )}
         </Dialog>
@@ -3178,7 +3692,7 @@ const CommitHistory = ({
             </AlertDialogContent>
           )}
         </AlertDialog>
-        <AlertDialog
+        <Dialog
           open={branchMergeConfirmation !== null}
           onOpenChange={(isOpen) => {
             if (isOpen) {
@@ -3189,13 +3703,13 @@ const CommitHistory = ({
           }}
         >
           {branchMergeConfirmation === null ? null : (
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Merge Branches</AlertDialogTitle>
-                <AlertDialogDescription>
+            <DialogContent className="sm:max-w-sm">
+              <DialogHeader>
+                <DialogTitle>Merge Branch</DialogTitle>
+                <DialogDescription>
                   Merge {branchMergeConfirmation.branch} into HEAD?
-                </AlertDialogDescription>
-              </AlertDialogHeader>
+                </DialogDescription>
+              </DialogHeader>
               <div className="branch-merge-preview-message">
                 <span className="commit-thread-change-added">
                   +{branchMergeConfirmation.preview.added}
@@ -3217,17 +3731,21 @@ const CommitHistory = ({
                   .
                 </span>
               </div>
-              <AlertDialogFooter>
-                <AlertDialogCancel onClick={closeBranchMergeConfirmationModal}>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={closeBranchMergeConfirmationModal}
+                >
                   Cancel
-                </AlertDialogCancel>
-                <AlertDialogAction onClick={confirmBranchMerge}>
+                </Button>
+                <Button type="button" onClick={confirmBranchMerge}>
                   Merge
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
+                </Button>
+              </DialogFooter>
+            </DialogContent>
           )}
-        </AlertDialog>
+        </Dialog>
         <AlertDialog
           open={branchPointerMove !== null}
           onOpenChange={(isOpen) => {
@@ -3243,7 +3761,11 @@ const CommitHistory = ({
               <AlertDialogHeader>
                 <AlertDialogTitle>Move Branch Pointer</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Move the {branchPointerMove.branch} branch pointer?
+                  {isBranchPointerMoveDetachingWorktree
+                    ? `Move the ${branchPointerMove.branch} branch tag back to this commit?`
+                    : branchPointerMove.targetPath === null
+                      ? `Move the ${branchPointerMove.branch} branch pointer?`
+                      : `Switch this worktree to ${branchPointerMove.branch}?`}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <ul className="branch-tag-change-list">
@@ -3263,9 +3785,13 @@ const CommitHistory = ({
                 </li>
               </ul>
               <AlertDialogDescription>
-                {branchPointerMove.willMoveCheckedOutWorktree
-                  ? "This branch is checked out in a clean worktree, so Git will reset that worktree to the target commit."
-                  : "No worktree files will be changed."}
+                {isBranchPointerMoveDetachingWorktree
+                  ? "Git will detach that worktree and keep its changes."
+                  : branchPointerMove.targetPath !== null
+                    ? "Git will keep the existing changes if they can apply on that branch."
+                    : branchPointerMove.willMoveCheckedOutWorktree
+                      ? "This branch is checked out in a clean worktree, so Git will reset that worktree to the target commit."
+                      : "No worktree files will be changed."}
               </AlertDialogDescription>
               <AlertDialogFooter>
                 <AlertDialogCancel onClick={closeBranchPointerMoveModal}>
@@ -3323,6 +3849,7 @@ const RepoSection = ({
           worktrees={repo.worktrees}
           threadOfId={threadOfId}
           repoRoot={repo.root}
+          mainWorktreePath={repo.mainWorktreePath}
           currentBranch={repo.currentBranch}
           defaultBranch={repo.defaultBranch}
           gitChangesOfCwd={gitChangesOfCwd}
@@ -3347,7 +3874,6 @@ export const App = () => {
   );
   const [selectedRepoRoot, setSelectedRepoRoot] = useState<string | null>(null);
   const [pathLauncher, setPathLauncher] = useState<PathLauncher>("vscode");
-  const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [dashboardErrorMessage, setDashboardErrorMessage] = useState<
     string | null
@@ -3357,6 +3883,7 @@ export const App = () => {
   >([]);
   const [branchTagChangeConfirmation, setBranchTagChangeConfirmation] =
     useState<BranchTagChangeConfirmation | null>(null);
+  const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [userGitUpdateCount, setUserGitUpdateCount] = useState(0);
   const [userGitUpdateDescription, setUserGitUpdateDescription] = useState("");
   const userGitUpdateCountRef = useRef(0);
@@ -3508,13 +4035,16 @@ export const App = () => {
   }, []);
   const showSuccessMessage = useCallback((message: string) => {
     toast.success(message, {
+      closeButton: false,
       duration: SUCCESS_MESSAGE_TIMEOUT_MS,
+      position: TOAST_POSITION,
     });
   }, []);
   const showErrorMessage = useCallback((message: string) => {
     toast.error("Error", {
       description: message,
       duration: Infinity,
+      position: TOAST_POSITION,
     });
   }, []);
   // User Git updates use this wrapper so the loading toast is tied to action results, not background polling.
@@ -3640,6 +4170,7 @@ export const App = () => {
     toast.error("Dashboard error", {
       description: dashboardErrorMessage,
       duration: Infinity,
+      position: TOAST_POSITION,
     });
   }, [dashboardErrorMessage]);
 
@@ -3656,7 +4187,7 @@ export const App = () => {
       dismissible: false,
       duration: Infinity,
       id: USER_GIT_UPDATE_TOAST_ID,
-      position: "top-center",
+      position: TOAST_POSITION,
     });
   }, [userGitUpdateCount, userGitUpdateDescription]);
 
@@ -3799,7 +4330,6 @@ export const App = () => {
         path: selectedRepo.root,
         launcher: pathLauncher,
       });
-      showSuccessMessage("Opened repo.");
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to open repo.";
@@ -3808,14 +4338,12 @@ export const App = () => {
   };
   const changeSelectedRepoRoot = (repoRoot: string) => {
     setSelectedRepoRoot(repoRoot);
-    showSuccessMessage("Selected repo.");
   };
   const changePathLauncher = (value: string) => {
     const nextPathLauncher = readPathLauncher(value);
 
     if (nextPathLauncher !== null) {
       setPathLauncher(nextPathLauncher);
-      showSuccessMessage("Path opener updated.");
     }
   };
   const selectedRepoBranchTagChanges =
@@ -3871,65 +4399,69 @@ export const App = () => {
             </SelectContent>
           </Select>
         </div>
-        {selectedRepo === null ? null : (
-          <div className="repo-actions">
-            <button
-              className="repo-action-control"
-              type="button"
-              aria-label="Revert branches"
-              onClick={() =>
-                openBranchTagChangeModal("reset", selectedRepo.root)
-              }
-              disabled={selectedRepoBranchTagChanges.length === 0}
-            >
-              <CircleArrowLeft
-                aria-hidden="true"
-                size={18}
-                strokeWidth={1.75}
-              />
-              <span>Revert</span>
-            </button>
-            <button
-              className="repo-action-control"
-              type="button"
-              aria-label="Pull branches"
-              onClick={() =>
-                openBranchTagChangeModal("pull", selectedRepo.root)
-              }
-              disabled={selectedRepoBranchTagChanges.length === 0}
-            >
-              <CircleArrowDown
-                aria-hidden="true"
-                size={18}
-                strokeWidth={1.75}
-              />
-              <span>Pull</span>
-            </button>
-            <button
-              className="repo-action-control"
-              type="button"
-              aria-label="Push branches"
-              onClick={() =>
-                openBranchTagChangeModal("push", selectedRepo.root)
-              }
-              disabled={selectedRepoBranchTagChanges.length === 0}
-            >
-              <CircleArrowUp aria-hidden="true" size={18} strokeWidth={1.75} />
-              <span>Push</span>
-            </button>
-          </div>
-        )}
-        <TitleTooltip title="Settings">
+        <div className="repo-actions">
+          {selectedRepo === null ? null : (
+            <>
+              <button
+                className="repo-action-control"
+                type="button"
+                aria-label="Revert branches"
+                onClick={() =>
+                  openBranchTagChangeModal("reset", selectedRepo.root)
+                }
+                disabled={selectedRepoBranchTagChanges.length === 0}
+              >
+                <CircleArrowLeft
+                  aria-hidden="true"
+                  size={18}
+                  strokeWidth={1.75}
+                />
+                <span>Revert</span>
+              </button>
+              <button
+                className="repo-action-control"
+                type="button"
+                aria-label="Pull branches"
+                onClick={() =>
+                  openBranchTagChangeModal("pull", selectedRepo.root)
+                }
+                disabled={selectedRepoBranchTagChanges.length === 0}
+              >
+                <CircleArrowDown
+                  aria-hidden="true"
+                  size={18}
+                  strokeWidth={1.75}
+                />
+                <span>Pull</span>
+              </button>
+              <button
+                className="repo-action-control"
+                type="button"
+                aria-label="Push branches"
+                onClick={() =>
+                  openBranchTagChangeModal("push", selectedRepo.root)
+                }
+                disabled={selectedRepoBranchTagChanges.length === 0}
+              >
+                <CircleArrowUp
+                  aria-hidden="true"
+                  size={18}
+                  strokeWidth={1.75}
+                />
+                <span>Push</span>
+              </button>
+            </>
+          )}
           <button
-            aria-label="Settings"
-            className="repo-action-control repo-settings-button"
+            aria-label="Open About"
+            className="repo-action-control"
             type="button"
-            onClick={() => setIsSettingsDialogOpen(true)}
+            onClick={() => setIsAboutModalOpen(true)}
           >
-            <Settings aria-hidden="true" size={18} strokeWidth={1.75} />
-            <span>Settings</span>
+            <Info aria-hidden="true" size={18} strokeWidth={1.75} />
+            <span>About</span>
           </button>
-        </TitleTooltip>
+        </div>
       </div>
     </>
   );
@@ -3937,34 +4469,6 @@ export const App = () => {
   return (
     <TooltipProvider>
       <main className="app-shell">
-        <Dialog
-          open={isSettingsDialogOpen}
-          onOpenChange={setIsSettingsDialogOpen}
-        >
-          <DialogContent className="settings-dialog sm:max-w-sm">
-            <DialogHeader>
-              <DialogTitle>Settings</DialogTitle>
-              <DialogDescription className="sr-only">
-                Configure local app settings.
-              </DialogDescription>
-            </DialogHeader>
-            <label className="settings-field">
-              <span>Open paths with</span>
-              <Select value={pathLauncher} onValueChange={changePathLauncher}>
-                <SelectTrigger className="settings-select" size="sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent
-                  align="end"
-                  className="path-launcher-select-content"
-                >
-                  <PathLauncherSelectItems />
-                </SelectContent>
-              </Select>
-            </label>
-          </DialogContent>
-        </Dialog>
-
         <AlertDialog
           open={branchTagChangeConfirmation !== null}
           onOpenChange={(isOpen) => {
@@ -4010,6 +4514,19 @@ export const App = () => {
             </AlertDialogContent>
           )}
         </AlertDialog>
+        <Dialog open={isAboutModalOpen} onOpenChange={setIsAboutModalOpen}>
+          <DialogContent aria-describedby={undefined} className="about-modal">
+            <DialogHeader>
+              <DialogTitle>About MoltTree</DialogTitle>
+            </DialogHeader>
+            <dl className="about-modal-fields">
+              <div className="about-modal-field">
+                <dt>Version:</dt>
+                <dd>v{packageInfo.version}</dd>
+              </div>
+            </dl>
+          </DialogContent>
+        </Dialog>
 
         {dashboardData.warnings.length > 0 && (
           <Alert className="warning-band">
@@ -4043,7 +4560,7 @@ export const App = () => {
               <Empty className="empty-state">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
-                    <GitCommitHorizontal size={22} />
+                    <LuGitCommitHorizontal size={22} />
                   </EmptyMedia>
                   <EmptyDescription>
                     No Git repos found from Codex thread working directories.
