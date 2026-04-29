@@ -1649,6 +1649,7 @@ const CommitHistoryRow = ({
   gitChangesOfCwd,
   isBranchPointerDropTarget,
   isSelected,
+  shouldOwnMainWorktreeHead,
   isBranchMergeableOfBranch,
   isBranchDeleteSafeOfBranch,
   selectRow,
@@ -1677,6 +1678,7 @@ const CommitHistoryRow = ({
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   isBranchPointerDropTarget: boolean;
   isSelected: boolean;
+  shouldOwnMainWorktreeHead: boolean;
   isBranchMergeableOfBranch: { [branch: string]: boolean };
   isBranchDeleteSafeOfBranch: { [branch: string]: boolean };
   selectRow: () => void;
@@ -1742,6 +1744,15 @@ const CommitHistoryRow = ({
     rowThreadIdOfId[rowThreadId] = true;
   }
 
+  // One dirty row for the main worktree owns HEAD and the checked-out branch instead of duplicating them on the base commit row.
+  const isMainWorktreeThreadGroupRow =
+    row.threadGroup !== null &&
+    row.threadGroup.cwd.length > 0 &&
+    readIsCwdInsidePath({
+      cwd: row.threadGroup.cwd,
+      path: mainWorktreePath,
+    }) &&
+    !readIsWorktreeCwd({ cwd: row.threadGroup.cwd, worktrees });
   const worktreesForRow = worktrees.filter((worktree) => {
     if (worktree.head !== commit.sha) {
       return false;
@@ -1778,6 +1789,7 @@ const CommitHistoryRow = ({
   const excludedLocalBranchOfName: { [branch: string]: boolean } = {};
   const rowLocalBranches: string[] = [];
   const isRowLocalBranchAddedOfBranch: { [branch: string]: boolean } = {};
+  let hasChangedMainWorktreeThreadGroup = false;
 
   const pushRowLocalBranch = (branch: string) => {
     if (isRowLocalBranchAddedOfBranch[branch] === true) {
@@ -1806,12 +1818,30 @@ const CommitHistoryRow = ({
 
   if (row.threadGroup === null) {
     for (const commitThreadId of commit.threadIds) {
+      const thread = threadOfId[commitThreadId];
+
+      if (thread === undefined) {
+        continue;
+      }
+
+      const gitChangeSummary = gitChangesOfCwd[thread.cwd];
+
+      if (
+        !hasChangedMainWorktreeThreadGroup &&
+        thread.cwd.length > 0 &&
+        gitChangeSummary !== undefined &&
+        !readIsGitChangeSummaryEmpty(gitChangeSummary) &&
+        readIsCwdInsidePath({ cwd: thread.cwd, path: mainWorktreePath }) &&
+        !readIsWorktreeCwd({ cwd: thread.cwd, worktrees })
+      ) {
+        hasChangedMainWorktreeThreadGroup = true;
+      }
+
       if (rowThreadIdOfId[commitThreadId] === true) {
         continue;
       }
 
-      const thread = threadOfId[commitThreadId];
-      const threadBranch = thread?.gitInfo?.branch ?? null;
+      const threadBranch = thread.gitInfo?.branch ?? null;
 
       if (
         threadBranch !== null &&
@@ -1823,6 +1853,10 @@ const CommitHistoryRow = ({
         excludedLocalBranchOfName[threadBranch] = true;
       }
     }
+
+    if (currentBranch !== null && hasChangedMainWorktreeThreadGroup) {
+      excludedLocalBranchOfName[currentBranch] = true;
+    }
   }
 
   if (row.threadGroup === null) {
@@ -1832,6 +1866,10 @@ const CommitHistoryRow = ({
       }
 
       pushRowLocalBranch(localBranch);
+    }
+  } else if (isMainWorktreeThreadGroupRow) {
+    if (currentBranch !== null) {
+      pushRowLocalBranch(currentBranch);
     }
   } else {
     for (const worktree of worktreesForRow) {
@@ -1868,6 +1906,10 @@ const CommitHistoryRow = ({
       ? commit.refs.filter((ref) => {
           const refName = cleanRefName(ref);
 
+          if (hasChangedMainWorktreeThreadGroup && readIsHeadRef(ref)) {
+            return false;
+          }
+
           return (
             excludedLocalBranchOfName[refName] !== true ||
             !readIsLocalBranch({
@@ -1876,9 +1918,15 @@ const CommitHistoryRow = ({
             })
           );
         })
-      : rowLocalBranches;
+      : isMainWorktreeThreadGroupRow
+        ? shouldOwnMainWorktreeHead
+          ? currentBranch === null
+            ? ["HEAD"]
+            : [`HEAD -> ${currentBranch}`]
+          : []
+        : rowLocalBranches;
   const rowCurrentBranch =
-    row.threadGroup !== null && row.threadGroup.cwd !== repoRoot
+    row.threadGroup !== null && !isMainWorktreeThreadGroupRow
       ? (rowLocalBranches[0] ?? null)
       : currentBranch;
   const isHeadRow =
@@ -1954,6 +2002,11 @@ const CommitHistoryRow = ({
     rowClassName = `${rowClassName} commit-history-row-branch-drop-target`;
     branchTagsCellClassName = `${branchTagsCellClassName} commit-branch-tags-cell-branch-drop-target`;
   }
+
+  const shouldShowCodeLocations =
+    row.isCommitRow ||
+    rowRefs.some((ref) => readIsHeadRef(ref)) ||
+    worktreesForRow.length > 0;
 
   return (
     <div
@@ -2099,7 +2152,7 @@ const CommitHistoryRow = ({
         ) : null}
       </div>
       <div className="commit-code-locations-cell">
-        {row.isCommitRow || worktreesForRow.length > 0 ? (
+        {shouldShowCodeLocations ? (
           <CodeLocations
             refs={rowRefs}
             worktreesForRow={worktreesForRow}
@@ -2666,6 +2719,25 @@ const CommitHistory = ({
       laneCount: graph.laneCount,
     };
   }, [graph, shouldShowChatOnly]);
+  const mainWorktreeHeadOwnerRowId = useMemo(() => {
+    for (const row of visibleGraph.rows) {
+      if (
+        row.threadGroup === null ||
+        row.threadGroup.cwd.length === 0 ||
+        !readIsCwdInsidePath({
+          cwd: row.threadGroup.cwd,
+          path: mainWorktreePath,
+        }) ||
+        readIsWorktreeCwd({ cwd: row.threadGroup.cwd, worktrees })
+      ) {
+        continue;
+      }
+
+      return row.id;
+    }
+
+    return null;
+  }, [mainWorktreePath, visibleGraph.rows, worktrees]);
 
   useEffect(() => {
     if (selectedCommitRowId === null) {
@@ -3424,6 +3496,9 @@ const CommitHistory = ({
                   branchPointerDropTargetRowId === row.id
                 }
                 isSelected={selectedCommitRowId === row.id}
+                shouldOwnMainWorktreeHead={
+                  mainWorktreeHeadOwnerRowId === row.id
+                }
                 isBranchMergeableOfBranch={isBranchMergeableOfBranch}
                 isBranchDeleteSafeOfBranch={isBranchDeleteSafeOfBranch}
                 selectRow={() => setSelectedCommitRowId(row.id)}
