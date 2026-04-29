@@ -1531,6 +1531,13 @@ const ChatRobotTags = ({
                     void openThread(thread.id);
                   }}
                 >
+                  {isThreadActive ? (
+                    <LoaderCircle
+                      aria-hidden="true"
+                      className="commit-thread-chat-loading-icon"
+                      size={10}
+                    />
+                  ) : null}
                   <span className="commit-thread-chat-title">{title}</span>
                   {isThreadGroupWorktree ? (
                     <MdOutlineCallSplit
@@ -1538,14 +1545,7 @@ const ChatRobotTags = ({
                       className="commit-thread-chat-icon commit-ref-worktree-icon"
                       size={10}
                     />
-                  ) : null}
-                  {isThreadActive ? (
-                    <LoaderCircle
-                      aria-hidden="true"
-                      className="commit-thread-chat-loading-icon"
-                      size={10}
-                    />
-                  ) : isThreadGroupWorktree ? null : (
+                  ) : (
                     <GoDotFill
                       aria-hidden="true"
                       className="commit-thread-chat-icon"

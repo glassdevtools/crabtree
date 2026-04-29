@@ -1115,6 +1115,7 @@ textarea,
   width: 10px;
   height: 10px;
   flex: 0 0 auto;
+  color: #000000;
   animation: initial-loading-spin 900ms linear infinite;
 }
 

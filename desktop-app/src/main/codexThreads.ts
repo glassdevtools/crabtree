@@ -13,14 +13,19 @@ const MAX_THREAD_COUNT = 1000;
 const THREAD_PAGE_SIZE = 200;
 // TODO: AI-PICKED-VALUE: Reading 64 KiB chunks keeps the common case cheap while still finding task markers near the end of large rollout files.
 const ROLLOUT_STATUS_READ_CHUNK_BYTE_COUNT = 64 * 1024;
-// TODO: AI-PICKED-VALUE: Six hours keeps genuinely long-running desktop tasks visible while excluding old unfinished rollout files from crashed or interrupted sessions.
-const ROLLOUT_ACTIVE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+// TODO: AI-PICKED-VALUE: Two minutes bridges the status gap for another Codex process without keeping stale interrupted chats active for hours.
+const ROLLOUT_ACTIVE_STARTED_MAX_AGE_MS = 2 * 60 * 1000;
 
 // Codex app-server owns thread reads so this app does not need raw transcript parsing.
 // The returned thread objects already include cwd and gitInfo for graph matching.
 // Runtime status is process-local, so we also inspect the latest task marker in the rollout file to see Codex Desktop tasks that are running in another app-server process.
 
-type RolloutTaskEvent = "taskStarted" | "taskComplete";
+type RolloutTaskEventType = "taskStarted" | "taskComplete";
+
+type RolloutTaskEvent = {
+  type: RolloutTaskEventType;
+  timestampMs: number | null;
+};
 
 const isObject = (value: unknown): value is { [key: string]: unknown } => {
   return typeof value === "object" && value !== null;
@@ -73,17 +78,22 @@ const readRolloutTaskEvent = (value: unknown): RolloutTaskEvent | null => {
     return null;
   }
 
+  const timestampMs =
+    typeof value.timestamp === "string" ? Date.parse(value.timestamp) : null;
+  const safeTimestampMs =
+    timestampMs === null || Number.isNaN(timestampMs) ? null : timestampMs;
+
   switch (payload.type) {
     case "task_started":
-      return "taskStarted";
+      return { type: "taskStarted", timestampMs: safeTimestampMs };
     case "task_complete":
-      return "taskComplete";
+      return { type: "taskComplete", timestampMs: safeTimestampMs };
     default:
       return null;
   }
 };
 
-export const readLatestRolloutTaskEventFromText = (text: string) => {
+const readLatestRolloutTaskEventWithTimeFromText = (text: string) => {
   const lines = text.split("\n");
 
   for (let lineIndex = lines.length - 1; lineIndex >= 0; lineIndex -= 1) {
@@ -109,6 +119,49 @@ export const readLatestRolloutTaskEventFromText = (text: string) => {
   }
 
   return null;
+};
+
+export const readLatestRolloutTaskEventFromText = (text: string) => {
+  return readLatestRolloutTaskEventWithTimeFromText(text)?.type ?? null;
+};
+
+const readRolloutTaskStatus = ({
+  rolloutTaskEvent,
+  latestActivityMs,
+  nowMs,
+}: {
+  rolloutTaskEvent: RolloutTaskEvent | null;
+  latestActivityMs: number;
+  nowMs: number;
+}): CodexThreadStatus | null => {
+  if (rolloutTaskEvent === null || rolloutTaskEvent.type === "taskComplete") {
+    return null;
+  }
+
+  if (
+    rolloutTaskEvent.timestampMs === null ||
+    nowMs - latestActivityMs > ROLLOUT_ACTIVE_STARTED_MAX_AGE_MS
+  ) {
+    return null;
+  }
+
+  return { type: "active", activeFlags: [] };
+};
+
+export const readRolloutTaskStatusFromText = ({
+  text,
+  latestActivityMs,
+  nowMs,
+}: {
+  text: string;
+  latestActivityMs: number;
+  nowMs: number;
+}) => {
+  return readRolloutTaskStatus({
+    rolloutTaskEvent: readLatestRolloutTaskEventWithTimeFromText(text),
+    latestActivityMs,
+    nowMs,
+  });
 };
 
 const convertGitInfo = (value: unknown): CodexGitInfo | null => {
@@ -208,7 +261,7 @@ const readLatestRolloutTaskEvent = async ({
 
     text = `${buffer.toString("utf8")}${text}`;
 
-    const rolloutTaskEvent = readLatestRolloutTaskEventFromText(text);
+    const rolloutTaskEvent = readLatestRolloutTaskEventWithTimeFromText(text);
 
     if (rolloutTaskEvent !== null) {
       return rolloutTaskEvent;
@@ -238,10 +291,6 @@ const readThreadStatusWithRolloutTask = async (
     return thread.status;
   }
 
-  if (Date.now() - modifiedAtMs > ROLLOUT_ACTIVE_MAX_AGE_MS) {
-    return thread.status;
-  }
-
   let fileHandle: FileHandle;
 
   try {
@@ -255,15 +304,13 @@ const readThreadStatusWithRolloutTask = async (
       fileHandle,
       byteCount,
     });
-
-    switch (rolloutTaskEvent) {
-      case "taskStarted":
-        return { type: "active", activeFlags: [] };
-      case "taskComplete":
-        return thread.status;
-      case null:
-        return thread.status;
-    }
+    return (
+      readRolloutTaskStatus({
+        rolloutTaskEvent,
+        latestActivityMs: modifiedAtMs,
+        nowMs: Date.now(),
+      }) ?? thread.status
+    );
   } finally {
     await fileHandle.close();
   }
