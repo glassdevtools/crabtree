@@ -90,6 +90,12 @@ import { cn } from "@/lib/utils";
 import cursorAppIconUrl from "./assets/cursor-app-icon.png";
 import finderAppIconUrl from "./assets/finder-app-icon.png";
 import initialLoadingImageUrl from "./assets/initial-loading.png";
+import {
+  readDisplayedThreadGroups,
+  readIsGitChangeSummaryEmpty,
+  readIsWorktreeCwd,
+} from "./threadGroups";
+import type { ThreadGroup } from "./threadGroups";
 
 // The history view is a SourceTree-style row table. Git owns the commits; the renderer only assigns lanes.
 // TODO: AI-PICKED-VALUE: These graph sizes and colors are initial SourceTree-like choices for dense commit rows.
@@ -465,12 +471,6 @@ type BranchCreateTarget = {
 type CommitBranchTarget = {
   branch: string;
   oldSha: string;
-};
-
-type ThreadGroup = {
-  key: string;
-  cwd: string;
-  threads: CodexThread[];
 };
 
 type CommitMessageTarget = {
@@ -967,56 +967,6 @@ const createThreadOfId = (threads: CodexThread[]) => {
   return threadOfId;
 };
 
-const readIsWorktreeCwd = ({
-  cwd,
-  worktrees,
-}: {
-  cwd: string;
-  worktrees: GitWorktree[];
-}) => {
-  for (const worktree of worktrees) {
-    if (cwd === worktree.path || cwd.startsWith(`${worktree.path}/`)) {
-      return true;
-    }
-  }
-
-  return false;
-};
-
-const readDisplayedThreadGroups = ({
-  threads,
-  worktrees,
-}: {
-  threads: CodexThread[];
-  worktrees: GitWorktree[];
-}) => {
-  const threadGroups: ThreadGroup[] = [];
-  const groupIndexOfKey: { [key: string]: number } = {};
-
-  for (const thread of threads) {
-    const groupKey =
-      thread.cwd.length === 0 ? `thread:${thread.id}` : `cwd:${thread.cwd}`;
-    const groupIndex = groupIndexOfKey[groupKey];
-
-    if (groupIndex !== undefined) {
-      threadGroups[groupIndex].threads.push(thread);
-      continue;
-    }
-
-    groupIndexOfKey[groupKey] = threadGroups.length;
-    threadGroups.push({ key: groupKey, cwd: thread.cwd, threads: [thread] });
-  }
-
-  return [
-    ...threadGroups.filter(
-      (threadGroup) => !readIsWorktreeCwd({ cwd: threadGroup.cwd, worktrees }),
-    ),
-    ...threadGroups.filter((threadGroup) =>
-      readIsWorktreeCwd({ cwd: threadGroup.cwd, worktrees }),
-    ),
-  ];
-};
-
 const readIsLocalBranch = ({
   branch,
   localBranches,
@@ -1328,8 +1278,7 @@ const ChatRobotTags = ({
         const storedChangeSummary = gitChangesOfCwd[threadGroup.cwd];
         const changeSummary = storedChangeSummary ?? EMPTY_GIT_CHANGE_SUMMARY;
         const totalChangeSummary = readTotalGitChangeSummary(changeSummary);
-        const isChangeSummaryEmpty =
-          totalChangeSummary.added === 0 && totalChangeSummary.removed === 0;
+        const isChangeSummaryEmpty = readIsGitChangeSummaryEmpty(changeSummary);
         const shouldShowChangeCount =
           storedChangeSummary !== undefined && !isChangeSummaryEmpty;
         const commitBranchTarget = readCommitBranchTarget({
@@ -1658,7 +1607,11 @@ const CommitHistoryRow = ({
   const threads = row.threadIds
     .map((rowThreadId) => threadOfId[rowThreadId])
     .filter((rowThread): rowThread is CodexThread => rowThread !== undefined);
-  const threadGroups = readDisplayedThreadGroups({ threads, worktrees });
+  const threadGroups = readDisplayedThreadGroups({
+    threads,
+    worktrees,
+    gitChangesOfCwd,
+  });
   const isHeadRow = commit.refs.some((ref) => readIsHeadRef(ref));
   const mergeBranch = isHeadRow
     ? null

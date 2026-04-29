@@ -12,6 +12,7 @@
     "tests/**/*.ts",
     "src/main/gitActions.ts",
     "src/main/gitData.ts",
+    "src/renderer/threadGroups.ts",
     "src/shared/types.ts"
   ]
 }

@@ -1,0 +1,107 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { readDisplayedThreadGroups } from "../src/renderer/threadGroups";
+import type { CodexThread, GitChangeSummary } from "../src/shared/types";
+
+const EMPTY_CHANGE_SUMMARY: GitChangeSummary = {
+  staged: {
+    added: 0,
+    removed: 0,
+  },
+  unstaged: {
+    added: 0,
+    removed: 0,
+  },
+};
+
+const ADDED_CHANGE_SUMMARY: GitChangeSummary = {
+  staged: {
+    added: 1,
+    removed: 0,
+  },
+  unstaged: {
+    added: 0,
+    removed: 0,
+  },
+};
+
+const REMOVED_CHANGE_SUMMARY: GitChangeSummary = {
+  staged: {
+    added: 0,
+    removed: 0,
+  },
+  unstaged: {
+    added: 0,
+    removed: 1,
+  },
+};
+
+const createThread = ({ id, cwd }: { id: string; cwd: string }) => {
+  const thread: CodexThread = {
+    id,
+    name: null,
+    preview: "",
+    cwd,
+    path: null,
+    source: "",
+    modelProvider: "",
+    createdAt: 0,
+    updatedAt: 0,
+    archived: false,
+    status: { type: "idle" },
+    gitInfo: null,
+  };
+
+  return thread;
+};
+
+test("orders changed cwd chat groups before unchanged groups", () => {
+  const threadGroups = readDisplayedThreadGroups({
+    threads: [
+      createThread({ id: "unchanged-root", cwd: "/repo/root" }),
+      createThread({ id: "changed-worktree", cwd: "/repo/worktree" }),
+      createThread({ id: "changed-root-a", cwd: "/repo/changed" }),
+      createThread({ id: "unchanged-empty", cwd: "" }),
+      createThread({ id: "changed-root-b", cwd: "/repo/changed" }),
+      createThread({ id: "empty-root", cwd: "/repo/empty" }),
+      createThread({ id: "unchanged-worktree", cwd: "/repo/worktree-clean" }),
+    ],
+    worktrees: [
+      {
+        path: "/repo/worktree",
+        head: null,
+        branch: null,
+        isDetached: false,
+        threadIds: ["changed-worktree"],
+      },
+      {
+        path: "/repo/worktree-clean",
+        head: null,
+        branch: null,
+        isDetached: false,
+        threadIds: ["unchanged-worktree"],
+      },
+    ],
+    gitChangesOfCwd: {
+      "/repo/worktree": ADDED_CHANGE_SUMMARY,
+      "/repo/changed": REMOVED_CHANGE_SUMMARY,
+      "/repo/empty": EMPTY_CHANGE_SUMMARY,
+    },
+  });
+
+  assert.deepEqual(
+    threadGroups.map((threadGroup) => threadGroup.key),
+    [
+      "cwd:/repo/changed",
+      "cwd:/repo/worktree",
+      "cwd:/repo/root",
+      "thread:unchanged-empty",
+      "cwd:/repo/empty",
+      "cwd:/repo/worktree-clean",
+    ],
+  );
+  assert.deepEqual(
+    threadGroups[0].threads.map((thread) => thread.id),
+    ["changed-root-a", "changed-root-b"],
+  );
+});
