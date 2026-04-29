@@ -1,4 +1,33 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+  --radius-md: var(--radius);
+}
+
 :root {
+  --radius: 8px;
+  --background: #ffffff;
+  --foreground: #151915;
+  --primary: #171d17;
+  --primary-foreground: #ffffff;
+  --secondary: #ffffff;
+  --secondary-foreground: #253027;
+  --muted: #f7f8f5;
+  --border: #d6ddd2;
+  --input: #d6ddd2;
+  --ring: #a7b0a2;
+  --destructive: #b42318;
   color: #151915;
   background: #ffffff;
   font-family:
@@ -66,6 +95,27 @@ a {
   object-fit: contain;
 }
 
+.wordmarkText {
+  background-image: linear-gradient(
+    90deg,
+    #192019 0%,
+    #192019 45%,
+    #c53a13 68%,
+    #ff6b45 100%
+  );
+  background-position: 0 50%;
+  background-size: 260% 100%;
+  background-clip: text;
+  color: transparent;
+  transition: background-position 180ms ease;
+  -webkit-background-clip: text;
+}
+
+.wordmark:hover .wordmarkText,
+.wordmark:focus-visible .wordmarkText {
+  background-position: 100% 50%;
+}
+
 .hero {
   display: flex;
   align-items: center;
@@ -121,68 +171,6 @@ h1 {
   gap: 12px;
 }
 
-.button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 46px;
-  border-radius: 8px;
-  padding: 0 18px;
-  border: 1px solid transparent;
-  font-weight: 800;
-  transition:
-    background 140ms ease,
-    border-color 140ms ease,
-    color 140ms ease,
-    transform 140ms ease;
-}
-
-.button:hover {
-  transform: translateY(-1px);
-}
-
-.button svg {
-  width: 19px;
-  height: 19px;
-  margin-right: 9px;
-  fill: currentColor;
-}
-
-.button--primary {
-  background: #171d17;
-  color: #fff;
-  box-shadow: 0 10px 24px rgba(23, 29, 23, 0.18);
-}
-
-.button--secondary {
-  border-color: #d6ddd2;
-  background: #fff;
-  color: #253027;
-}
-
-.button--secondary:hover {
-  border-color: #bfc9ba;
-  background: #f7f8f5;
-}
-
-.hero__details {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 22px;
-  color: #687366;
-  font-size: 0.82rem;
-  font-weight: 750;
-}
-
-.hero__details span {
-  border: 1px solid #dfe5dc;
-  border-radius: 999px;
-  padding: 7px 10px;
-  background: rgba(255, 255, 255, 0.72);
-}
-
 @media (max-width: 640px) {
   .hero {
     width: min(100% - 32px, 920px);
@@ -209,8 +197,7 @@ h1 {
     font-size: 1.08rem;
   }
 
-  .hero__actions,
-  .button {
+  .hero__actions {
     width: 100%;
   }
 }

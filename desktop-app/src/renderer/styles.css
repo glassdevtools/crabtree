@@ -915,13 +915,7 @@ textarea,
 
 /* TODO: AI-PICKED-VALUE: These dividers make cwd groups read as separate actor clusters without adding row height. */
 .commit-thread-group-list {
-  gap: 0;
-}
-
-.commit-thread-group + .commit-thread-group {
-  margin-left: 8px;
-  padding-left: 0;
-  border-left: 0;
+  gap: 4px;
 }
 
 .commit-ref {
@@ -1034,14 +1028,28 @@ textarea,
   gap: 3px;
   min-width: max-content;
   flex: 0 0 auto;
-  padding: 1px 3px;
+  padding: 0;
   border: 0;
   border-radius: 5px;
   box-sizing: border-box;
 }
 
 .commit-thread-group-highlighted {
+  background: transparent;
+}
+
+.commit-thread-group-highlighted::before {
+  content: "";
+  position: absolute;
+  inset: -1px -2px;
+  z-index: 0;
+  border-radius: inherit;
   background: #fff8df;
+  pointer-events: none;
+}
+
+.commit-thread-group-highlighted .commit-thread-group-background-tooltip {
+  inset: -1px -2px;
 }
 
 .commit-thread-group-background-tooltip {
@@ -1080,11 +1088,10 @@ textarea,
 }
 
 .commit-thread-chat-icon {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   flex: 0 0 auto;
   overflow: visible;
-  transform: rotate(90deg);
 }
 
 .commit-thread-chat:focus {
