@@ -1,16 +1,16 @@
 import {
-  Check,
   CircleArrowDown,
   CircleArrowLeft,
   CircleArrowUp,
+  CircleUser,
   GitBranch,
   GitCommitHorizontal,
   GitPullRequestArrow,
   LoaderCircle,
   Settings,
   Trash2,
-  User,
 } from "lucide-react";
+import { IoCheckmarkSharp } from "react-icons/io5";
 import { MdOutlineCallSplit } from "react-icons/md";
 import { VscVscode } from "react-icons/vsc";
 import { Resizable } from "react-resizable";
@@ -108,9 +108,9 @@ const COMMIT_GRAPH_HEAD_CENTER_DOT_RADIUS = 1.75;
 // TODO: AI-PICKED-VALUE: This keeps graph lines readable in compact rows while making them less heavy.
 const COMMIT_GRAPH_SEGMENT_STROKE_WIDTH = 2.25;
 // TODO: AI-PICKED-VALUE: The HEAD icon is large enough to read in compact rows without taking over the graph column.
-const COMMIT_GRAPH_USER_ICON_SIZE = 12;
+const COMMIT_GRAPH_HEAD_ICON_SIZE = 12;
 // TODO: AI-PICKED-VALUE: This stroke weight keeps the HEAD icon visibly bolder than the graph lines.
-const COMMIT_GRAPH_USER_ICON_STROKE_WIDTH = 2.25;
+const COMMIT_GRAPH_HEAD_ICON_STROKE_WIDTH = 2.25;
 const COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO = 0;
 const COMMIT_HISTORY_HEADER_HEIGHT = 22;
 // Dashboard reads touch Codex and Git, so automatic refreshes share the manual refresh path and never overlap.
@@ -1050,7 +1050,6 @@ const readCommitBranchTarget = ({
 const BranchTags = ({
   refs,
   worktrees,
-  repoRoot,
   localBranches,
   currentBranch,
   defaultBranch,
@@ -1065,7 +1064,6 @@ const BranchTags = ({
 }: {
   refs: string[];
   worktrees: GitWorktree[];
-  repoRoot: string;
   localBranches: string[];
   currentBranch: string | null;
   defaultBranch: string | null;
@@ -1122,22 +1120,6 @@ const BranchTags = ({
 
   return (
     <div className="commit-label-list">
-      {hasHead ? (
-        <Badge
-          className="commit-ref commit-ref-head"
-          variant="secondary"
-          onContextMenu={(event) => {
-            void copyTextAfterContextMenu({
-              event,
-              text: repoRoot,
-              copiedLabel: "path",
-              errorMessage: "Failed to copy path.",
-            });
-          }}
-        >
-          <span>HEAD</span>
-        </Badge>
-      ) : null}
       {worktreesForCommit.map((worktree) => (
         <Badge
           asChild
@@ -1446,7 +1428,7 @@ const ChatRobotTags = ({
                     })
                   }
                 >
-                  <Check size={10} />
+                  <IoCheckmarkSharp size={13} />
                 </Button>
               </TitleTooltip>
             ) : branchCreateTarget === null ? null : (
@@ -1689,12 +1671,12 @@ const CommitHistoryRow = ({
         {shouldShowGraphActions ? (
           <div className="commit-graph-actions">
             {isHeadRow ? (
-              <TitleTooltip title="You">
-                <span className="commit-graph-head-icon" aria-label="You">
-                  <User
+              <TitleTooltip title="HEAD">
+                <span className="commit-graph-head-icon" aria-label="HEAD">
+                  <CircleUser
                     aria-hidden="true"
-                    size={COMMIT_GRAPH_USER_ICON_SIZE}
-                    strokeWidth={COMMIT_GRAPH_USER_ICON_STROKE_WIDTH}
+                    size={COMMIT_GRAPH_HEAD_ICON_SIZE}
+                    strokeWidth={COMMIT_GRAPH_HEAD_ICON_STROKE_WIDTH}
                   />
                 </span>
               </TitleTooltip>
@@ -1755,7 +1737,6 @@ const CommitHistoryRow = ({
         <BranchTags
           refs={commit.refs}
           worktrees={worktrees}
-          repoRoot={repoRoot}
           localBranches={commit.localBranches}
           currentBranch={currentBranch}
           defaultBranch={defaultBranch}
