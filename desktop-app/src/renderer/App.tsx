@@ -881,9 +881,6 @@ const createCommitGraph = ({
     }
 
     const commitLane = lanes[lane];
-    const firstThreadGroupRowIndex = rows.length;
-    const commitRowIndex =
-      firstThreadGroupRowIndex + graphItem.changedThreadGroups.length;
     for (
       let threadGroupIndex = 0;
       threadGroupIndex < graphItem.changedThreadGroups.length;
@@ -892,6 +889,10 @@ const createCommitGraph = ({
       const threadGroup = graphItem.changedThreadGroups[threadGroupIndex];
       const rowIndex = rows.length;
       const threadGroupLane = lanes.length + threadGroupIndex;
+      const skippedPassthroughLane =
+        shouldShowCommitLaneThroughChangedThreadGroups || threadGroupIndex > 0
+          ? null
+          : lane;
       rows.push({
         id: `${graphItem.id}:thread-group:${threadGroup.key}`,
         commit: graphItem.commit,
@@ -904,15 +905,13 @@ const createCommitGraph = ({
       });
       addPassthroughSegmentsForThreadGroupRow({
         rowIndex,
-        skippedLane: shouldShowCommitLaneThroughChangedThreadGroups
-          ? null
-          : lane,
+        skippedLane: skippedPassthroughLane,
       });
       addSegment({
         fromLane: threadGroupLane,
         toLane: lane,
         fromRowIndex: rowIndex,
-        toRowIndex: commitRowIndex,
+        toRowIndex: rowIndex + 1,
         color: readCommitGraphColor(commitLane.colorIndex),
         isMergeSegment: false,
       });
@@ -1146,7 +1145,7 @@ const readCommitBranchTarget = ({
 
 const BranchTags = ({
   refs,
-  worktrees,
+  worktreesForRow,
   mainWorktreePath,
   localBranches,
   currentBranch,
@@ -1161,7 +1160,7 @@ const BranchTags = ({
   finishBranchPointerDrag,
 }: {
   refs: string[];
-  worktrees: GitWorktree[];
+  worktreesForRow: GitWorktree[];
   mainWorktreePath: string;
   localBranches: string[];
   currentBranch: string | null;
@@ -1191,9 +1190,6 @@ const BranchTags = ({
   }) => void;
   finishBranchPointerDrag: () => void;
 }) => {
-  const worktreesForCommit = worktrees.filter(
-    (worktree) => worktree.head === commitSha,
-  );
   const hasHead = refs.some((ref) => readIsHeadRef(ref));
   const normalRefs = refs.filter((ref) => ref !== "HEAD");
   const orderedRefs = [
@@ -1213,7 +1209,7 @@ const BranchTags = ({
     isLocalBranchOfName[localBranch] = true;
   }
 
-  if (!hasHead && orderedRefs.length === 0 && worktreesForCommit.length === 0) {
+  if (!hasHead && orderedRefs.length === 0 && worktreesForRow.length === 0) {
     return null;
   }
 
@@ -1248,7 +1244,7 @@ const BranchTags = ({
           </Button>
         </Badge>
       ) : null}
-      {worktreesForCommit.map((worktree) => (
+      {worktreesForRow.map((worktree) => (
         <Badge
           asChild
           className="commit-ref commit-ref-head commit-ref-clickable commit-ref-worktree"
@@ -1619,6 +1615,32 @@ const CommitHistoryRow = ({
           gitChangesOfCwd,
         })
       : [row.threadGroup];
+  const rowThreadIdOfId: { [threadId: string]: boolean } = {};
+
+  for (const rowThreadId of row.threadIds) {
+    rowThreadIdOfId[rowThreadId] = true;
+  }
+
+  const worktreesForRow = worktrees.filter((worktree) => {
+    if (worktree.head !== commit.sha) {
+      return false;
+    }
+
+    if (row.threadGroup !== null) {
+      return (
+        row.threadGroup.cwd === worktree.path ||
+        row.threadGroup.cwd.startsWith(`${worktree.path}/`)
+      );
+    }
+
+    for (const worktreeThreadId of worktree.threadIds) {
+      if (rowThreadIdOfId[worktreeThreadId] !== true) {
+        return false;
+      }
+    }
+
+    return true;
+  });
   const isHeadRow =
     row.isCommitRow && commit.refs.some((ref) => readIsHeadRef(ref));
   const actionThreadGroup = row.threadGroup;
@@ -1807,12 +1829,12 @@ const CommitHistoryRow = ({
         onDragLeave={clearBranchPointerDropTarget}
         onDrop={finishBranchPointerDrop}
       >
-        {row.isCommitRow ? (
+        {row.isCommitRow || worktreesForRow.length > 0 ? (
           <BranchTags
-            refs={commit.refs}
-            worktrees={worktrees}
+            refs={row.isCommitRow ? commit.refs : []}
+            worktreesForRow={worktreesForRow}
             mainWorktreePath={mainWorktreePath}
-            localBranches={commit.localBranches}
+            localBranches={row.isCommitRow ? commit.localBranches : []}
             currentBranch={currentBranch}
             defaultBranch={defaultBranch}
             commitSha={commit.sha}
@@ -2981,7 +3003,7 @@ const CommitHistory = ({
                   setShouldShowChatOnly(!shouldShowChatOnly);
                 }}
               >
-                Chats
+                Codex Chats
               </Button>
               <CommitHistoryColumnResizeHandle
                 columnKey="actors"
