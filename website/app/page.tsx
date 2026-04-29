@@ -52,11 +52,6 @@ const HomePage = () => {
             GitHub
           </a>
         </div>
-        <div className="hero__details" aria-label="Product focus">
-          <span>Local-first</span>
-          <span>Git-aware</span>
-          <span>Codex-native</span>
-        </div>
       </section>
     </main>
   );

@@ -165,24 +165,6 @@ h1 {
   background: #f7f8f5;
 }
 
-.hero__details {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 22px;
-  color: #687366;
-  font-size: 0.82rem;
-  font-weight: 750;
-}
-
-.hero__details span {
-  border: 1px solid #dfe5dc;
-  border-radius: 999px;
-  padding: 7px 10px;
-  background: rgba(255, 255, 255, 0.72);
-}
-
 @media (max-width: 640px) {
   .hero {
     width: min(100% - 32px, 920px);
