@@ -1,7 +1,7 @@
 import Image from "next/image";
 import { ClientDownloadLink } from "./client-download-link";
 import { buttonVariants } from "@/components/ui/button";
-import originalLobsterTreeIcon from "../src/assets/original-lobster-tree-icon.png";
+import defaultAppIcon from "../src/assets/default-app-icon.png";
 
 const repoUrl = "https://github.com/glassdevtools/molttree";
 const heroActionButtonClassName = "max-sm:w-full";
@@ -11,14 +11,14 @@ const HomePage = () => {
     <main className="page">
       <nav className="topNav" aria-label="Primary">
         <a className="wordmark" href="/">
-          <Image src={originalLobsterTreeIcon} alt="" aria-hidden="true" />
+          <Image src={defaultAppIcon} alt="" aria-hidden="true" />
           <span className="wordmarkText">MoltTree</span>
         </a>
       </nav>
 
       <section className="hero" aria-labelledby="hero-title">
         <div className="heroArt">
-          <Image src={originalLobsterTreeIcon} alt="MoltTree icon" preload />
+          <Image src={defaultAppIcon} alt="MoltTree app icon" preload />
         </div>
 
         <h1 id="hero-title">MoltTree</h1>

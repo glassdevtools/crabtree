@@ -90,7 +90,7 @@ import {
 import { cn } from "@/lib/utils";
 import cursorAppIconUrl from "./assets/cursor-app-icon.png";
 import finderAppIconUrl from "./assets/finder-app-icon.png";
-import initialLoadingImageUrl from "./assets/initial-loading.png";
+import logoLoaderImageUrl from "./assets/logo-loader.png";
 import {
   readDisplayedThreadGroups,
   readIsGitChangeSummaryEmpty,
@@ -4337,7 +4337,7 @@ const MoltTreeDesktopApp = () => {
               alt=""
               className="initial-loading-image"
               draggable={false}
-              src={initialLoadingImageUrl}
+              src={logoLoaderImageUrl}
             />
             <div className="initial-loading-status">
               <LoaderCircle
@@ -4572,7 +4572,7 @@ const MoltTreeDesktopApp = () => {
                     rel="noreferrer"
                     target="_blank"
                   >
-                    molttree
+                    glassdevtools/molttree
                   </a>
                 </dd>
               </div>
