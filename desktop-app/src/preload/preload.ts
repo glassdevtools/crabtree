@@ -6,8 +6,10 @@ import type {
   GitCommitChangesRequest,
   GitCreateBranchRequest,
   GitDeleteBranchRequest,
+  GitDetachWorktreeBranchRequest,
   GitMergeBranchRequest,
   GitMoveBranchRequest,
+  GitSwitchBranchRequest,
   MoltTreeApi,
   OpenPathRequest,
 } from "../shared/types";
@@ -53,6 +55,17 @@ const api: MoltTreeApi = {
   },
   moveGitBranch: async (gitMoveBranchRequest: GitMoveBranchRequest) => {
     await ipcRenderer.invoke("git:moveBranch", gitMoveBranchRequest);
+  },
+  switchGitBranch: async (gitSwitchBranchRequest: GitSwitchBranchRequest) => {
+    await ipcRenderer.invoke("git:switchBranch", gitSwitchBranchRequest);
+  },
+  detachGitWorktreeBranch: async (
+    gitDetachWorktreeBranchRequest: GitDetachWorktreeBranchRequest,
+  ) => {
+    await ipcRenderer.invoke(
+      "git:detachWorktreeBranch",
+      gitDetachWorktreeBranchRequest,
+    );
   },
   checkoutGitCommit: async (
     gitCheckoutCommitRequest: GitCheckoutCommitRequest,

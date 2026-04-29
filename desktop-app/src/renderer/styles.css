@@ -825,20 +825,27 @@ textarea,
   color: #202124;
 }
 
-.commit-branch-tags-cell-branch-drop-target {
-  outline: 2px solid #0a84ff;
-  outline-offset: -2px;
-  background: #eaf1ff;
-}
-
 .commit-history-row:nth-child(even) {
   background: #ffffff;
 }
 
 /* TODO: AI-PICKED-VALUE: This gray is a subtle hover state that keeps the compact table readable without adding row lines. */
-.commit-history-row:not(.commit-history-row-selected):hover {
+.commit-history-row:not(.commit-history-row-selected):hover,
+.commit-history-row-branch-drop-target:not(.commit-history-row-selected),
+.commit-history-row-branch-drop-target:not(
+    .commit-history-row-selected
+  ):nth-child(even) {
   border-radius: 5px;
   background: #f3f4f6;
+}
+
+.commit-history-row-branch-drop-target {
+  border-radius: 5px;
+}
+
+.commit-branch-tags-cell-branch-drop-target {
+  /* TODO: AI-PICKED-VALUE: This restores the blue branch-drop affordance without replacing the gray row highlight. */
+  box-shadow: inset 0 0 0 2px #0a84ff;
 }
 
 /* TODO: AI-PICKED-VALUE: This blue is intentionally brighter than the branch tag blue so the selected row is obvious without adding a line. */
@@ -872,6 +879,7 @@ textarea,
 }
 
 .commit-branch-tags-cell,
+.commit-code-locations-cell,
 .commit-actors-cell,
 .commit-description-cell,
 .commit-hash-cell,
@@ -884,12 +892,14 @@ textarea,
 }
 
 .commit-branch-tags-cell,
+.commit-code-locations-cell,
 .commit-actors-cell,
 .commit-description-cell {
   overflow: hidden;
 }
 
 .commit-branch-tags-cell,
+.commit-code-locations-cell,
 .commit-actors-cell {
   overflow-x: auto;
   overflow-y: hidden;
@@ -897,11 +907,13 @@ textarea,
 }
 
 .commit-branch-tags-cell::-webkit-scrollbar,
+.commit-code-locations-cell::-webkit-scrollbar,
 .commit-actors-cell::-webkit-scrollbar {
   display: none;
 }
 
 .commit-branch-tags-cell .commit-label-list,
+.commit-code-locations-cell .commit-label-list,
 .commit-actors-cell .commit-label-list {
   min-width: max-content;
   flex: 0 0 auto;
@@ -1080,10 +1092,12 @@ textarea,
 }
 
 .commit-thread-chat-icon {
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
   flex: 0 0 auto;
   overflow: visible;
+  color: #5f6670;
+  opacity: 0.62;
 }
 
 .commit-thread-chat:focus {

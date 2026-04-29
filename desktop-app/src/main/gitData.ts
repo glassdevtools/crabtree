@@ -97,20 +97,37 @@ const readDefaultBranch = async ({ root }: { root: string }) => {
   return originHead;
 };
 
+const readMainWorktreePath = async ({ root }: { root: string }) => {
+  const { stdout } = await runGit({
+    cwd: root,
+    args: ["worktree", "list", "--porcelain"],
+  });
+  const prefix = "worktree ";
+
+  for (const line of stdout.split("\n")) {
+    if (line.startsWith(prefix)) {
+      return line.slice(prefix.length);
+    }
+  }
+
+  throw new Error("Git worktree list did not include a main worktree.");
+};
+
 const readRepoSeedForThread = async ({ thread }: { thread: CodexThread }) => {
   if (thread.cwd.length === 0) {
     return null;
   }
 
-  const root = await readNullableGitText({
+  const threadRoot = await readNullableGitText({
     cwd: thread.cwd,
     args: ["rev-parse", "--show-toplevel"],
   });
 
-  if (root === null) {
+  if (threadRoot === null) {
     return null;
   }
 
+  const root = await readMainWorktreePath({ root: threadRoot });
   const originUrl = await readNullableGitText({
     cwd: root,
     args: ["config", "--get", "remote.origin.url"],
@@ -423,6 +440,8 @@ export const readGitChangesOfCwd = async ({
     .filter((cwd) => cwd.length > 0);
 
   for (const repo of repos) {
+    cwds.push(repo.root);
+
     for (const worktree of repo.worktrees) {
       cwds.push(worktree.path);
     }

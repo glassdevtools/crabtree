@@ -9,6 +9,7 @@ import {
   Settings,
   Trash2,
 } from "lucide-react";
+import { GoDotFill } from "react-icons/go";
 import { LuGitCommitVertical } from "react-icons/lu";
 import { MdOutlineCallSplit } from "react-icons/md";
 import { VscVscode } from "react-icons/vsc";
@@ -386,6 +387,7 @@ const readRepoFolderName = (repo: RepoGraph) => {
 const COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS = {
   graph: 140,
   branchTags: 408,
+  codeLocations: 160,
   actors: 480,
   description: 294,
   commit: 84,
@@ -395,6 +397,7 @@ const COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS = {
 // TODO: AI-PICKED-VALUE: These smaller resize limits keep columns usable while allowing the page to compress much further.
 const COMMIT_HISTORY_MIN_COLUMN_WIDTHS = {
   branchTags: 120,
+  codeLocations: 96,
   actors: 44,
   description: 120,
   commit: 52,
@@ -404,6 +407,7 @@ const COMMIT_HISTORY_MIN_COLUMN_WIDTHS = {
 const COMMIT_HISTORY_MIN_DETAILS_WIDTH =
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.actors +
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.branchTags +
+  COMMIT_HISTORY_MIN_COLUMN_WIDTHS.codeLocations +
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.description +
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.commit +
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.author +
@@ -411,6 +415,7 @@ const COMMIT_HISTORY_MIN_DETAILS_WIDTH =
 
 type CommitHistoryColumnKey =
   | "branchTags"
+  | "codeLocations"
   | "actors"
   | "description"
   | "commit"
@@ -420,6 +425,7 @@ type CommitHistoryColumnKey =
 type CommitHistoryColumnWidths = {
   graph: number;
   branchTags: number;
+  codeLocations: number;
   actors: number;
   description: number;
   commit: number;
@@ -437,6 +443,7 @@ type CommitHistoryColumnResize = {
 
 type BranchPointerDrag = {
   repoRoot: string;
+  sourcePath: string | null;
   branch: string;
   oldSha: string;
   oldShortSha: string;
@@ -445,6 +452,8 @@ type BranchPointerDrag = {
 
 type BranchPointerMove = {
   repoRoot: string;
+  sourcePath: string | null;
+  targetPath: string | null;
   branch: string;
   oldSha: string;
   oldShortSha: string;
@@ -600,7 +609,7 @@ const readCommitGraphWidth = ({ laneCount }: { laneCount: number }) => {
 const readCommitGridTemplateColumns = (
   columnWidths: CommitHistoryColumnWidths,
 ) => {
-  return `${columnWidths.graph}px ${columnWidths.actors}px ${columnWidths.branchTags}px ${columnWidths.description}px ${columnWidths.commit}px ${columnWidths.author}px ${columnWidths.date}px`;
+  return `${columnWidths.graph}px ${columnWidths.actors}px ${columnWidths.branchTags}px ${columnWidths.codeLocations}px ${columnWidths.description}px ${columnWidths.commit}px ${columnWidths.author}px ${columnWidths.date}px`;
 };
 
 const readCommitHistoryTableWidth = (
@@ -609,6 +618,7 @@ const readCommitHistoryTableWidth = (
   return (
     columnWidths.graph +
     columnWidths.branchTags +
+    columnWidths.codeLocations +
     columnWidths.actors +
     columnWidths.description +
     columnWidths.commit +
@@ -629,6 +639,8 @@ const replaceCommitHistoryColumnWidth = ({
   switch (columnKey) {
     case "branchTags":
       return { ...columnWidths, branchTags: width };
+    case "codeLocations":
+      return { ...columnWidths, codeLocations: width };
     case "actors":
       return { ...columnWidths, actors: width };
     case "description":
@@ -706,6 +718,43 @@ const createCommitGraph = ({
     }
   }
 
+  let headSha: string | null = null;
+
+  for (const commit of commits) {
+    if (commit.refs.some((ref) => readIsHeadRef(ref))) {
+      headSha = commit.sha;
+      break;
+    }
+  }
+
+  const displayedThreadIdsOfSha: { [sha: string]: string[] } = {};
+
+  for (const commit of commits) {
+    displayedThreadIdsOfSha[commit.sha] = [];
+  }
+
+  for (const commit of commits) {
+    for (const threadId of commit.threadIds) {
+      const thread = threadOfId[threadId];
+
+      if (thread === undefined) {
+        continue;
+      }
+
+      const displaySha =
+        headSha !== null && !readIsWorktreeCwd({ cwd: thread.cwd, worktrees })
+          ? headSha
+          : commit.sha;
+      const displayedThreadIds = displayedThreadIdsOfSha[displaySha];
+
+      if (displayedThreadIds === undefined) {
+        continue;
+      }
+
+      displayedThreadIds.push(thread.id);
+    }
+  }
+
   const readIsThreadGroupChanged = (threadGroup: ThreadGroup) => {
     const gitChangeSummary = gitChangesOfCwd[threadGroup.cwd];
 
@@ -777,7 +826,8 @@ const createCommitGraph = ({
   };
 
   for (const commit of commits) {
-    const threads = commit.threadIds
+    const commitThreadIds = displayedThreadIdsOfSha[commit.sha] ?? [];
+    const threads = commitThreadIds
       .map((threadId) => threadOfId[threadId])
       .filter((thread): thread is CodexThread => thread !== undefined);
     const threadGroups = readDisplayedThreadGroups({
@@ -1081,6 +1131,38 @@ const readIsLocalBranch = ({
   return false;
 };
 
+const readIsCwdInsidePath = ({ cwd, path }: { cwd: string; path: string }) => {
+  return cwd === path || cwd.startsWith(`${path}/`);
+};
+
+const readBranchPointerRowPath = ({
+  row,
+  repoRoot,
+  worktrees,
+}: {
+  row: CommitGraphRow;
+  repoRoot: string;
+  worktrees: GitWorktree[];
+}) => {
+  if (row.threadGroup === null || row.threadGroup.cwd.length === 0) {
+    return null;
+  }
+
+  for (const worktree of worktrees) {
+    if (
+      readIsCwdInsidePath({ cwd: row.threadGroup.cwd, path: worktree.path })
+    ) {
+      return worktree.path;
+    }
+  }
+
+  if (readIsCwdInsidePath({ cwd: row.threadGroup.cwd, path: repoRoot })) {
+    return repoRoot;
+  }
+
+  return row.threadGroup.cwd;
+};
+
 const readCommitBranchTarget = ({
   cwd,
   groupThreads,
@@ -1145,44 +1227,42 @@ const readCommitBranchTarget = ({
 
 const BranchTags = ({
   refs,
-  worktreesForRow,
-  mainWorktreePath,
   localBranches,
   currentBranch,
   defaultBranch,
   commitSha,
   commitShortSha,
   commitSubject,
+  branchPointerSourcePath,
   isBranchDeleteSafeOfBranch,
   openBranchDeleteModal,
-  openCodePath,
   startBranchPointerDrag,
   finishBranchPointerDrag,
 }: {
   refs: string[];
-  worktreesForRow: GitWorktree[];
-  mainWorktreePath: string;
   localBranches: string[];
   currentBranch: string | null;
   defaultBranch: string | null;
   commitSha: string;
   commitShortSha: string;
   commitSubject: string;
+  branchPointerSourcePath: string | null;
   isBranchDeleteSafeOfBranch: { [branch: string]: boolean };
   openBranchDeleteModal: (
     event: MouseEvent<HTMLButtonElement>,
     branch: string,
     oldSha: string,
   ) => void;
-  openCodePath: (path: string) => Promise<void>;
   startBranchPointerDrag: ({
     event,
+    sourcePath,
     branch,
     oldSha,
     oldShortSha,
     oldSubject,
   }: {
     event: DragEvent<HTMLElement>;
+    sourcePath: string | null;
     branch: string;
     oldSha: string;
     oldShortSha: string;
@@ -1190,7 +1270,6 @@ const BranchTags = ({
   }) => void;
   finishBranchPointerDrag: () => void;
 }) => {
-  const hasHead = refs.some((ref) => readIsHeadRef(ref));
   const normalRefs = refs.filter((ref) => ref !== "HEAD");
   const orderedRefs = [
     ...normalRefs.filter(
@@ -1209,7 +1288,105 @@ const BranchTags = ({
     isLocalBranchOfName[localBranch] = true;
   }
 
-  if (!hasHead && orderedRefs.length === 0 && worktreesForRow.length === 0) {
+  if (orderedRefs.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="commit-label-list">
+      {orderedRefs.map((ref) => {
+        const refName = cleanRefName(ref);
+        const isLocalBranch = isLocalBranchOfName[refName] === true;
+        const isTag = ref.startsWith("tag: ");
+        const isOriginBranch = refName.startsWith("origin/");
+        let refClassName = "commit-ref commit-ref-local";
+        const canDeleteBranch =
+          isLocalBranch &&
+          refName !== currentBranch &&
+          refName !== defaultBranch &&
+          isBranchDeleteSafeOfBranch[refName] === true;
+
+        if (isOriginBranch) {
+          refClassName = "commit-ref commit-ref-origin";
+        }
+
+        if (isTag) {
+          refClassName = "commit-ref commit-ref-tag";
+        }
+
+        return (
+          <Badge
+            className={cn(
+              refClassName,
+              isLocalBranch && "commit-ref-draggable",
+            )}
+            variant="secondary"
+            draggable={isLocalBranch}
+            key={ref}
+            onDoubleClick={(event) => event.stopPropagation()}
+            onContextMenu={(event) => {
+              void copyTextAfterContextMenu({
+                event,
+                text: refName,
+                errorMessage: "Failed to copy branch name.",
+              });
+            }}
+            onDragStart={(event) => {
+              if (!isLocalBranch) {
+                return;
+              }
+
+              startBranchPointerDrag({
+                event,
+                sourcePath: branchPointerSourcePath,
+                branch: refName,
+                oldSha: commitSha,
+                oldShortSha: commitShortSha,
+                oldSubject: commitSubject,
+              });
+            }}
+            onDragEnd={finishBranchPointerDrag}
+          >
+            <span>{refName}</span>
+            {canDeleteBranch ? (
+              <TitleTooltip title={`Delete ${refName}`}>
+                <Button
+                  className="commit-ref-delete"
+                  variant="ghost"
+                  size="icon-xs"
+                  type="button"
+                  draggable={false}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onDoubleClick={(event) => event.stopPropagation()}
+                  onClick={(event) =>
+                    openBranchDeleteModal(event, refName, commitSha)
+                  }
+                >
+                  <Trash2 size={9} />
+                </Button>
+              </TitleTooltip>
+            ) : null}
+          </Badge>
+        );
+      })}
+    </div>
+  );
+};
+
+const CodeLocations = ({
+  refs,
+  worktreesForRow,
+  mainWorktreePath,
+  openCodePath,
+}: {
+  refs: string[];
+  worktreesForRow: GitWorktree[];
+  mainWorktreePath: string;
+  openCodePath: (path: string) => Promise<void>;
+}) => {
+  const hasHead = refs.some((ref) => readIsHeadRef(ref));
+
+  if (!hasHead && worktreesForRow.length === 0) {
     return null;
   }
 
@@ -1279,80 +1456,6 @@ const BranchTags = ({
           </Button>
         </Badge>
       ))}
-      {orderedRefs.map((ref) => {
-        const refName = cleanRefName(ref);
-        const isLocalBranch = isLocalBranchOfName[refName] === true;
-        const isTag = ref.startsWith("tag: ");
-        const isOriginBranch = refName.startsWith("origin/");
-        let refClassName = "commit-ref commit-ref-local";
-        const canDeleteBranch =
-          isLocalBranch &&
-          refName !== currentBranch &&
-          refName !== defaultBranch &&
-          isBranchDeleteSafeOfBranch[refName] === true;
-
-        if (isOriginBranch) {
-          refClassName = "commit-ref commit-ref-origin";
-        }
-
-        if (isTag) {
-          refClassName = "commit-ref commit-ref-tag";
-        }
-
-        return (
-          <Badge
-            className={cn(
-              refClassName,
-              isLocalBranch && "commit-ref-draggable",
-            )}
-            variant="secondary"
-            draggable={isLocalBranch}
-            key={ref}
-            onDoubleClick={(event) => event.stopPropagation()}
-            onContextMenu={(event) => {
-              void copyTextAfterContextMenu({
-                event,
-                text: refName,
-                errorMessage: "Failed to copy branch name.",
-              });
-            }}
-            onDragStart={(event) => {
-              if (!isLocalBranch) {
-                return;
-              }
-
-              startBranchPointerDrag({
-                event,
-                branch: refName,
-                oldSha: commitSha,
-                oldShortSha: commitShortSha,
-                oldSubject: commitSubject,
-              });
-            }}
-            onDragEnd={finishBranchPointerDrag}
-          >
-            <span>{refName}</span>
-            {canDeleteBranch ? (
-              <TitleTooltip title={`Delete ${refName}`}>
-                <Button
-                  className="commit-ref-delete"
-                  variant="ghost"
-                  size="icon-xs"
-                  type="button"
-                  draggable={false}
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onDoubleClick={(event) => event.stopPropagation()}
-                  onClick={(event) =>
-                    openBranchDeleteModal(event, refName, commitSha)
-                  }
-                >
-                  <Trash2 size={9} />
-                </Button>
-              </TitleTooltip>
-            ) : null}
-          </Badge>
-        );
-      })}
     </div>
   );
 };
@@ -1412,14 +1515,20 @@ const ChatRobotTags = ({
                     void openThread(thread.id);
                   }}
                 >
+                  <span className="commit-thread-chat-title">{title}</span>
                   {isThreadGroupWorktree ? (
                     <MdOutlineCallSplit
                       aria-hidden="true"
                       className="commit-thread-chat-icon commit-ref-worktree-icon"
-                      size={10}
+                      size={12}
                     />
-                  ) : null}
-                  <span className="commit-thread-chat-title">{title}</span>
+                  ) : (
+                    <GoDotFill
+                      aria-hidden="true"
+                      className="commit-thread-chat-icon"
+                      size={9}
+                    />
+                  )}
                 </Button>
               );
             })}
@@ -1562,7 +1671,7 @@ const CommitHistoryRow = ({
   isBranchDeleteSafeOfBranch: { [branch: string]: boolean };
   selectRow: () => void;
   updateBranchPointerDropTarget: (event: DragEvent<HTMLDivElement>) => void;
-  clearBranchPointerDropTarget: () => void;
+  clearBranchPointerDropTarget: (event: DragEvent<HTMLDivElement>) => void;
   finishBranchPointerDrop: (event: DragEvent<HTMLDivElement>) => void;
   openRowAfterDoubleClick: () => void;
   openBranchDeleteModal: (
@@ -1590,12 +1699,14 @@ const CommitHistoryRow = ({
   showErrorMessage: (message: string) => void;
   startBranchPointerDrag: ({
     event,
+    sourcePath,
     branch,
     oldSha,
     oldShortSha,
     oldSubject,
   }: {
     event: DragEvent<HTMLElement>;
+    sourcePath: string | null;
     branch: string;
     oldSha: string;
     oldShortSha: string;
@@ -1627,10 +1738,22 @@ const CommitHistoryRow = ({
     }
 
     if (row.threadGroup !== null) {
-      return (
-        row.threadGroup.cwd === worktree.path ||
-        row.threadGroup.cwd.startsWith(`${worktree.path}/`)
-      );
+      if (
+        readIsCwdInsidePath({
+          cwd: row.threadGroup.cwd,
+          path: worktree.path,
+        })
+      ) {
+        return true;
+      }
+
+      for (const thread of row.threadGroup.threads) {
+        if (worktree.threadIds.includes(thread.id)) {
+          return true;
+        }
+      }
+
+      return false;
     }
 
     for (const worktreeThreadId of worktree.threadIds) {
@@ -1641,8 +1764,115 @@ const CommitHistoryRow = ({
 
     return true;
   });
+  const rowWorktreePathOfPath: { [path: string]: boolean } = {};
+  const excludedLocalBranchOfName: { [branch: string]: boolean } = {};
+  const rowLocalBranches: string[] = [];
+  const isRowLocalBranchAddedOfBranch: { [branch: string]: boolean } = {};
+
+  const pushRowLocalBranch = (branch: string) => {
+    if (isRowLocalBranchAddedOfBranch[branch] === true) {
+      return;
+    }
+
+    isRowLocalBranchAddedOfBranch[branch] = true;
+    rowLocalBranches.push(branch);
+  };
+
+  for (const worktree of worktreesForRow) {
+    rowWorktreePathOfPath[worktree.path] = true;
+  }
+
+  for (const worktree of worktrees) {
+    if (
+      worktree.head !== commit.sha ||
+      worktree.branch === null ||
+      rowWorktreePathOfPath[worktree.path] === true
+    ) {
+      continue;
+    }
+
+    excludedLocalBranchOfName[worktree.branch] = true;
+  }
+
+  if (row.threadGroup === null) {
+    for (const commitThreadId of commit.threadIds) {
+      if (rowThreadIdOfId[commitThreadId] === true) {
+        continue;
+      }
+
+      const thread = threadOfId[commitThreadId];
+      const threadBranch = thread?.gitInfo?.branch ?? null;
+
+      if (
+        threadBranch !== null &&
+        readIsLocalBranch({
+          branch: threadBranch,
+          localBranches: commit.localBranches,
+        })
+      ) {
+        excludedLocalBranchOfName[threadBranch] = true;
+      }
+    }
+  }
+
+  if (row.threadGroup === null) {
+    for (const localBranch of commit.localBranches) {
+      if (excludedLocalBranchOfName[localBranch] === true) {
+        continue;
+      }
+
+      pushRowLocalBranch(localBranch);
+    }
+  } else {
+    for (const worktree of worktreesForRow) {
+      if (worktree.branch !== null) {
+        pushRowLocalBranch(worktree.branch);
+      }
+    }
+
+    for (const thread of row.threadGroup.threads) {
+      const threadBranch = thread.gitInfo?.branch ?? null;
+
+      if (
+        threadBranch !== null &&
+        readIsLocalBranch({
+          branch: threadBranch,
+          localBranches: commit.localBranches,
+        })
+      ) {
+        pushRowLocalBranch(threadBranch);
+      }
+    }
+
+    if (
+      currentBranch !== null &&
+      worktreesForRow.length === 0 &&
+      readIsCwdInsidePath({ cwd: row.threadGroup.cwd, path: repoRoot })
+    ) {
+      pushRowLocalBranch(currentBranch);
+    }
+  }
+
+  const rowRefs =
+    row.threadGroup === null
+      ? commit.refs.filter((ref) => {
+          const refName = cleanRefName(ref);
+
+          return (
+            excludedLocalBranchOfName[refName] !== true ||
+            !readIsLocalBranch({
+              branch: refName,
+              localBranches: commit.localBranches,
+            })
+          );
+        })
+      : rowLocalBranches;
+  const rowCurrentBranch =
+    row.threadGroup !== null && row.threadGroup.cwd !== repoRoot
+      ? (rowLocalBranches[0] ?? null)
+      : currentBranch;
   const isHeadRow =
-    row.isCommitRow && commit.refs.some((ref) => readIsHeadRef(ref));
+    row.isCommitRow && rowRefs.some((ref) => readIsHeadRef(ref));
   const actionThreadGroup = row.threadGroup;
   const storedActionChangeSummary =
     actionThreadGroup === null
@@ -1662,8 +1892,8 @@ const CommitHistoryRow = ({
           cwd: actionThreadGroup.cwd,
           groupThreads: actionThreadGroup.threads,
           repoRoot,
-          currentBranch,
-          localBranches: commit.localBranches,
+          currentBranch: rowCurrentBranch,
+          localBranches: rowLocalBranches,
           commitSha: commit.sha,
         });
   const shouldShowActionCommit =
@@ -1671,7 +1901,7 @@ const CommitHistoryRow = ({
     actionThreadGroup.cwd.length > 0 &&
     shouldShowActionChangeCount &&
     actionCommitBranchTarget !== null;
-  const shouldShowBranchCreateActions = commit.localBranches.length === 0;
+  const shouldShowBranchCreateActions = rowLocalBranches.length === 0;
   const actionBranchCreateTarget =
     actionThreadGroup !== null &&
     shouldShowBranchCreateActions &&
@@ -1685,7 +1915,7 @@ const CommitHistoryRow = ({
   const mergeBranch =
     !row.isCommitRow || isHeadRow
       ? null
-      : (commit.localBranches.find(
+      : (rowLocalBranches.find(
           (localBranch) =>
             localBranch !== currentBranch &&
             isBranchMergeableOfBranch[localBranch] === true,
@@ -1711,6 +1941,7 @@ const CommitHistoryRow = ({
   }
 
   if (isBranchPointerDropTarget) {
+    rowClassName = `${rowClassName} commit-history-row-branch-drop-target`;
     branchTagsCellClassName = `${branchTagsCellClassName} commit-branch-tags-cell-branch-drop-target`;
   }
 
@@ -1719,6 +1950,9 @@ const CommitHistoryRow = ({
       className={rowClassName}
       onMouseDown={selectRow}
       onDoubleClick={row.isCommitRow ? openRowAfterDoubleClick : undefined}
+      onDragOver={updateBranchPointerDropTarget}
+      onDragLeave={clearBranchPointerDropTarget}
+      onDrop={finishBranchPointerDrop}
     >
       <div className="commit-graph-cell">
         {shouldShowGraphActions ? (
@@ -1823,28 +2057,35 @@ const CommitHistoryRow = ({
           showErrorMessage={showErrorMessage}
         />
       </div>
-      <div
-        className={branchTagsCellClassName}
-        onDragOver={updateBranchPointerDropTarget}
-        onDragLeave={clearBranchPointerDropTarget}
-        onDrop={finishBranchPointerDrop}
-      >
-        {row.isCommitRow || worktreesForRow.length > 0 ? (
+      <div className={branchTagsCellClassName}>
+        {row.isCommitRow || rowRefs.length > 0 || worktreesForRow.length > 0 ? (
           <BranchTags
-            refs={row.isCommitRow ? commit.refs : []}
-            worktreesForRow={worktreesForRow}
-            mainWorktreePath={mainWorktreePath}
-            localBranches={row.isCommitRow ? commit.localBranches : []}
-            currentBranch={currentBranch}
+            refs={rowRefs}
+            localBranches={rowLocalBranches}
+            currentBranch={rowCurrentBranch}
             defaultBranch={defaultBranch}
             commitSha={commit.sha}
             commitShortSha={commit.shortSha}
             commitSubject={commit.subject}
+            branchPointerSourcePath={readBranchPointerRowPath({
+              row,
+              repoRoot,
+              worktrees,
+            })}
             isBranchDeleteSafeOfBranch={isBranchDeleteSafeOfBranch}
             openBranchDeleteModal={openBranchDeleteModal}
-            openCodePath={openCodePath}
             startBranchPointerDrag={startBranchPointerDrag}
             finishBranchPointerDrag={finishBranchPointerDrag}
+          />
+        ) : null}
+      </div>
+      <div className="commit-code-locations-cell">
+        {row.isCommitRow || worktreesForRow.length > 0 ? (
+          <CodeLocations
+            refs={rowRefs}
+            worktreesForRow={worktreesForRow}
+            mainWorktreePath={mainWorktreePath}
+            openCodePath={openCodePath}
           />
         ) : null}
       </div>
@@ -2355,6 +2596,17 @@ const CommitHistory = ({
 
     return false;
   };
+  const readBranchPointerTarget = ({ row }: { row: CommitGraphRow }) => {
+    return {
+      sha: row.commit.sha,
+      shortSha: row.commit.shortSha,
+      subject:
+        row.threadGroup === null
+          ? row.commit.subject
+          : `Uncommitted changes in ${row.threadGroup.cwd}`,
+      path: readBranchPointerRowPath({ row, repoRoot, worktrees }),
+    };
+  };
   const visibleGraph = useMemo(() => {
     if (!shouldShowChatOnly) {
       return graph;
@@ -2524,12 +2776,14 @@ const CommitHistory = ({
   };
   const startBranchPointerDrag = ({
     event,
+    sourcePath,
     branch,
     oldSha,
     oldShortSha,
     oldSubject,
   }: {
     event: DragEvent<HTMLElement>;
+    sourcePath: string | null;
     branch: string;
     oldSha: string;
     oldShortSha: string;
@@ -2537,6 +2791,7 @@ const CommitHistory = ({
   }) => {
     const nextBranchPointerDrag = {
       repoRoot,
+      sourcePath,
       branch,
       oldSha,
       oldShortSha,
@@ -2562,13 +2817,18 @@ const CommitHistory = ({
   }) => {
     const activeBranchPointerDrag = branchPointerDragRef.current;
 
-    if (activeBranchPointerDrag === null || !row.isCommitRow) {
+    if (activeBranchPointerDrag === null) {
       return;
     }
 
+    const branchPointerTarget = readBranchPointerTarget({ row });
+    const isSameBranchPointerPlace =
+      activeBranchPointerDrag.oldSha === branchPointerTarget.sha &&
+      activeBranchPointerDrag.sourcePath === branchPointerTarget.path;
+
     if (
       activeBranchPointerDrag.repoRoot !== repoRoot ||
-      activeBranchPointerDrag.oldSha === row.commit.sha
+      isSameBranchPointerPlace
     ) {
       setBranchPointerDropTargetRowId(null);
       return;
@@ -2579,7 +2839,7 @@ const CommitHistory = ({
       readIsBranchMoveSafe({
         branch: activeBranchPointerDrag.branch,
         oldSha: activeBranchPointerDrag.oldSha,
-        newSha: row.commit.sha,
+        newSha: branchPointerTarget.sha,
       })
     ) {
       event.dataTransfer.dropEffect = "move";
@@ -2590,7 +2850,16 @@ const CommitHistory = ({
     event.dataTransfer.dropEffect = "none";
     setBranchPointerDropTargetRowId(null);
   };
-  const clearBranchPointerDropTarget = () => {
+  const clearBranchPointerDropTarget = (event: DragEvent<HTMLDivElement>) => {
+    const relatedTarget = event.relatedTarget;
+
+    if (
+      relatedTarget instanceof Node &&
+      event.currentTarget.contains(relatedTarget)
+    ) {
+      return;
+    }
+
     setBranchPointerDropTargetRowId(null);
   };
   const finishBranchPointerDrop = async ({
@@ -2603,14 +2872,19 @@ const CommitHistory = ({
     event.preventDefault();
     const activeBranchPointerDrag = branchPointerDragRef.current;
 
-    if (activeBranchPointerDrag === null || !row.isCommitRow) {
+    if (activeBranchPointerDrag === null) {
       finishBranchPointerDrag();
       return;
     }
 
+    const branchPointerTarget = readBranchPointerTarget({ row });
+    const isSameBranchPointerPlace =
+      activeBranchPointerDrag.oldSha === branchPointerTarget.sha &&
+      activeBranchPointerDrag.sourcePath === branchPointerTarget.path;
+
     if (
       activeBranchPointerDrag.repoRoot !== repoRoot ||
-      activeBranchPointerDrag.oldSha === row.commit.sha
+      isSameBranchPointerPlace
     ) {
       finishBranchPointerDrag();
       return;
@@ -2620,7 +2894,7 @@ const CommitHistory = ({
       !readIsBranchMoveSafe({
         branch: activeBranchPointerDrag.branch,
         oldSha: activeBranchPointerDrag.oldSha,
-        newSha: row.commit.sha,
+        newSha: branchPointerTarget.sha,
       })
     ) {
       showErrorMessage(
@@ -2632,13 +2906,15 @@ const CommitHistory = ({
 
     setBranchPointerMove({
       repoRoot,
+      sourcePath: activeBranchPointerDrag.sourcePath,
+      targetPath: branchPointerTarget.path,
       branch: activeBranchPointerDrag.branch,
       oldSha: activeBranchPointerDrag.oldSha,
       oldShortSha: activeBranchPointerDrag.oldShortSha,
       oldSubject: activeBranchPointerDrag.oldSubject,
-      newSha: row.commit.sha,
-      newShortSha: row.commit.shortSha,
-      newSubject: row.commit.subject,
+      newSha: branchPointerTarget.sha,
+      newShortSha: branchPointerTarget.shortSha,
+      newSubject: branchPointerTarget.subject,
       willMoveCheckedOutWorktree: readIsBranchCheckedOut(
         activeBranchPointerDrag.branch,
       ),
@@ -2901,27 +3177,52 @@ const CommitHistory = ({
     const request = branchPointerMove;
     closeBranchPointerMoveModal();
 
+    const isDetachingBranchFromWorktree =
+      request.sourcePath !== null &&
+      request.targetPath === null &&
+      request.oldSha === request.newSha;
+
     await runUserGitUpdateThenRefreshDashboard(
-      "Moving branch",
-      "Moved branch.",
+      request.targetPath === null ? "Moving branch" : "Switching branch",
+      request.targetPath === null ? "Moved branch." : "Switched branch.",
       async () => {
         try {
-          await window.molttree.moveGitBranch({
-            repoRoot: request.repoRoot,
-            branch: request.branch,
-            oldSha: request.oldSha,
-            newSha: request.newSha,
-          });
-          rememberBranchTagChange({
-            repoRoot: request.repoRoot,
-            branch: request.branch,
-            oldSha: request.oldSha,
-            newSha: request.newSha,
-          });
+          if (isDetachingBranchFromWorktree && request.sourcePath !== null) {
+            await window.molttree.detachGitWorktreeBranch({
+              repoRoot: request.repoRoot,
+              path: request.sourcePath,
+              branch: request.branch,
+              sha: request.oldSha,
+            });
+          } else if (request.targetPath === null) {
+            await window.molttree.moveGitBranch({
+              repoRoot: request.repoRoot,
+              branch: request.branch,
+              oldSha: request.oldSha,
+              newSha: request.newSha,
+            });
+          } else {
+            await window.molttree.switchGitBranch({
+              repoRoot: request.repoRoot,
+              path: request.targetPath,
+              branch: request.branch,
+              oldSha: request.oldSha,
+              newSha: request.newSha,
+            });
+          }
+
+          if (request.oldSha !== request.newSha) {
+            rememberBranchTagChange({
+              repoRoot: request.repoRoot,
+              branch: request.branch,
+              oldSha: request.oldSha,
+              newSha: request.newSha,
+            });
+          }
         } catch (error) {
           return error instanceof Error
             ? error.message
-            : "Failed to move branch.";
+            : "Failed to update branch.";
         }
 
         return null;
@@ -2957,6 +3258,12 @@ const CommitHistory = ({
       },
     );
   };
+
+  const isBranchPointerMoveDetachingWorktree =
+    branchPointerMove !== null &&
+    branchPointerMove.sourcePath !== null &&
+    branchPointerMove.targetPath === null &&
+    branchPointerMove.oldSha === branchPointerMove.newSha;
 
   return (
     <>
@@ -3016,6 +3323,15 @@ const CommitHistory = ({
               <span>Branch Tags</span>
               <CommitHistoryColumnResizeHandle
                 columnKey="branchTags"
+                startColumnResize={startColumnResize}
+                updateColumnResize={updateColumnResize}
+                finishColumnResize={finishColumnResize}
+              />
+            </div>
+            <div className="commit-history-header-cell">
+              <span>Code locations</span>
+              <CommitHistoryColumnResizeHandle
+                columnKey="codeLocations"
                 startColumnResize={startColumnResize}
                 updateColumnResize={updateColumnResize}
                 finishColumnResize={finishColumnResize}
@@ -3083,7 +3399,7 @@ const CommitHistory = ({
                 threadOfId={threadOfId}
                 gitChangesOfCwd={gitChangesOfCwd}
                 isBranchPointerDropTarget={
-                  row.isCommitRow && branchPointerDropTargetRowId === row.id
+                  branchPointerDropTargetRowId === row.id
                 }
                 isSelected={selectedCommitRowId === row.id}
                 isBranchMergeableOfBranch={isBranchMergeableOfBranch}
@@ -3354,7 +3670,11 @@ const CommitHistory = ({
               <AlertDialogHeader>
                 <AlertDialogTitle>Move Branch Pointer</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Move the {branchPointerMove.branch} branch pointer?
+                  {isBranchPointerMoveDetachingWorktree
+                    ? `Move the ${branchPointerMove.branch} branch tag back to this commit?`
+                    : branchPointerMove.targetPath === null
+                      ? `Move the ${branchPointerMove.branch} branch pointer?`
+                      : `Switch this worktree to ${branchPointerMove.branch}?`}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <ul className="branch-tag-change-list">
@@ -3374,9 +3694,13 @@ const CommitHistory = ({
                 </li>
               </ul>
               <AlertDialogDescription>
-                {branchPointerMove.willMoveCheckedOutWorktree
-                  ? "This branch is checked out in a clean worktree, so Git will reset that worktree to the target commit."
-                  : "No worktree files will be changed."}
+                {isBranchPointerMoveDetachingWorktree
+                  ? "Git will detach that worktree and keep its changes."
+                  : branchPointerMove.targetPath !== null
+                    ? "Git will keep the existing changes if they can apply on that branch."
+                    : branchPointerMove.willMoveCheckedOutWorktree
+                      ? "This branch is checked out in a clean worktree, so Git will reset that worktree to the target commit."
+                      : "No worktree files will be changed."}
               </AlertDialogDescription>
               <AlertDialogFooter>
                 <AlertDialogCancel onClick={closeBranchPointerMoveModal}>
