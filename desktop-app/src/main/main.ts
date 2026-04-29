@@ -68,6 +68,40 @@ const startAutoUpdates = () => {
   autoUpdater.checkForUpdatesAndNotify();
 };
 
+const readExternalUrl = (value: unknown) => {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error("url must be a non-empty string.");
+  }
+
+  const url = new URL(value);
+
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new Error("url must use http or https.");
+  }
+
+  return url.toString();
+};
+
+const openExternalUrlInBrowser = async (value: unknown) => {
+  await shell.openExternal(readExternalUrl(value));
+};
+
+const openExternalUrlInBrowserFromWindow = (value: unknown) => {
+  void openExternalUrlInBrowser(value).catch((error) => {
+    console.error("Failed to open external URL.", error);
+  });
+};
+
+const readIsInternalAppUrl = (url: string) => {
+  if (process.env.ELECTRON_RENDERER_URL) {
+    return (
+      new URL(url).origin === new URL(process.env.ELECTRON_RENDERER_URL).origin
+    );
+  }
+
+  return url.startsWith("file:");
+};
+
 const createMainWindow = () => {
   const mainWindow = new BrowserWindow({
     width: MAIN_WINDOW_WIDTH,
@@ -82,6 +116,19 @@ const createMainWindow = () => {
       nodeIntegration: false,
       sandbox: false,
     },
+  });
+
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    openExternalUrlInBrowserFromWindow(url);
+    return { action: "deny" };
+  });
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    if (readIsInternalAppUrl(url)) {
+      return;
+    }
+
+    event.preventDefault();
+    openExternalUrlInBrowserFromWindow(url);
   });
 
   if (process.env.ELECTRON_RENDERER_URL) {
@@ -487,6 +534,10 @@ ipcMain.handle("codex:openNewThread", async () => {
   await shell.openExternal("codex://new");
 });
 
+ipcMain.handle("external:openUrl", async (_event, value: unknown) => {
+  await openExternalUrlInBrowser(value);
+});
+
 ipcMain.handle("path:open", async (_event, value: unknown) => {
   const openPathRequest = readOpenPathRequest(value);
 
@@ -599,7 +650,7 @@ ipcMain.handle("git:previewMerge", async (_event, value: unknown) => {
 ipcMain.handle("git:mergeBranch", async (_event, value: unknown) => {
   const gitMergeBranchRequest = readGitMergeBranchRequest(value);
 
-  await mergeGitBranch(gitMergeBranchRequest);
+  return await mergeGitBranch(gitMergeBranchRequest);
 });
 
 app.whenReady().then(() => {

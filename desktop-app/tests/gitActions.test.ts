@@ -972,7 +972,7 @@ test("previews and merges a branch into HEAD", async () => {
       message: "feature",
     });
     await runGit({ cwd: repoRoot, args: ["switch", "main"] });
-    await commitRepoFile({
+    const oldSha = await commitRepoFile({
       repoRoot,
       filePath: "main.txt",
       content: "main\n",
@@ -985,7 +985,18 @@ test("previews and merges a branch into HEAD", async () => {
     assert.equal(preview.removed, 0);
     assert.equal(preview.conflictCount, 0);
 
-    await mergeGitBranch({ repoRoot, branch: "feature" });
+    const branchTagChange = await mergeGitBranch({
+      repoRoot,
+      branch: "feature",
+    });
+    const newSha = await readSha({ cwd: repoRoot, ref: "HEAD" });
+
+    assert.deepEqual(branchTagChange, {
+      repoRoot,
+      branch: "main",
+      oldSha,
+      newSha,
+    });
 
     assert.equal(
       await runGit({
@@ -998,6 +1009,39 @@ test("previews and merges a branch into HEAD", async () => {
       await readRepoFile({ repoRoot, filePath: "feature.txt" }),
       "feature\n",
     );
+  });
+});
+
+test("returns the current branch tag change for fast-forward merges", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    const oldSha = await commitRepoFile({
+      repoRoot,
+      filePath: "base.txt",
+      content: "base\n",
+      message: "base",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
+    const newSha = await commitRepoFile({
+      repoRoot,
+      filePath: "feature.txt",
+      content: "feature\n",
+      message: "feature",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "main"] });
+
+    const branchTagChange = await mergeGitBranch({
+      repoRoot,
+      branch: "feature",
+    });
+
+    assert.deepEqual(branchTagChange, {
+      repoRoot,
+      branch: "main",
+      oldSha,
+      newSha,
+    });
+    assert.equal(await readSha({ cwd: repoRoot, ref: "HEAD" }), newSha);
+    assert.equal(await readSha({ cwd: repoRoot, ref: "main" }), newSha);
   });
 });
 
@@ -1031,6 +1075,33 @@ test("rejects merge when the branch is already in HEAD", async () => {
     await assert.rejects(async () => {
       await mergeGitBranch({ repoRoot, branch: "feature" });
     }, /already in HEAD/);
+  });
+});
+
+test("rejects merge when HEAD is detached", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    const oldSha = await commitRepoFile({
+      repoRoot,
+      filePath: "base.txt",
+      content: "base\n",
+      message: "base",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
+    await commitRepoFile({
+      repoRoot,
+      filePath: "feature.txt",
+      content: "feature\n",
+      message: "feature",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "--detach", oldSha] });
+
+    await assert.rejects(async () => {
+      await previewGitMerge({ repoRoot, branch: "feature" });
+    }, /HEAD must be on a branch/);
+    await assert.rejects(async () => {
+      await mergeGitBranch({ repoRoot, branch: "feature" });
+    }, /HEAD must be on a branch/);
+    assert.equal(await readSha({ cwd: repoRoot, ref: "HEAD" }), oldSha);
   });
 });
 

@@ -121,6 +121,7 @@ const COMMIT_HISTORY_HEADER_HEIGHT = 22;
 const DASHBOARD_REFRESH_INTERVAL_MS = 1000;
 const TOAST_POSITION = "bottom-center";
 const USER_GIT_UPDATE_TOAST_ID = "user-git-update";
+const GITHUB_REPOSITORY_URL = packageInfo.repository.url.replace(/\.git$/, "");
 const MERGE_BRANCH_BUTTON_TITLE = "Merge this into HEAD";
 const COMMIT_GRAPH_ACTION_ICON_SIZE = 10;
 // TODO: AI-PICKED-VALUE: A light stroke makes the graph actions read as buttons instead of status markers.
@@ -1979,7 +1980,7 @@ const CommitHistoryRow = ({
         }
       : null;
   const mergeBranch =
-    !row.isCommitRow || isHeadRow
+    currentBranch === null || !row.isCommitRow || isHeadRow
       ? null
       : (rowLocalBranches.find(
           (localBranch) =>
@@ -3254,10 +3255,11 @@ const CommitHistory = ({
       "Merged branch.",
       async () => {
         try {
-          await window.molttree.mergeGitBranch({
+          const branchTagChange = await window.molttree.mergeGitBranch({
             repoRoot,
             branch: request.branch,
           });
+          rememberBranchTagChange(branchTagChange);
         } catch (error) {
           return error instanceof Error
             ? error.message
@@ -3889,7 +3891,19 @@ const RepoSection = ({
   );
 };
 
-export const App = () => {
+const ElectronApiMissingScreen = () => (
+  <main className="electron-api-missing-screen">
+    <Card className="electron-api-missing-card">
+      <h1>MoltTree desktop UI</h1>
+      <p>
+        Open this app from Electron. The website runs at{" "}
+        <a href="http://127.0.0.1:5174/">127.0.0.1:5174</a>.
+      </p>
+    </Card>
+  </main>
+);
+
+const MoltTreeDesktopApp = () => {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(
     null,
   );
@@ -4201,9 +4215,8 @@ export const App = () => {
     }
 
     toast.loading("Updating", {
-      className: "git-update-toast-shell",
       closeButton: false,
-      description: userGitUpdateDescription,
+      description: `${userGitUpdateDescription}...`,
       dismissible: false,
       duration: Infinity,
       id: USER_GIT_UPDATE_TOAST_ID,
@@ -4544,6 +4557,25 @@ export const App = () => {
                 <dt>Version:</dt>
                 <dd>v{packageInfo.version}</dd>
               </div>
+              <div className="about-modal-field">
+                <dt>GitHub:</dt>
+                <dd>
+                  <a
+                    className="about-modal-link"
+                    href={GITHUB_REPOSITORY_URL}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      void window.molttree.openExternalUrl(
+                        GITHUB_REPOSITORY_URL,
+                      );
+                    }}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    molttree
+                  </a>
+                </dd>
+              </div>
             </dl>
           </DialogContent>
         </Dialog>
@@ -4594,4 +4626,12 @@ export const App = () => {
       <Toaster />
     </TooltipProvider>
   );
+};
+
+export const App = () => {
+  if (window.molttree === undefined) {
+    return <ElectronApiMissingScreen />;
+  }
+
+  return <MoltTreeDesktopApp />;
 };

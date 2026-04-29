@@ -7,6 +7,7 @@ import type {
   GitDeleteBranchRequest,
   GitDetachWorktreeBranchRequest,
   GitMergeBranchRequest,
+  GitMergeBranchResult,
   GitMergePreview,
   GitMoveBranchRequest,
   GitSwitchBranchRequest,
@@ -427,7 +428,7 @@ const parseGitChangeLineCounts = (stdout: string) => {
 
 // -------------------------- Merge actions ---------------
 
-const readGitMergeBranchRef = async ({
+const readGitMergeBranchTarget = async ({
   repoRoot,
   branch,
 }: GitMergeBranchRequest) => {
@@ -437,6 +438,15 @@ const readGitMergeBranchRef = async ({
   });
 
   const branchRef = `refs/heads/${branch}`;
+  const currentBranch = await readGitTextForPath({
+    path: repoRoot,
+    args: ["branch", "--show-current"],
+  });
+
+  if (currentBranch.length === 0) {
+    throw new Error("HEAD must be on a branch before merging.");
+  }
+
   const branchHead = await readGitTextForPath({
     path: repoRoot,
     args: ["rev-parse", "--verify", `${branchRef}^{commit}`],
@@ -457,13 +467,13 @@ const readGitMergeBranchRef = async ({
     throw new Error("This branch is already in HEAD.");
   }
 
-  return branchRef;
+  return { branchRef, currentBranch, oldSha: headSha };
 };
 
 export const previewGitMerge = async (
   gitMergeBranchRequest: GitMergeBranchRequest,
 ) => {
-  const branchRef = await readGitMergeBranchRef(gitMergeBranchRequest);
+  const { branchRef } = await readGitMergeBranchTarget(gitMergeBranchRequest);
   const diffText = await readGitTextForPath({
     path: gitMergeBranchRequest.repoRoot,
     args: ["diff", "--numstat", `HEAD...${branchRef}`, "--", "."],
@@ -495,8 +505,10 @@ export const previewGitMerge = async (
 
 export const mergeGitBranch = async (
   gitMergeBranchRequest: GitMergeBranchRequest,
-) => {
-  const branchRef = await readGitMergeBranchRef(gitMergeBranchRequest);
+): Promise<GitMergeBranchResult> => {
+  const { branchRef, currentBranch, oldSha } = await readGitMergeBranchTarget(
+    gitMergeBranchRequest,
+  );
   const statusText = await readGitTextForPath({
     path: gitMergeBranchRequest.repoRoot,
     args: ["status", "--porcelain"],
@@ -510,6 +522,18 @@ export const mergeGitBranch = async (
     path: gitMergeBranchRequest.repoRoot,
     args: ["merge", "--no-edit", branchRef],
   });
+
+  const newSha = await readGitTextForPath({
+    path: gitMergeBranchRequest.repoRoot,
+    args: ["rev-parse", "--verify", "HEAD"],
+  });
+
+  return {
+    repoRoot: gitMergeBranchRequest.repoRoot,
+    branch: currentBranch,
+    oldSha,
+    newSha,
+  };
 };
 
 // -------------------------- Branch pointer and checkout actions ---------------

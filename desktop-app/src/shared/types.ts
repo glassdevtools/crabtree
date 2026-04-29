@@ -109,6 +109,8 @@ export type GitBranchTagChange = {
   newSha: string | null;
 };
 
+export type GitMergeBranchResult = GitBranchTagChange;
+
 export type PathLauncher = "vscode" | "cursor" | "finder";
 
 export type OpenPathRequest = {
@@ -157,6 +159,7 @@ export type MoltTreeApi = {
   ) => () => void;
   openCodexThread: (threadId: string) => Promise<void>;
   openNewCodexThread: () => Promise<void>;
+  openExternalUrl: (url: string) => Promise<void>;
   openPath: (openPathRequest: OpenPathRequest) => Promise<void>;
   copyText: (text: string) => Promise<void>;
   stageGitChanges: (path: string) => Promise<void>;
@@ -191,5 +194,5 @@ export type MoltTreeApi = {
   ) => Promise<GitMergePreview>;
   mergeGitBranch: (
     gitMergeBranchRequest: GitMergeBranchRequest,
-  ) => Promise<void>;
+  ) => Promise<GitMergeBranchResult>;
 };

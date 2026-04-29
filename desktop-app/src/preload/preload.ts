@@ -43,6 +43,9 @@ const api: MoltTreeApi = {
   openNewCodexThread: async () => {
     await ipcRenderer.invoke("codex:openNewThread");
   },
+  openExternalUrl: async (url: string) => {
+    await ipcRenderer.invoke("external:openUrl", url);
+  },
   openPath: async (openPathRequest: OpenPathRequest) => {
     await ipcRenderer.invoke("path:open", openPathRequest);
   },
@@ -102,7 +105,7 @@ const api: MoltTreeApi = {
     return await ipcRenderer.invoke("git:previewMerge", gitMergeBranchRequest);
   },
   mergeGitBranch: async (gitMergeBranchRequest: GitMergeBranchRequest) => {
-    await ipcRenderer.invoke("git:mergeBranch", gitMergeBranchRequest);
+    return await ipcRenderer.invoke("git:mergeBranch", gitMergeBranchRequest);
   },
 };
 
