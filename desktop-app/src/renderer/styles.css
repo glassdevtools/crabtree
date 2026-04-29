@@ -363,6 +363,12 @@ textarea,
   color: var(--error-text);
 }
 
+[data-sonner-toast][data-type="error"] [data-title],
+[data-sonner-toast][data-type="error"] [data-description] {
+  cursor: text;
+  user-select: text;
+}
+
 [data-sonner-toaster]
   [data-sonner-toast][data-styled="true"]:hover
   [data-close-button]:hover {
@@ -840,6 +846,7 @@ textarea,
 
 /* TODO: AI-PICKED-VALUE: This gray is a subtle hover state that keeps the compact table readable without adding row lines. */
 .commit-history-row:not(.commit-history-row-selected):hover {
+  border-radius: 5px;
   background: #f3f4f6;
 }
 
@@ -931,7 +938,7 @@ textarea,
   overflow: hidden;
 }
 
-/* TODO: AI-PICKED-VALUE: These dividers make cwd groups read as separate actor clusters without adding row height. */
+/* TODO: AI-PICKED-VALUE: This matches the visible space between plain and highlighted chat groups. */
 .commit-thread-group-list {
   gap: 4px;
 }
@@ -976,10 +983,12 @@ textarea,
   color: #343a43;
 }
 
+.commit-ref-clickable,
 .commit-ref-worktree {
   cursor: pointer;
 }
 
+.commit-ref-clickable:hover,
 .commit-ref-worktree:hover {
   background: #e3e7ed;
 }
@@ -1042,40 +1051,13 @@ textarea,
   min-height: 18px;
   display: inline-flex;
   align-items: center;
-  /* TODO: AI-PICKED-VALUE: This gives neighboring chat items inside a cwd group a little more breathing room without widening group breaks. */
-  gap: 3px;
+  gap: 0;
   min-width: max-content;
   flex: 0 0 auto;
   padding: 0;
   border: 0;
   border-radius: 5px;
   box-sizing: border-box;
-}
-
-.commit-thread-group-highlighted {
-  background: transparent;
-}
-
-.commit-thread-group-highlighted::before {
-  content: "";
-  position: absolute;
-  inset: -1px -2px;
-  z-index: 0;
-  border-radius: inherit;
-  background: #fff8df;
-  background-clip: content-box;
-  pointer-events: none;
-}
-
-.commit-thread-group-highlighted .commit-thread-group-background-tooltip {
-  inset: -1px -2px;
-}
-
-.commit-thread-group-background-tooltip {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  border-radius: inherit;
 }
 
 .commit-thread-group .commit-thread-chat,
@@ -1134,8 +1116,8 @@ textarea,
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  margin: 0 2px;
-  padding: 0 2px;
+  margin: 0;
+  padding: 0 4px;
   border: 0;
   background: transparent;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -1146,7 +1128,7 @@ textarea,
 
 .commit-thread-group .commit-branch-create-action,
 .commit-thread-group .commit-thread-commit-action {
-  margin: 0 2px;
+  margin: 0;
 }
 
 .commit-thread-change-added {

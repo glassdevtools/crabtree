@@ -184,6 +184,7 @@ const readWorktrees = async ({
     args: ["worktree", "list", "--porcelain"],
   });
   const worktrees: GitWorktree[] = [];
+  let mainWorktreePath: string | null = null;
   let path: string | null = null;
   let head: string | null = null;
   let branch: string | null = null;
@@ -197,6 +198,7 @@ const readWorktrees = async ({
 
     if (!didReadMainWorktree) {
       didReadMainWorktree = true;
+      mainWorktreePath = path;
       return;
     }
 
@@ -243,7 +245,11 @@ const readWorktrees = async ({
 
   pushWorktree();
 
-  return worktrees;
+  if (mainWorktreePath === null) {
+    throw new Error("Git worktree list did not include a main worktree.");
+  }
+
+  return { mainWorktreePath, worktrees };
 };
 
 const splitRefs = (value: string) => {
@@ -659,7 +665,7 @@ export const readRepoGraphs = async ({
     );
 
     try {
-      const worktrees = await readWorktrees({
+      const { mainWorktreePath, worktrees } = await readWorktrees({
         repoSeed,
         threads: threadsInRepo,
       });
@@ -677,6 +683,7 @@ export const readRepoGraphs = async ({
       repos.push({
         key: repoSeed.key,
         root: repoSeed.root,
+        mainWorktreePath,
         originUrl: repoSeed.originUrl,
         currentBranch: repoSeed.currentBranch,
         defaultBranch: repoSeed.defaultBranch,

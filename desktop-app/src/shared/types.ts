@@ -111,6 +111,7 @@ export type GitCommit = {
 export type RepoGraph = {
   key: string;
   root: string;
+  mainWorktreePath: string;
   originUrl: string | null;
   currentBranch: string | null;
   defaultBranch: string | null;
