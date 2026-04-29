@@ -370,12 +370,10 @@ const copyTextAfterContextMenu = async ({
 
   try {
     await window.molttree.copyText(text);
-    toast(
-      <div className="copy-toast">
-        <div>{`Copied ${copiedLabel}!`}</div>
-        <div className="copy-toast-value">{text}</div>
-      </div>,
-    );
+    toast.success(`Copied ${copiedLabel}!`, {
+      description: <div className="copy-toast-value">{text}</div>,
+      duration: SUCCESS_MESSAGE_TIMEOUT_MS,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : errorMessage;
     toast.error("Error", {
@@ -1267,6 +1265,8 @@ const ChatRobotTags = ({
   openBranchCreateModal,
   openCommitMessageModal,
   openChangeSummaryModal,
+  showSuccessMessage,
+  showErrorMessage,
 }: {
   threadGroups: ThreadGroup[];
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
@@ -1288,13 +1288,22 @@ const ChatRobotTags = ({
     event: MouseEvent<HTMLButtonElement>,
     changeSummaryTarget: ChangeSummaryTarget,
   ) => void;
+  showSuccessMessage: (message: string) => void;
+  showErrorMessage: (message: string) => void;
 }) => {
   if (threadGroups.length === 0) {
     return null;
   }
 
   const openThread = async (threadId: string) => {
-    await window.molttree.openCodexThread(threadId);
+    try {
+      await window.molttree.openCodexThread(threadId);
+      showSuccessMessage("Opened chat.");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to open chat.";
+      showErrorMessage(message);
+    }
   };
 
   return (
@@ -1571,6 +1580,8 @@ const CommitHistoryRow = ({
   openChangeSummaryModal,
   openBranchMergeModal,
   openCodePath,
+  showSuccessMessage,
+  showErrorMessage,
   startBranchPointerDrag,
   finishBranchPointerDrag,
 }: {
@@ -1613,6 +1624,8 @@ const CommitHistoryRow = ({
     branch: string,
   ) => void;
   openCodePath: (path: string) => Promise<void>;
+  showSuccessMessage: (message: string) => void;
+  showErrorMessage: (message: string) => void;
   startBranchPointerDrag: ({
     event,
     branch,
@@ -1729,6 +1742,8 @@ const CommitHistoryRow = ({
           openBranchCreateModal={openBranchCreateModal}
           openCommitMessageModal={openCommitMessageModal}
           openChangeSummaryModal={openChangeSummaryModal}
+          showSuccessMessage={showSuccessMessage}
+          showErrorMessage={showErrorMessage}
         />
       </div>
       <div
@@ -1853,6 +1868,7 @@ const CommitHistory = ({
   refreshDashboard,
   refreshDashboardAfterUserGitUpdate,
   runUserGitUpdate,
+  showSuccessMessage,
   showErrorMessage,
   rememberBranchTagChange,
 }: {
@@ -1872,6 +1888,7 @@ const CommitHistory = ({
     userGitUpdateDescription: string,
     updateGit: (finishUserGitUpdate: () => void) => Promise<void>,
   ) => Promise<void>;
+  showSuccessMessage: (message: string) => void;
   showErrorMessage: (message: string) => void;
   rememberBranchTagChange: (branchTagChange: GitBranchTagChange) => void;
 }) => {
@@ -2527,17 +2544,23 @@ const CommitHistory = ({
   // User Git updates keep the visible update status open until the dashboard read has shown the new Git state.
   const runUserGitUpdateThenRefreshDashboard = async (
     userGitUpdateDescription: string,
+    successMessage: string,
     updateGit: () => Promise<string | null>,
   ) => {
     await runUserGitUpdate(
       userGitUpdateDescription,
       async (finishUserGitUpdate) => {
         const gitErrorMessage = await updateGit();
-
-        await refreshDashboardAfterUserGitUpdate(finishUserGitUpdate);
+        const didRefreshDashboard =
+          await refreshDashboardAfterUserGitUpdate(finishUserGitUpdate);
 
         if (gitErrorMessage !== null) {
           showErrorMessage(gitErrorMessage);
+          return;
+        }
+
+        if (didRefreshDashboard) {
+          showSuccessMessage(successMessage);
         }
       },
     );
@@ -2606,21 +2629,25 @@ const CommitHistory = ({
 
     const request = branchCreateTarget;
 
-    await runUserGitUpdateThenRefreshDashboard("Creating branch", async () => {
-      try {
-        await window.molttree.createGitBranch({
-          path: request.path,
-          branch: branchName.trim(),
-        });
-        closeBranchCreateModal();
-      } catch (error) {
-        return error instanceof Error
-          ? error.message
-          : "Failed to create branch.";
-      }
+    await runUserGitUpdateThenRefreshDashboard(
+      "Creating branch",
+      "Created branch.",
+      async () => {
+        try {
+          await window.molttree.createGitBranch({
+            path: request.path,
+            branch: branchName.trim(),
+          });
+          closeBranchCreateModal();
+        } catch (error) {
+          return error instanceof Error
+            ? error.message
+            : "Failed to create branch.";
+        }
 
-      return null;
-    });
+        return null;
+      },
+    );
   };
   const submitCommitMessage = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -2633,6 +2660,7 @@ const CommitHistory = ({
 
     await runUserGitUpdateThenRefreshDashboard(
       "Committing changes",
+      "Committed changes.",
       async () => {
         try {
           const newSha = await window.molttree.commitAllGitChanges({
@@ -2678,31 +2706,36 @@ const CommitHistory = ({
     const branchDeleteTarget = branchToDelete;
     closeBranchDeleteModal();
 
-    await runUserGitUpdateThenRefreshDashboard("Deleting branch", async () => {
-      try {
-        await window.molttree.deleteGitBranch({
-          repoRoot,
-          branch: branchDeleteTarget.branch,
-          oldSha: branchDeleteTarget.oldSha,
-        });
-        rememberBranchTagChange({
-          repoRoot,
-          branch: branchDeleteTarget.branch,
-          oldSha: branchDeleteTarget.oldSha,
-          newSha: null,
-        });
-      } catch (error) {
-        return error instanceof Error
-          ? error.message
-          : "Failed to delete branch.";
-      }
+    await runUserGitUpdateThenRefreshDashboard(
+      "Deleting branch",
+      "Deleted branch.",
+      async () => {
+        try {
+          await window.molttree.deleteGitBranch({
+            repoRoot,
+            branch: branchDeleteTarget.branch,
+            oldSha: branchDeleteTarget.oldSha,
+          });
+          rememberBranchTagChange({
+            repoRoot,
+            branch: branchDeleteTarget.branch,
+            oldSha: branchDeleteTarget.oldSha,
+            newSha: null,
+          });
+        } catch (error) {
+          return error instanceof Error
+            ? error.message
+            : "Failed to delete branch.";
+        }
 
-      return null;
-    });
+        return null;
+      },
+    );
   };
   const openCodePath = async (path: string) => {
     try {
       await window.molttree.openPath({ path, launcher: pathLauncher });
+      showSuccessMessage("Opened path.");
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to open path.";
@@ -2722,6 +2755,7 @@ const CommitHistory = ({
         branch,
       });
       setBranchMergeConfirmation({ branch, preview });
+      showSuccessMessage("Loaded merge preview.");
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to preview merge.";
@@ -2738,20 +2772,24 @@ const CommitHistory = ({
     const request = branchMergeConfirmation;
     closeBranchMergeConfirmationModal();
 
-    await runUserGitUpdateThenRefreshDashboard("Merging branch", async () => {
-      try {
-        await window.molttree.mergeGitBranch({
-          repoRoot,
-          branch: request.branch,
-        });
-      } catch (error) {
-        return error instanceof Error
-          ? error.message
-          : "Failed to start merge.";
-      }
+    await runUserGitUpdateThenRefreshDashboard(
+      "Merging branch",
+      "Merged branch.",
+      async () => {
+        try {
+          await window.molttree.mergeGitBranch({
+            repoRoot,
+            branch: request.branch,
+          });
+        } catch (error) {
+          return error instanceof Error
+            ? error.message
+            : "Failed to start merge.";
+        }
 
-      return null;
-    });
+        return null;
+      },
+    );
   };
   const moveBranchPointer = async () => {
     if (branchPointerMove === null) {
@@ -2761,28 +2799,32 @@ const CommitHistory = ({
     const request = branchPointerMove;
     closeBranchPointerMoveModal();
 
-    await runUserGitUpdateThenRefreshDashboard("Moving branch", async () => {
-      try {
-        await window.molttree.moveGitBranch({
-          repoRoot: request.repoRoot,
-          branch: request.branch,
-          oldSha: request.oldSha,
-          newSha: request.newSha,
-        });
-        rememberBranchTagChange({
-          repoRoot: request.repoRoot,
-          branch: request.branch,
-          oldSha: request.oldSha,
-          newSha: request.newSha,
-        });
-      } catch (error) {
-        return error instanceof Error
-          ? error.message
-          : "Failed to move branch.";
-      }
+    await runUserGitUpdateThenRefreshDashboard(
+      "Moving branch",
+      "Moved branch.",
+      async () => {
+        try {
+          await window.molttree.moveGitBranch({
+            repoRoot: request.repoRoot,
+            branch: request.branch,
+            oldSha: request.oldSha,
+            newSha: request.newSha,
+          });
+          rememberBranchTagChange({
+            repoRoot: request.repoRoot,
+            branch: request.branch,
+            oldSha: request.oldSha,
+            newSha: request.newSha,
+          });
+        } catch (error) {
+          return error instanceof Error
+            ? error.message
+            : "Failed to move branch.";
+        }
 
-      return null;
-    });
+        return null;
+      },
+    );
   };
   const openRowAfterDoubleClick = async (row: CommitGraphRow) => {
     const gitCheckoutDescription =
@@ -2792,6 +2834,7 @@ const CommitHistory = ({
 
     await runUserGitUpdateThenRefreshDashboard(
       gitCheckoutDescription,
+      "Switched HEAD.",
       async () => {
         try {
           await window.molttree.checkoutGitCommit({
@@ -2850,11 +2893,16 @@ const CommitHistory = ({
                 size="xs"
                 type="button"
                 aria-pressed={shouldShowChatOnly}
-                onClick={() =>
-                  setShouldShowChatOnly((currentShouldShowChatOnly) => {
-                    return !currentShouldShowChatOnly;
-                  })
-                }
+                onClick={() => {
+                  const nextShouldShowChatOnly = !shouldShowChatOnly;
+
+                  setShouldShowChatOnly(nextShouldShowChatOnly);
+                  showSuccessMessage(
+                    nextShouldShowChatOnly
+                      ? "Showing chats only."
+                      : "Showing all commits.",
+                  );
+                }}
               >
                 Chats
               </Button>
@@ -2955,6 +3003,8 @@ const CommitHistory = ({
                 openChangeSummaryModal={openChangeSummaryModal}
                 openBranchMergeModal={openBranchMergeModal}
                 openCodePath={openCodePath}
+                showSuccessMessage={showSuccessMessage}
+                showErrorMessage={showErrorMessage}
                 startBranchPointerDrag={startBranchPointerDrag}
                 finishBranchPointerDrag={finishBranchPointerDrag}
               />
@@ -3254,6 +3304,7 @@ const RepoSection = ({
   refreshDashboard,
   refreshDashboardAfterUserGitUpdate,
   runUserGitUpdate,
+  showSuccessMessage,
   showErrorMessage,
   rememberBranchTagChange,
 }: {
@@ -3270,6 +3321,7 @@ const RepoSection = ({
     userGitUpdateDescription: string,
     updateGit: (finishUserGitUpdate: () => void) => Promise<void>,
   ) => Promise<void>;
+  showSuccessMessage: (message: string) => void;
   showErrorMessage: (message: string) => void;
   rememberBranchTagChange: (branchTagChange: GitBranchTagChange) => void;
 }) => {
@@ -3292,6 +3344,7 @@ const RepoSection = ({
             refreshDashboardAfterUserGitUpdate
           }
           runUserGitUpdate={runUserGitUpdate}
+          showSuccessMessage={showSuccessMessage}
           showErrorMessage={showErrorMessage}
           rememberBranchTagChange={rememberBranchTagChange}
         />
@@ -3311,8 +3364,6 @@ export const App = () => {
   const [dashboardErrorMessage, setDashboardErrorMessage] = useState<
     string | null
   >(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [branchTagChanges, setBranchTagChanges] = useState<
     GitBranchTagChange[]
   >([]);
@@ -3360,7 +3411,6 @@ export const App = () => {
     );
 
     if (nextDashboardData.gitErrors.length > 0) {
-      setSuccessMessage(null);
       setDashboardErrorMessage(nextDashboardData.gitErrors.join("\n"));
     } else {
       setDashboardErrorMessage(null);
@@ -3400,7 +3450,6 @@ export const App = () => {
               error instanceof Error
                 ? error.message
                 : "Failed to read dashboard data.";
-            setSuccessMessage(null);
             setDashboardErrorMessage(message);
           }
         } while (shouldRefreshDashboardAgainRef.current);
@@ -3429,7 +3478,6 @@ export const App = () => {
           error instanceof Error
             ? error.message
             : "Failed to read dashboard data.";
-        setSuccessMessage(null);
         setDashboardErrorMessage(message);
         return false;
       } finally {
@@ -3438,9 +3486,16 @@ export const App = () => {
     },
     [applyDashboardData],
   );
+  const showSuccessMessage = useCallback((message: string) => {
+    toast.success(message, {
+      duration: SUCCESS_MESSAGE_TIMEOUT_MS,
+    });
+  }, []);
   const showErrorMessage = useCallback((message: string) => {
-    setSuccessMessage(null);
-    setErrorMessage(message);
+    toast.error("Error", {
+      description: message,
+      duration: Infinity,
+    });
   }, []);
   // User Git updates use this wrapper so the loading toast is tied to action results, not background polling.
   const runUserGitUpdate = useCallback(
@@ -3569,36 +3624,6 @@ export const App = () => {
   }, [dashboardErrorMessage]);
 
   useEffect(() => {
-    if (errorMessage === null) {
-      return;
-    }
-
-    toast.error("Error", {
-      description: errorMessage,
-      duration: Infinity,
-    });
-    setErrorMessage(null);
-  }, [errorMessage]);
-
-  useEffect(() => {
-    if (successMessage === null) {
-      return;
-    }
-
-    toast.success(successMessage, {
-      duration: SUCCESS_MESSAGE_TIMEOUT_MS,
-    });
-
-    const successMessageTimeoutId = window.setTimeout(() => {
-      setSuccessMessage(null);
-    }, SUCCESS_MESSAGE_TIMEOUT_MS);
-
-    return () => {
-      window.clearTimeout(successMessageTimeoutId);
-    };
-  }, [successMessage]);
-
-  useEffect(() => {
     if (userGitUpdateCount === 0) {
       toast.dismiss(USER_GIT_UPDATE_TOAST_ID);
       return;
@@ -3703,7 +3728,7 @@ export const App = () => {
         }
 
         if (didRefreshDashboard && gitSuccessMessage !== null) {
-          setSuccessMessage(gitSuccessMessage);
+          showSuccessMessage(gitSuccessMessage);
         }
       },
     );
@@ -3754,17 +3779,23 @@ export const App = () => {
         path: selectedRepo.root,
         launcher: pathLauncher,
       });
+      showSuccessMessage("Opened repo.");
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to open repo.";
       showErrorMessage(message);
     }
   };
+  const changeSelectedRepoRoot = (repoRoot: string) => {
+    setSelectedRepoRoot(repoRoot);
+    showSuccessMessage("Selected repo.");
+  };
   const changePathLauncher = (value: string) => {
     const nextPathLauncher = readPathLauncher(value);
 
     if (nextPathLauncher !== null) {
       setPathLauncher(nextPathLauncher);
+      showSuccessMessage("Path opener updated.");
     }
   };
   const selectedRepoBranchTagChanges =
@@ -3777,7 +3808,7 @@ export const App = () => {
         <div className="repo-picker">
           <Select
             value={selectedRepo?.root ?? ""}
-            onValueChange={setSelectedRepoRoot}
+            onValueChange={changeSelectedRepoRoot}
           >
             <SelectTrigger
               className="repo-picker-select"
@@ -3983,6 +4014,7 @@ export const App = () => {
                   refreshDashboardAfterUserGitUpdate
                 }
                 runUserGitUpdate={runUserGitUpdate}
+                showSuccessMessage={showSuccessMessage}
                 showErrorMessage={showErrorMessage}
                 rememberBranchTagChange={rememberBranchTagChange}
               />
