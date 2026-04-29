@@ -121,7 +121,7 @@ const COMMIT_HISTORY_HEADER_HEIGHT = 22;
 const DASHBOARD_REFRESH_INTERVAL_MS = 1000;
 // TODO: AI-PICKED-VALUE: One second is long enough for success confirmations that do not need manual dismissal.
 const SUCCESS_MESSAGE_TIMEOUT_MS = 1000;
-const TOAST_POSITION = "top-center";
+const TOAST_POSITION = "bottom-center";
 const USER_GIT_UPDATE_TOAST_ID = "user-git-update";
 const MERGE_BRANCH_BUTTON_TITLE = "Merge this into HEAD";
 const COMMIT_GRAPH_ACTION_ICON_SIZE = 10;
@@ -533,6 +533,7 @@ type CommitGraphRow = {
   threadIds: string[];
   threadGroup: ThreadGroup | null;
   isCommitRow: boolean;
+  shouldShowHeadDot: boolean;
   lane: number;
   color: string;
   rowIndex: number;
@@ -965,6 +966,7 @@ const createCommitGraph = ({
         threadIds: threadGroup.threads.map((thread) => thread.id),
         threadGroup,
         isCommitRow: false,
+        shouldShowHeadDot: false,
         lane: threadGroupLane,
         color: COMMIT_GRAPH_CWD_CHANGE_COLOR,
         rowIndex,
@@ -994,6 +996,9 @@ const createCommitGraph = ({
       threadIds: graphItem.threadIds,
       threadGroup: null,
       isCommitRow: true,
+      shouldShowHeadDot: graphItem.commit.refs.some((ref) =>
+        readIsHeadRef(ref),
+      ),
       lane,
       color: readCommitGraphColor(commitLane.colorIndex),
       rowIndex,
@@ -1620,8 +1625,6 @@ const CommitGraphSvg = ({
       {graph.rows.map((row) => {
         const centerX = readCommitGraphX(row.lane);
         const centerY = readCommitGraphY(row.rowIndex);
-        const isHeadRow =
-          row.isCommitRow && row.commit.refs.some((ref) => readIsHeadRef(ref));
 
         return (
           <g key={row.id}>
@@ -1629,13 +1632,13 @@ const CommitGraphSvg = ({
               cx={centerX}
               cy={centerY}
               r={
-                isHeadRow
+                row.shouldShowHeadDot
                   ? COMMIT_GRAPH_HEAD_DOT_RADIUS
                   : COMMIT_GRAPH_DOT_RADIUS
               }
               fill={row.color}
             />
-            {isHeadRow ? (
+            {row.shouldShowHeadDot ? (
               <circle
                 cx={centerX}
                 cy={centerY}
@@ -1938,8 +1941,7 @@ const CommitHistoryRow = ({
     row.threadGroup !== null && !isMainWorktreeThreadGroupRow
       ? (rowLocalBranches[0] ?? null)
       : currentBranch;
-  const isHeadRow =
-    row.isCommitRow && rowRefs.some((ref) => readIsHeadRef(ref));
+  const isHeadRow = row.shouldShowHeadDot;
   const actionThreadGroup = row.threadGroup;
   const storedActionChangeSummary =
     actionThreadGroup === null
@@ -2739,9 +2741,28 @@ const CommitHistory = ({
 
     return null;
   }, [mainWorktreePath, visibleGraph.rows, worktrees]);
+  const visibleGraphWithHeadDot = useMemo(() => {
+    const rows = visibleGraph.rows.map((row) => {
+      const shouldShowHeadDot =
+        mainWorktreeHeadOwnerRowId === null
+          ? row.shouldShowHeadDot
+          : row.id === mainWorktreeHeadOwnerRowId;
+
+      if (row.shouldShowHeadDot === shouldShowHeadDot) {
+        return row;
+      }
+
+      return { ...row, shouldShowHeadDot };
+    });
+
+    return {
+      ...visibleGraph,
+      rows,
+    };
+  }, [mainWorktreeHeadOwnerRowId, visibleGraph]);
 
   const graphMinimumWidth = readCommitGraphWidth({
-    laneCount: visibleGraph.laneCount,
+    laneCount: visibleGraphWithHeadDot.laneCount,
   });
   const visibleColumnWidths: CommitHistoryColumnWidths = {
     ...columnWidths,
@@ -3466,8 +3487,11 @@ const CommitHistory = ({
           }}
         >
           <div className="commit-history-body">
-            <CommitGraphSvg graph={visibleGraph} graphWidth={graphWidth} />
-            {visibleGraph.rows.map((row) => (
+            <CommitGraphSvg
+              graph={visibleGraphWithHeadDot}
+              graphWidth={graphWidth}
+            />
+            {visibleGraphWithHeadDot.rows.map((row) => (
               <CommitHistoryRow
                 key={row.id}
                 row={row}
