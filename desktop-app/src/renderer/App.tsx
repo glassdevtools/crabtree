@@ -1383,6 +1383,13 @@ const ChatRobotTags = ({
                       size={10}
                     />
                   ) : null}
+                  {isThreadActive ? (
+                    <LoaderCircle
+                      aria-hidden="true"
+                      className="commit-thread-chat-loading-icon"
+                      size={10}
+                    />
+                  ) : null}
                   <span className="commit-thread-chat-title">{title}</span>
                 </Button>
               );
@@ -3467,6 +3474,38 @@ export const App = () => {
     },
     [applyDashboardData],
   );
+  useEffect(() => {
+    return window.molttree.watchCodexThreadStatus((codexThreadStatusChange) => {
+      setDashboardData((currentDashboardData) => {
+        if (currentDashboardData === null) {
+          return currentDashboardData;
+        }
+
+        let didUpdateThread = false;
+        const threads = currentDashboardData.threads.map((thread) => {
+          if (thread.id !== codexThreadStatusChange.threadId) {
+            return thread;
+          }
+
+          didUpdateThread = true;
+
+          return {
+            ...thread,
+            status: codexThreadStatusChange.status,
+          };
+        });
+
+        if (!didUpdateThread) {
+          return currentDashboardData;
+        }
+
+        return {
+          ...currentDashboardData,
+          threads,
+        };
+      });
+    });
+  }, []);
   const showSuccessMessage = useCallback((message: string) => {
     toast.success(message, {
       duration: SUCCESS_MESSAGE_TIMEOUT_MS,

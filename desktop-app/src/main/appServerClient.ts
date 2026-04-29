@@ -6,6 +6,11 @@ type PendingRequest = {
   reject: (reason: Error) => void;
 };
 
+export type AppServerNotification = {
+  method: string;
+  params: unknown;
+};
+
 export type AppServerClient = {
   request: ({
     method,
@@ -30,8 +35,15 @@ const makeError = (message: string) => {
   return new Error(message);
 };
 
-export const createAppServerClient = async () => {
+export const createAppServerClient = async ({
+  onNotification,
+  onClose,
+}: {
+  onNotification: (notification: AppServerNotification) => void;
+  onClose: () => void;
+}) => {
   let nextRequestId = 1;
+  let didClose = false;
   const pendingRequestOfId: { [id: number]: PendingRequest } = {};
   const appServerProcess = spawn(CODEX_BINARY_PATH, ["app-server"], {
     stdio: ["pipe", "pipe", "pipe"],
@@ -52,6 +64,15 @@ export const createAppServerClient = async () => {
       delete pendingRequestOfId[id];
     }
   };
+  const finishClose = (message: string) => {
+    if (didClose) {
+      return;
+    }
+
+    didClose = true;
+    rejectPendingRequests(message);
+    onClose();
+  };
 
   lineReader.on("line", (line) => {
     let message: unknown;
@@ -62,7 +83,15 @@ export const createAppServerClient = async () => {
       return;
     }
 
-    if (!isObject(message) || typeof message.id !== "number") {
+    if (!isObject(message)) {
+      return;
+    }
+
+    if (typeof message.id !== "number") {
+      if (typeof message.method === "string") {
+        onNotification({ method: message.method, params: message.params });
+      }
+
       return;
     }
 
@@ -82,15 +111,21 @@ export const createAppServerClient = async () => {
     pendingRequest.resolve(message.result);
   });
 
+  appServerProcess.stderr.on("data", () => {});
+
   appServerProcess.on("exit", () => {
-    rejectPendingRequests("Codex app-server exited.");
+    finishClose("Codex app-server exited.");
   });
 
   appServerProcess.on("error", (error) => {
-    rejectPendingRequests(error.message);
+    finishClose(error.message);
   });
 
   const request = ({ method, params }: { method: string; params: unknown }) => {
+    if (didClose) {
+      return Promise.reject(makeError("Codex app-server exited."));
+    }
+
     const id = nextRequestId;
     nextRequestId += 1;
 

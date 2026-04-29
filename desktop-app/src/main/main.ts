@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type {
+  CodexThreadStatusChange,
   GitBranchTagChange,
   GitCheckoutCommitRequest,
   GitCommitChangesRequest,
@@ -14,6 +15,9 @@ import type {
   OpenPathRequest,
   PathLauncher,
 } from "../shared/types";
+import type { AppServerClient } from "./appServerClient";
+import { createAppServerClient } from "./appServerClient";
+import { convertThreadStatus } from "./codexThreads";
 import { readDashboardData } from "./dashboard";
 import {
   checkoutGitCommit,
@@ -35,6 +39,10 @@ const MAIN_WINDOW_WIDTH = 1320;
 const MAIN_WINDOW_HEIGHT = 860;
 const MAIN_WINDOW_MIN_WIDTH = 980;
 const MAIN_WINDOW_MIN_HEIGHT = 640;
+// The Codex app-server process stays warm so refreshes and status notifications do not pay the startup cost each time.
+let appServerClient: AppServerClient | null = null;
+let appServerClientPromise: Promise<AppServerClient> | null = null;
+let appServerClientVersion = 0;
 let dashboardReadPromise: ReturnType<typeof readDashboardData> | null = null;
 let shouldReadDashboardAgain = false;
 
@@ -89,11 +97,15 @@ const readDashboardDataWithoutOverlap = async () => {
 
   const currentDashboardReadPromise = (async () => {
     shouldReadDashboardAgain = false;
-    let dashboardData = await readDashboardData();
+    let dashboardData = await readDashboardData({
+      appServerClient: await readAppServerClient(),
+    });
 
     while (shouldReadDashboardAgain) {
       shouldReadDashboardAgain = false;
-      dashboardData = await readDashboardData();
+      dashboardData = await readDashboardData({
+        appServerClient: await readAppServerClient(),
+      });
     }
 
     return dashboardData;
@@ -112,6 +124,75 @@ const readDashboardDataWithoutOverlap = async () => {
 
 const isObject = (value: unknown): value is { [key: string]: unknown } => {
   return typeof value === "object" && value !== null;
+};
+
+const readAppServerClient = async () => {
+  if (appServerClient !== null) {
+    return appServerClient;
+  }
+
+  if (appServerClientPromise === null) {
+    appServerClientVersion += 1;
+    const appServerClientVersionForProcess = appServerClientVersion;
+
+    appServerClientPromise = createAppServerClient({
+      onNotification: (notification) => {
+        switch (notification.method) {
+          case "thread/status/changed": {
+            const value = notification.params;
+
+            if (
+              !isObject(value) ||
+              typeof value.threadId !== "string" ||
+              value.threadId.length === 0
+            ) {
+              return;
+            }
+
+            const codexThreadStatusChange: CodexThreadStatusChange = {
+              threadId: value.threadId,
+              status: convertThreadStatus(value.status),
+            };
+
+            for (const browserWindow of BrowserWindow.getAllWindows()) {
+              browserWindow.webContents.send(
+                "codex:threadStatusChanged",
+                codexThreadStatusChange,
+              );
+            }
+
+            return;
+          }
+        }
+      },
+      onClose: () => {
+        if (appServerClientVersion !== appServerClientVersionForProcess) {
+          return;
+        }
+
+        appServerClient = null;
+        appServerClientPromise = null;
+      },
+    });
+  }
+
+  const currentAppServerClientPromise = appServerClientPromise;
+
+  try {
+    const nextAppServerClient = await currentAppServerClientPromise;
+
+    if (appServerClientPromise === currentAppServerClientPromise) {
+      appServerClient = nextAppServerClient;
+    }
+
+    return nextAppServerClient;
+  } catch (error) {
+    if (appServerClientPromise === currentAppServerClientPromise) {
+      appServerClientPromise = null;
+    }
+
+    throw error;
+  }
 };
 
 const readGitCommitChangesRequest = (value: unknown) => {
@@ -450,6 +531,16 @@ app.whenReady().then(() => {
       createMainWindow();
     }
   });
+});
+
+app.on("before-quit", () => {
+  const currentAppServerClient = appServerClient;
+  appServerClient = null;
+  appServerClientPromise = null;
+
+  if (currentAppServerClient !== null) {
+    currentAppServerClient.close();
+  }
 });
 
 app.on("window-all-closed", () => {

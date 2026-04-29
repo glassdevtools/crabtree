@@ -10,6 +10,7 @@
   },
   "include": [
     "tests/**/*.ts",
+    "src/main/codexThreads.ts",
     "src/main/gitActions.ts",
     "src/main/gitData.ts",
     "src/renderer/threadGroups.ts",

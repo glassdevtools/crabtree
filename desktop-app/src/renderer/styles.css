@@ -1113,6 +1113,13 @@ textarea,
   overflow: visible;
 }
 
+.commit-thread-chat-loading-icon {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  animation: initial-loading-spin 900ms linear infinite;
+}
+
 .commit-thread-chat:focus {
   outline: none;
 }
