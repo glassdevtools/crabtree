@@ -8,7 +8,6 @@ import {
   LoaderCircle,
   Settings,
   Trash2,
-  User,
 } from "lucide-react";
 import { LuGitCommitVertical } from "react-icons/lu";
 import { MdOutlineCallSplit } from "react-icons/md";
@@ -103,16 +102,14 @@ const COMMIT_GRAPH_LANE_WIDTH = 14;
 const COMMIT_GRAPH_PADDING_LEFT = 16;
 const COMMIT_GRAPH_MIN_WIDTH = 96;
 const COMMIT_GRAPH_DOT_RADIUS = 4;
-// TODO: AI-PICKED-VALUE: This small center dot makes the HEAD commit distinct without hiding the commit color.
-const COMMIT_GRAPH_HEAD_CENTER_DOT_RADIUS = 1.75;
+// TODO: AI-PICKED-VALUE: This slightly larger outer dot makes the HEAD commit distinct without adding another icon.
+const COMMIT_GRAPH_HEAD_DOT_RADIUS = 4.75;
+// TODO: AI-PICKED-VALUE: This center dot makes the HEAD commit distinct without hiding the commit color.
+const COMMIT_GRAPH_HEAD_CENTER_DOT_RADIUS = 2.25;
 // TODO: AI-PICKED-VALUE: This keeps graph lines readable in compact rows while making them less heavy.
 const COMMIT_GRAPH_SEGMENT_STROKE_WIDTH = 2.25;
 // TODO: AI-PICKED-VALUE: This neutral gray makes changed cwd rows read as working-tree state instead of Git history.
 const COMMIT_GRAPH_CWD_CHANGE_COLOR = "#8b929c";
-// TODO: AI-PICKED-VALUE: The HEAD icon is large enough to read in compact rows without taking over the graph column.
-const COMMIT_GRAPH_USER_ICON_SIZE = 12;
-// TODO: AI-PICKED-VALUE: This stroke weight keeps the HEAD icon visibly bolder than the graph lines.
-const COMMIT_GRAPH_USER_ICON_STROKE_WIDTH = 2.25;
 const COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO = 0;
 const COMMIT_HISTORY_HEADER_HEIGHT = 22;
 // Dashboard reads touch Codex and Git, so automatic refreshes share the manual refresh path and never overlap.
@@ -123,8 +120,6 @@ const SUCCESS_MESSAGE_TIMEOUT_MS = 4000;
 const TOAST_POSITION = "top-center";
 const USER_GIT_UPDATE_TOAST_ID = "user-git-update";
 const MERGE_BRANCH_BUTTON_TITLE = "Merge this into HEAD";
-const MOVE_BRANCH_POINTER_ENABLED_MESSAGE = "Move branch pointer";
-const WORKING_TREE_CLEAN_ERROR_PREFIX = "Working tree must be clean before";
 const COMMIT_GRAPH_COLORS = [
   "#c53a13",
   "#0a84ff",
@@ -246,7 +241,6 @@ const readBranchTagChangeActionText = (
         message:
           "Are you sure you want to push branch tag changes for this repo?",
         buttonText: "Push",
-        enabledMessage: "Push branches",
         loadingDescription: "Pushing branch tags",
         successMessage: "Branch tag changes pushed.",
       };
@@ -256,7 +250,6 @@ const readBranchTagChangeActionText = (
         message:
           "Are you sure you want to pull branch tag changes from origin for this repo?",
         buttonText: "Pull",
-        enabledMessage: "Pull branches",
         loadingDescription: "Pulling branch tags",
         successMessage: "Branch tag changes pulled.",
       };
@@ -266,29 +259,10 @@ const readBranchTagChangeActionText = (
         message:
           "Are you sure you want to revert branch tag changes for this repo to match origin?",
         buttonText: "Revert",
-        enabledMessage: "Revert branches",
         loadingDescription: "Reverting branch tags",
         successMessage: "Branch tag changes reverted.",
       };
   }
-};
-
-const readResolveChangesOnHeadMessage = (enabledMessage: string) => {
-  return `${enabledMessage} (resolve changes on HEAD first)`;
-};
-
-const readUserGitUpdateErrorMessage = ({
-  message,
-  enabledMessage,
-}: {
-  message: string;
-  enabledMessage: string;
-}) => {
-  if (message.startsWith(WORKING_TREE_CLEAN_ERROR_PREFIX)) {
-    return readResolveChangesOnHeadMessage(enabledMessage);
-  }
-
-  return message;
 };
 
 const TitleTooltip = ({
@@ -411,8 +385,8 @@ const readRepoFolderName = (repo: RepoGraph) => {
 // TODO: AI-PICKED-VALUE: These column widths match the current table layout closely enough while making drag resizing concrete.
 const COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS = {
   graph: 140,
-  branchTags: 272,
-  actors: 240,
+  branchTags: 408,
+  actors: 480,
   description: 294,
   commit: 84,
   author: 150,
@@ -519,7 +493,6 @@ type BranchTagChangeActionText = {
   title: string;
   message: string;
   buttonText: string;
-  enabledMessage: string;
   loadingDescription: string;
   successMessage: string;
 };
@@ -1527,7 +1500,11 @@ const CommitGraphSvg = ({
             <circle
               cx={centerX}
               cy={centerY}
-              r={COMMIT_GRAPH_DOT_RADIUS}
+              r={
+                isHeadRow
+                  ? COMMIT_GRAPH_HEAD_DOT_RADIUS
+                  : COMMIT_GRAPH_DOT_RADIUS
+              }
               fill={row.color}
             />
             {isHeadRow ? (
@@ -1695,9 +1672,8 @@ const CommitHistoryRow = ({
   let rowClassName = "commit-history-row";
 
   if (mergeBranch !== null && isHeadClean === false) {
-    mergeDisabledReason = readResolveChangesOnHeadMessage(
-      MERGE_BRANCH_BUTTON_TITLE,
-    );
+    mergeDisabledReason =
+      "Current HEAD working tree must be clean before merging.";
   }
 
   const shouldShowGraphThreadActions =
@@ -1770,7 +1746,7 @@ const CommitHistoryRow = ({
                     </Button>
                   </TitleTooltip>
                 ) : actionBranchCreateTarget === null ? null : (
-                  <TitleTooltip title="Add branch here">
+                  <TitleTooltip title="Add branch tag here">
                     <Button
                       className="commit-branch-create-action"
                       variant="ghost"
@@ -1787,17 +1763,6 @@ const CommitHistoryRow = ({
                   </TitleTooltip>
                 )}
               </div>
-            ) : null}
-            {isHeadRow ? (
-              <TitleTooltip title="You">
-                <span className="commit-graph-head-icon" aria-label="You">
-                  <User
-                    aria-hidden="true"
-                    size={COMMIT_GRAPH_USER_ICON_SIZE}
-                    strokeWidth={COMMIT_GRAPH_USER_ICON_STROKE_WIDTH}
-                  />
-                </span>
-              </TitleTooltip>
             ) : null}
             {mergeBranch === null ? null : (
               <TitleTooltip
@@ -2662,7 +2627,6 @@ const CommitHistory = ({
   const runUserGitUpdateThenRefreshDashboard = async (
     userGitUpdateDescription: string,
     successMessage: string,
-    enabledMessage: string,
     updateGit: () => Promise<string | null>,
   ) => {
     await runUserGitUpdate(
@@ -2673,12 +2637,7 @@ const CommitHistory = ({
           await refreshDashboardAfterUserGitUpdate(finishUserGitUpdate);
 
         if (gitErrorMessage !== null) {
-          showErrorMessage(
-            readUserGitUpdateErrorMessage({
-              message: gitErrorMessage,
-              enabledMessage,
-            }),
-          );
+          showErrorMessage(gitErrorMessage);
           return;
         }
 
@@ -2755,7 +2714,6 @@ const CommitHistory = ({
     await runUserGitUpdateThenRefreshDashboard(
       "Creating branch",
       "Created branch.",
-      "Create branch",
       async () => {
         try {
           await window.molttree.createGitBranch({
@@ -2785,7 +2743,6 @@ const CommitHistory = ({
     await runUserGitUpdateThenRefreshDashboard(
       "Committing changes",
       "Committed changes.",
-      "Commit changes",
       async () => {
         try {
           const newSha = await window.molttree.commitAllGitChanges({
@@ -2834,7 +2791,6 @@ const CommitHistory = ({
     await runUserGitUpdateThenRefreshDashboard(
       "Deleting branch",
       "Deleted branch.",
-      "Delete branch",
       async () => {
         try {
           await window.molttree.deleteGitBranch({
@@ -2899,7 +2855,6 @@ const CommitHistory = ({
     await runUserGitUpdateThenRefreshDashboard(
       "Merging branch",
       "Merged branch.",
-      MERGE_BRANCH_BUTTON_TITLE,
       async () => {
         try {
           await window.molttree.mergeGitBranch({
@@ -2927,7 +2882,6 @@ const CommitHistory = ({
     await runUserGitUpdateThenRefreshDashboard(
       "Moving branch",
       "Moved branch.",
-      MOVE_BRANCH_POINTER_ENABLED_MESSAGE,
       async () => {
         try {
           await window.molttree.moveGitBranch({
@@ -2965,7 +2919,6 @@ const CommitHistory = ({
     await runUserGitUpdateThenRefreshDashboard(
       gitCheckoutDescription,
       "Switched HEAD.",
-      gitCheckoutDescription,
       async () => {
         try {
           await window.molttree.checkoutGitCommit({
@@ -3851,12 +3804,7 @@ export const App = () => {
           await refreshDashboardAfterUserGitUpdate(finishUserGitUpdate);
 
         if (gitErrorMessage !== null) {
-          showErrorMessage(
-            readUserGitUpdateErrorMessage({
-              message: gitErrorMessage,
-              enabledMessage: branchTagChangeActionText.enabledMessage,
-            }),
-          );
+          showErrorMessage(gitErrorMessage);
           return;
         }
 

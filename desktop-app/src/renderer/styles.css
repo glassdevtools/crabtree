@@ -702,15 +702,6 @@ textarea,
   pointer-events: none;
 }
 
-.commit-graph-head-icon {
-  width: 16px;
-  height: 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #343a43;
-}
-
 .change-summary-modal {
   width: min(360px, calc(100vw - 32px));
 }
