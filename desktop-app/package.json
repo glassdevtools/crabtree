@@ -1,6 +1,6 @@
 {
   "name": "molttree",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "private": true,
   "description": "A Codex thread and Git graph.",
   "author": "Glass Devtools, Inc.",

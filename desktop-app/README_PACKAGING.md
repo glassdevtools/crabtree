@@ -106,11 +106,11 @@ The release assets must include `latest-mac.yml`, the `.dmg`, the `.zip`, and bl
 
 ## GitHub Actions
 
-`../.github/workflows/build-macos-installer.yml` builds the macOS installer on pushes to `main`, version tags, and manual dispatch.
+`../.github/workflows/build-macos-installer.yml` builds the macOS installer on pushes to `main` and manual dispatch.
 
-For pushes to `main` and manual dispatches, the workflow uploads the generated `desktop-app/dist/MoltTree-*.dmg`, `desktop-app/dist/MoltTree-*.zip`, and blockmaps as a GitHub Actions artifact. If the Apple signing secrets are missing, it builds an unsigned artifact for CI testing. If all Apple signing secrets are present, it signs and notarizes the app before uploading it.
+The workflow reads `desktop-app/package.json` and uses `v<version>` as the release tag. If that GitHub Release already exists, the workflow only uploads the generated `desktop-app/dist/MoltTree-*.dmg`, `desktop-app/dist/MoltTree-*.zip`, and blockmaps as a GitHub Actions artifact. If the Apple signing secrets are missing, it builds an unsigned artifact for CI testing. If all Apple signing secrets are present, it signs and notarizes the app before uploading it.
 
-For `v*` tags, the workflow requires signing secrets, validates that the tag matches `desktop-app/package.json` `version`, then publishes the signed and notarized macOS release assets to `glassdevtools/molttree` GitHub Releases.
+If the matching GitHub Release does not exist yet, the workflow requires signing secrets, creates the `v<version>` tag on the current commit when needed, then publishes the signed and notarized macOS release assets to `glassdevtools/molttree` GitHub Releases. If the tag already exists on a different commit, the workflow fails so that a package version cannot silently point at two different builds.
 
 Required secrets for signed builds:
 
@@ -143,8 +143,7 @@ Release command:
 npm version patch --workspace desktop-app --no-git-tag-version
 git add desktop-app/package.json package-lock.json
 git commit -m "Release vX.Y.Z"
-git tag vX.Y.Z
-git push origin main vX.Y.Z
+git push origin main
 ```
 
-Replace `X.Y.Z` with the new `desktop-app/package.json` version.
+Replace `X.Y.Z` with the new `desktop-app/package.json` version. The workflow creates and pushes `vX.Y.Z` during the signed release build.

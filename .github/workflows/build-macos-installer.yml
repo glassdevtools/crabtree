@@ -5,8 +5,6 @@ on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
 
 permissions:
   contents: write
@@ -38,15 +36,43 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Validate release tag
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Read package release status
+        id: release
         shell: bash
         run: |
           PACKAGE_VERSION="$(node -p "require('./desktop-app/package.json').version")"
-          if [[ "v${PACKAGE_VERSION}" != "$GITHUB_REF_NAME" ]]; then
-            echo "Release tag $GITHUB_REF_NAME does not match desktop-app/package.json version v${PACKAGE_VERSION}." >&2
+          RELEASE_TAG="v${PACKAGE_VERSION}"
+
+          echo "package_version=$PACKAGE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+            echo "should_create_tag=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "should_publish=true" >> "$GITHUB_OUTPUT"
+
+          TAG_SHA="$(git ls-remote --tags origin "refs/tags/${RELEASE_TAG}^{}" | awk '{print $1}' | head -n 1)"
+          if [[ -z "$TAG_SHA" ]]; then
+            TAG_SHA="$(git ls-remote --tags origin "refs/tags/${RELEASE_TAG}" | awk '{print $1}' | head -n 1)"
+          fi
+
+          if [[ -z "$TAG_SHA" ]]; then
+            echo "should_create_tag=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "should_create_tag=false" >> "$GITHUB_OUTPUT"
+
+          if [[ "$TAG_SHA" != "$GITHUB_SHA" ]]; then
+            echo "$RELEASE_TAG already exists at $TAG_SHA, but this build is $GITHUB_SHA." >&2
+            echo "Bump desktop-app/package.json before publishing a new release." >&2
             exit 1
           fi
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Prepare App Store Connect key
         id: signing
@@ -77,22 +103,33 @@ jobs:
             echo "mode=unsigned" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Require signing for release tags
-        if: startsWith(github.ref, 'refs/tags/') && steps.signing.outputs.mode != 'signed'
+      - name: Require signing for release
+        if: steps.release.outputs.should_publish == 'true' && steps.signing.outputs.mode != 'signed'
         shell: bash
         run: |
-          echo "Release tags require APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, and notarization credentials." >&2
+          echo "Publishing a release requires APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, and notarization credentials." >&2
           echo "Use either APPLE_API_KEY + APPLE_API_ISSUER + APPLE_API_KEY_P8_BASE64, or APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD + APPLE_TEAM_ID." >&2
           exit 1
 
+      - name: Create release tag
+        if: steps.release.outputs.should_publish == 'true' && steps.release.outputs.should_create_tag == 'true' && steps.signing.outputs.mode == 'signed'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "$RELEASE_TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/${RELEASE_TAG}"
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+
       - name: Build and publish signed release
-        if: startsWith(github.ref, 'refs/tags/') && steps.signing.outputs.mode == 'signed'
+        if: steps.release.outputs.should_publish == 'true' && steps.signing.outputs.mode == 'signed'
         run: npm run dist:mac --workspace desktop-app -- --publish always
         env:
           GH_TOKEN: ${{ github.token }}
 
       - name: Publish static download aliases
-        if: startsWith(github.ref, 'refs/tags/') && steps.signing.outputs.mode == 'signed'
+        if: steps.release.outputs.should_publish == 'true' && steps.signing.outputs.mode == 'signed'
         shell: bash
         run: |
           shopt -s nullglob
@@ -112,16 +149,17 @@ jobs:
             exit 0
           fi
 
-          gh release upload "$GITHUB_REF_NAME" "${static_assets[@]}" --clobber
+          gh release upload "$RELEASE_TAG" "${static_assets[@]}" --clobber
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
 
       - name: Build signed installer
-        if: ${{ !startsWith(github.ref, 'refs/tags/') && steps.signing.outputs.mode == 'signed' }}
+        if: steps.release.outputs.should_publish != 'true' && steps.signing.outputs.mode == 'signed'
         run: npm run dist:mac --workspace desktop-app -- --publish never
 
       - name: Build unsigned installer
-        if: ${{ !startsWith(github.ref, 'refs/tags/') && steps.signing.outputs.mode == 'unsigned' }}
+        if: steps.release.outputs.should_publish != 'true' && steps.signing.outputs.mode == 'unsigned'
         run: npm run dist:mac --workspace desktop-app -- --publish never -c.mac.identity=null -c.mac.notarize=false
 
       - name: Upload macOS installer
