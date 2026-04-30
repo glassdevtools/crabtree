@@ -5,6 +5,7 @@ import type {
   GitCheckoutCommitRequest,
   GitCommitChangesRequest,
   GitCreateBranchRequest,
+  GitCreateRefRequest,
   GitDeleteBranchRequest,
   GitDeleteTagRequest,
   GitMergeBranchRequest,
@@ -361,6 +362,54 @@ export const createGitBranch = async ({
     args: ["check-ref-format", "--branch", branch],
   });
   await runGitCommandForPath({ path, args: ["switch", "-c", branch] });
+};
+
+export const createGitRef = async ({
+  repoRoot,
+  gitRefType,
+  name,
+  sha,
+}: GitCreateRefRequest) => {
+  const gitRef =
+    gitRefType === "branch" ? `refs/heads/${name}` : `refs/tags/${name}`;
+
+  if (gitRefType === "branch") {
+    await runGitCommandForPath({
+      path: repoRoot,
+      args: ["check-ref-format", "--branch", name],
+    });
+  } else {
+    await runGitCommandForPath({
+      path: repoRoot,
+      args: ["check-ref-format", gitRef],
+    });
+  }
+
+  const existingRef = await readNullableGitTextForPath({
+    path: repoRoot,
+    args: ["rev-parse", "--verify", gitRef],
+  });
+
+  if (existingRef !== null) {
+    throw new Error(`${name} already exists.`);
+  }
+
+  const targetSha = await readGitTextForPath({
+    path: repoRoot,
+    args: ["rev-parse", "--verify", `${sha}^{commit}`],
+  });
+
+  await runGitCommandForPath({
+    path: repoRoot,
+    args: [
+      "update-ref",
+      "-m",
+      `MoltTree: create ${name}`,
+      gitRef,
+      targetSha,
+      ZERO_SHA,
+    ],
+  });
 };
 
 // Branches and tags share this path so both delete actions get the same stale-ref check.

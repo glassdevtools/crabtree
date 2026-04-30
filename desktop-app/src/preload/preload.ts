@@ -7,6 +7,7 @@ import type {
   GitCheckoutCommitRequest,
   GitCommitChangesRequest,
   GitCreateBranchRequest,
+  GitCreateRefRequest,
   GitDeleteBranchRequest,
   GitDeleteTagRequest,
   GitMergeBranchRequest,
@@ -68,6 +69,9 @@ const api: MoltTreeApi = {
   },
   createGitBranch: async (gitCreateBranchRequest: GitCreateBranchRequest) => {
     await ipcRenderer.invoke("git:createBranch", gitCreateBranchRequest);
+  },
+  createGitRef: async (gitCreateRefRequest: GitCreateRefRequest) => {
+    await ipcRenderer.invoke("git:createRef", gitCreateRefRequest);
   },
   deleteGitBranch: async (gitDeleteBranchRequest: GitDeleteBranchRequest) => {
     await ipcRenderer.invoke("git:deleteBranch", gitDeleteBranchRequest);

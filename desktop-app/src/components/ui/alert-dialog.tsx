@@ -6,10 +6,25 @@ import { AlertDialog as AlertDialogPrimitive } from "radix-ui";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
+const AlertDialogCloseContext = React.createContext<(() => void) | null>(null);
+
 function AlertDialog({
+  onOpenChange,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Root>) {
-  return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />;
+  const closeAlertDialog = React.useCallback(() => {
+    onOpenChange?.(false);
+  }, [onOpenChange]);
+
+  return (
+    <AlertDialogCloseContext.Provider value={closeAlertDialog}>
+      <AlertDialogPrimitive.Root
+        data-slot="alert-dialog"
+        onOpenChange={onOpenChange}
+        {...props}
+      />
+    </AlertDialogCloseContext.Provider>
+  );
 }
 
 function AlertDialogTrigger({
@@ -30,8 +45,11 @@ function AlertDialogPortal({
 
 function AlertDialogOverlay({
   className,
+  onClick,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Overlay>) {
+  const closeAlertDialog = React.useContext(AlertDialogCloseContext);
+
   return (
     <AlertDialogPrimitive.Overlay
       data-slot="alert-dialog-overlay"
@@ -39,6 +57,15 @@ function AlertDialogOverlay({
         "fixed inset-0 z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         className,
       )}
+      onClick={(event) => {
+        onClick?.(event);
+
+        if (event.defaultPrevented) {
+          return;
+        }
+
+        closeAlertDialog?.();
+      }}
       {...props}
     />
   );

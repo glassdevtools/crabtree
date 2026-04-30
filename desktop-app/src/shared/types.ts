@@ -58,6 +58,13 @@ export type GitCreateBranchRequest = {
   branch: string;
 };
 
+export type GitCreateRefRequest = {
+  repoRoot: string;
+  gitRefType: "branch" | "tag";
+  name: string;
+  sha: string;
+};
+
 export type GitDeleteBranchRequest = {
   repoRoot: string;
   branch: string;
@@ -176,6 +183,7 @@ export type MoltTreeApi = {
   createGitBranch: (
     gitCreateBranchRequest: GitCreateBranchRequest,
   ) => Promise<void>;
+  createGitRef: (gitCreateRefRequest: GitCreateRefRequest) => Promise<void>;
   deleteGitBranch: (
     gitDeleteBranchRequest: GitDeleteBranchRequest,
   ) => Promise<void>;

@@ -9,6 +9,7 @@ import type {
   GitCheckoutCommitRequest,
   GitCommitChangesRequest,
   GitCreateBranchRequest,
+  GitCreateRefRequest,
   GitDeleteBranchRequest,
   GitDeleteTagRequest,
   GitMergeBranchRequest,
@@ -25,6 +26,7 @@ import {
   checkoutGitCommit,
   commitAllGitChanges,
   createGitBranch,
+  createGitRef,
   deleteGitBranch,
   deleteGitTag,
   mergeGitBranch,
@@ -288,6 +290,35 @@ const readGitCreateBranchRequest = (value: unknown) => {
   };
 
   return gitCreateBranchRequest;
+};
+
+const readGitCreateRefRequest = (value: unknown) => {
+  if (!isObject(value)) {
+    throw new Error("gitCreateRefRequest must be an object.");
+  }
+
+  if (
+    typeof value.repoRoot !== "string" ||
+    value.repoRoot.length === 0 ||
+    (value.gitRefType !== "branch" && value.gitRefType !== "tag") ||
+    typeof value.name !== "string" ||
+    value.name.trim().length === 0 ||
+    typeof value.sha !== "string" ||
+    value.sha.length === 0
+  ) {
+    throw new Error(
+      "gitCreateRefRequest needs a repo root, ref type, name, and sha.",
+    );
+  }
+
+  const gitCreateRefRequest: GitCreateRefRequest = {
+    repoRoot: value.repoRoot,
+    gitRefType: value.gitRefType,
+    name: value.name.trim(),
+    sha: value.sha,
+  };
+
+  return gitCreateRefRequest;
 };
 
 const readGitDeleteBranchRequest = (value: unknown) => {
@@ -596,6 +627,12 @@ ipcMain.handle("git:createBranch", async (_event, value: unknown) => {
   const gitCreateBranchRequest = readGitCreateBranchRequest(value);
 
   await createGitBranch(gitCreateBranchRequest);
+});
+
+ipcMain.handle("git:createRef", async (_event, value: unknown) => {
+  const gitCreateRefRequest = readGitCreateRefRequest(value);
+
+  await createGitRef(gitCreateRefRequest);
 });
 
 ipcMain.handle("git:deleteBranch", async (_event, value: unknown) => {

@@ -3,6 +3,7 @@ import {
   CircleArrowUp,
   Info,
   LoaderCircle,
+  Tag,
   Trash2,
 } from "lucide-react";
 import { GoDotFill } from "react-icons/go";
@@ -157,8 +158,33 @@ const readTotalGitChangeSummary = (changeSummary: GitChangeSummary) => {
   };
 };
 
-const readCreatedBranchName = (branchName: string) => {
-  return branchName.trim().replace(/[^A-Za-z0-9._/-]+/g, "-");
+const readCreatedGitRefName = (gitRefName: string) => {
+  return gitRefName.trim().replace(/[^A-Za-z0-9._/-]+/g, "-");
+};
+
+const readGitRefCreateText = (gitRefType: "branch" | "tag") => {
+  switch (gitRefType) {
+    case "branch":
+      return {
+        title: "Create Branch",
+        description: "Enter a new branch name.",
+        nameLabel: "Branch name",
+        previewLabel: "Branch name will become",
+        loadingDescription: "Creating branch",
+        successMessage: "Created branch.",
+        errorMessage: "Failed to create branch.",
+      };
+    case "tag":
+      return {
+        title: "Create Tag",
+        description: "Enter a new tag name.",
+        nameLabel: "Tag name",
+        previewLabel: "Tag name will become",
+        loadingDescription: "Creating tag",
+        successMessage: "Created tag.",
+        errorMessage: "Failed to create tag.",
+      };
+  }
 };
 
 const readBranchSyncActionText = (
@@ -492,6 +518,18 @@ type GitRefDeleteTarget = {
 type BranchCreateTarget = {
   path: string;
   title: string;
+};
+
+type GitRefCreateMenuTarget = {
+  x: number;
+  y: number;
+  sha: string | null;
+  isEnabled: boolean;
+};
+
+type GitRefCreateTarget = {
+  gitRefType: "branch" | "tag";
+  sha: string;
 };
 
 type CommitBranchTarget = {
@@ -1701,6 +1739,7 @@ const CommitHistoryRow = ({
   updateBranchPointerDropTarget,
   clearBranchPointerDropTarget,
   finishBranchPointerDrop,
+  openGitRefCreateMenu,
   openRowAfterDoubleClick,
   openGitRefDeleteModal,
   openBranchCreateModal,
@@ -1728,6 +1767,10 @@ const CommitHistoryRow = ({
   updateBranchPointerDropTarget: (event: DragEvent<HTMLDivElement>) => void;
   clearBranchPointerDropTarget: (event: DragEvent<HTMLDivElement>) => void;
   finishBranchPointerDrop: (event: DragEvent<HTMLDivElement>) => void;
+  openGitRefCreateMenu: (
+    event: MouseEvent<HTMLDivElement>,
+    row: CommitGraphRow,
+  ) => void;
   openRowAfterDoubleClick: () => void;
   openGitRefDeleteModal: (
     event: MouseEvent<HTMLButtonElement>,
@@ -2070,6 +2113,7 @@ const CommitHistoryRow = ({
     <div
       className={rowClassName}
       onDoubleClick={row.isCommitRow ? openRowAfterDoubleClick : undefined}
+      onContextMenu={(event) => openGitRefCreateMenu(event, row)}
       onDragOver={updateBranchPointerDropTarget}
       onDragLeave={clearBranchPointerDropTarget}
       onDrop={finishBranchPointerDrop}
@@ -2318,6 +2362,182 @@ const CommitHistoryColumnResizeHandle = ({
   );
 };
 
+const BranchCreateDialog = ({
+  branchCreateTarget,
+  createBranch,
+  closeBranchCreateModal,
+}: {
+  branchCreateTarget: BranchCreateTarget | null;
+  createBranch: ({
+    branchCreateTarget,
+    branch,
+  }: {
+    branchCreateTarget: BranchCreateTarget;
+    branch: string;
+  }) => Promise<void>;
+  closeBranchCreateModal: () => void;
+}) => {
+  const [branchName, setBranchName] = useState("");
+  const createdBranchName = readCreatedGitRefName(branchName);
+  const shouldShowBranchNamePreview =
+    branchName.trim().length > 0 && createdBranchName !== branchName.trim();
+
+  useEffect(() => {
+    if (branchCreateTarget !== null) {
+      setBranchName("");
+    }
+  }, [branchCreateTarget]);
+
+  const submitBranchName = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (branchCreateTarget === null) {
+      return;
+    }
+
+    await createBranch({ branchCreateTarget, branch: createdBranchName });
+  };
+
+  return (
+    <Dialog
+      open={branchCreateTarget !== null}
+      onOpenChange={(isOpen) => {
+        if (isOpen) {
+          return;
+        }
+
+        closeBranchCreateModal();
+      }}
+    >
+      {branchCreateTarget === null ? null : (
+        <DialogContent className="sm:max-w-sm">
+          <form className="grid gap-4" onSubmit={submitBranchName}>
+            <DialogHeader>
+              <DialogTitle>Create Branch</DialogTitle>
+              <DialogDescription>
+                Create a branch tag for this commit.
+              </DialogDescription>
+            </DialogHeader>
+            <Input
+              autoFocus
+              value={branchName}
+              onChange={(event) => setBranchName(event.target.value)}
+            />
+            {shouldShowBranchNamePreview ? (
+              <p className="branch-name-preview">
+                Branch name will become: <code>{createdBranchName}</code>
+              </p>
+            ) : null}
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={closeBranchCreateModal}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={createdBranchName.length === 0}>
+                Create
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      )}
+    </Dialog>
+  );
+};
+
+const GitRefCreateDialog = ({
+  gitRefCreateTarget,
+  createGitRef,
+  closeGitRefCreateModal,
+}: {
+  gitRefCreateTarget: GitRefCreateTarget | null;
+  createGitRef: ({
+    gitRefCreateTarget,
+    name,
+  }: {
+    gitRefCreateTarget: GitRefCreateTarget;
+    name: string;
+  }) => Promise<void>;
+  closeGitRefCreateModal: () => void;
+}) => {
+  const [gitRefName, setGitRefName] = useState("");
+  const createdGitRefName = readCreatedGitRefName(gitRefName);
+  const shouldShowGitRefNamePreview =
+    gitRefName.trim().length > 0 && createdGitRefName !== gitRefName.trim();
+  const gitRefCreateText =
+    gitRefCreateTarget === null
+      ? null
+      : readGitRefCreateText(gitRefCreateTarget.gitRefType);
+
+  useEffect(() => {
+    if (gitRefCreateTarget !== null) {
+      setGitRefName("");
+    }
+  }, [gitRefCreateTarget]);
+
+  const submitGitRefName = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (gitRefCreateTarget === null) {
+      return;
+    }
+
+    await createGitRef({ gitRefCreateTarget, name: createdGitRefName });
+  };
+
+  return (
+    <Dialog
+      open={gitRefCreateTarget !== null}
+      onOpenChange={(isOpen) => {
+        if (isOpen) {
+          return;
+        }
+
+        closeGitRefCreateModal();
+      }}
+    >
+      {gitRefCreateTarget === null || gitRefCreateText === null ? null : (
+        <DialogContent className="sm:max-w-sm">
+          <form className="grid gap-4" onSubmit={submitGitRefName}>
+            <DialogHeader>
+              <DialogTitle>{gitRefCreateText.title}</DialogTitle>
+              <DialogDescription>
+                {gitRefCreateText.description}
+              </DialogDescription>
+            </DialogHeader>
+            <Input
+              autoFocus
+              aria-label={gitRefCreateText.nameLabel}
+              value={gitRefName}
+              onChange={(event) => setGitRefName(event.target.value)}
+            />
+            {shouldShowGitRefNamePreview ? (
+              <p className="branch-name-preview">
+                {gitRefCreateText.previewLabel}:{" "}
+                <code>{createdGitRefName}</code>
+              </p>
+            ) : null}
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={closeGitRefCreateModal}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={createdGitRefName.length === 0}>
+                Create
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      )}
+    </Dialog>
+  );
+};
+
 const CommitHistory = ({
   commits,
   worktrees,
@@ -2365,10 +2585,10 @@ const CommitHistory = ({
   const branchPointerDragRef = useRef<BranchPointerDrag | null>(null);
   const [branchCreateTarget, setBranchCreateTarget] =
     useState<BranchCreateTarget | null>(null);
-  const [branchName, setBranchName] = useState("");
-  const createdBranchName = readCreatedBranchName(branchName);
-  const shouldShowBranchNamePreview =
-    branchName.trim().length > 0 && createdBranchName !== branchName.trim();
+  const [gitRefCreateMenuTarget, setGitRefCreateMenuTarget] =
+    useState<GitRefCreateMenuTarget | null>(null);
+  const [gitRefCreateTarget, setGitRefCreateTarget] =
+    useState<GitRefCreateTarget | null>(null);
   const [commitMessageTarget, setCommitMessageTarget] =
     useState<CommitMessageTarget | null>(null);
   const [commitMessage, setCommitMessage] = useState("");
@@ -2382,6 +2602,30 @@ const CommitHistory = ({
     useState<BranchPointerMove | null>(null);
   const [branchPointerDropTargetRowId, setBranchPointerDropTargetRowId] =
     useState<string | null>(null);
+  useEffect(() => {
+    if (gitRefCreateMenuTarget === null) {
+      return;
+    }
+
+    const closeGitRefCreateMenu = () => {
+      setGitRefCreateMenuTarget(null);
+    };
+    const closeGitRefCreateMenuAfterEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+
+      closeGitRefCreateMenu();
+    };
+
+    window.addEventListener("mousedown", closeGitRefCreateMenu);
+    window.addEventListener("keydown", closeGitRefCreateMenuAfterEscape);
+
+    return () => {
+      window.removeEventListener("mousedown", closeGitRefCreateMenu);
+      window.removeEventListener("keydown", closeGitRefCreateMenuAfterEscape);
+    };
+  }, [gitRefCreateMenuTarget]);
   const graph = useMemo(
     () =>
       createCommitGraph({
@@ -2626,17 +2870,9 @@ const CommitHistory = ({
     }
 
     for (const tag of Object.keys(tagShaOfTag)) {
-      const reasons = ["it's a version tag"];
-
-      if (
-        !readIsShaVisibleAfterDelete({
-          sha: tagShaOfTag[tag],
-          deletedRefKey: readTagRefKey(tag),
-        })
-      ) {
-        reasons.push("it's the only thing keeping this commit in the graph");
-      }
-
+      const reasons = [
+        "people and build pipelines often expect tags not to change",
+      ];
       const warningMessage = readWarningMessage(reasons);
 
       if (warningMessage !== null) {
@@ -3151,11 +3387,39 @@ const CommitHistory = ({
     event.preventDefault();
     event.stopPropagation();
     setBranchCreateTarget(branchCreateTarget);
-    setBranchName("");
   };
   const closeBranchCreateModal = () => {
     setBranchCreateTarget(null);
-    setBranchName("");
+  };
+  const openGitRefCreateMenu = (
+    event: MouseEvent<HTMLDivElement>,
+    row: CommitGraphRow,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setGitRefCreateMenuTarget({
+      sha: row.isCommitRow ? row.commit.sha : null,
+      isEnabled: row.isCommitRow,
+      x: event.clientX,
+      y: event.clientY,
+    });
+  };
+  const openGitRefCreateModal = (gitRefType: "branch" | "tag") => {
+    if (
+      gitRefCreateMenuTarget === null ||
+      gitRefCreateMenuTarget.sha === null
+    ) {
+      return;
+    }
+
+    setGitRefCreateTarget({
+      gitRefType,
+      sha: gitRefCreateMenuTarget.sha,
+    });
+    setGitRefCreateMenuTarget(null);
+  };
+  const closeGitRefCreateModal = () => {
+    setGitRefCreateTarget(null);
   };
   const openCommitMessageModal = (
     event: MouseEvent<HTMLButtonElement>,
@@ -3187,29 +3451,59 @@ const CommitHistory = ({
   const closeBranchPointerMoveModal = () => {
     setBranchPointerMove(null);
   };
-  const submitBranchName = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    if (branchCreateTarget === null) {
-      return;
-    }
-
-    const request = branchCreateTarget;
-
+  const createBranch = async ({
+    branchCreateTarget,
+    branch,
+  }: {
+    branchCreateTarget: BranchCreateTarget;
+    branch: string;
+  }) => {
     await runUserGitUpdateThenRefreshDashboard(
       "Creating branch",
       "Created branch.",
       async () => {
         try {
           await window.molttree.createGitBranch({
-            path: request.path,
-            branch: createdBranchName,
+            path: branchCreateTarget.path,
+            branch,
           });
           closeBranchCreateModal();
         } catch (error) {
           return error instanceof Error
             ? error.message
             : "Failed to create branch.";
+        }
+
+        return null;
+      },
+    );
+  };
+  const createGitRef = async ({
+    gitRefCreateTarget,
+    name,
+  }: {
+    gitRefCreateTarget: GitRefCreateTarget;
+    name: string;
+  }) => {
+    const gitRefCreateText = readGitRefCreateText(
+      gitRefCreateTarget.gitRefType,
+    );
+    await runUserGitUpdateThenRefreshDashboard(
+      gitRefCreateText.loadingDescription,
+      gitRefCreateText.successMessage,
+      async () => {
+        try {
+          await window.molttree.createGitRef({
+            repoRoot,
+            gitRefType: gitRefCreateTarget.gitRefType,
+            name,
+            sha: gitRefCreateTarget.sha,
+          });
+          closeGitRefCreateModal();
+        } catch (error) {
+          return error instanceof Error
+            ? error.message
+            : gitRefCreateText.errorMessage;
         }
 
         return null;
@@ -3438,9 +3732,45 @@ const CommitHistory = ({
           operation: branchPointerMove.operation,
           branch: branchPointerMove.branch,
         });
-
   return (
     <>
+      {gitRefCreateMenuTarget === null ? null : (
+        <div
+          className="git-ref-create-menu"
+          style={{
+            left: gitRefCreateMenuTarget.x,
+            top: gitRefCreateMenuTarget.y,
+          }}
+          onMouseDown={(event) => event.stopPropagation()}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+        >
+          <Button
+            className="git-ref-create-menu-item"
+            variant="ghost"
+            size="sm"
+            type="button"
+            disabled={!gitRefCreateMenuTarget.isEnabled}
+            onClick={() => openGitRefCreateModal("branch")}
+          >
+            <LuGitBranchPlus size={10} />
+            <span>Add branch</span>
+          </Button>
+          <Button
+            className="git-ref-create-menu-item"
+            variant="ghost"
+            size="sm"
+            type="button"
+            disabled={!gitRefCreateMenuTarget.isEnabled}
+            onClick={() => openGitRefCreateModal("tag")}
+          >
+            <Tag size={10} />
+            <span>Add tag</span>
+          </Button>
+        </div>
+      )}
       <Card className="commit-history gap-0 py-0 ring-0" ref={commitHistoryRef}>
         <div
           className="commit-history-header-scroll"
@@ -3594,6 +3924,7 @@ const CommitHistory = ({
                 finishBranchPointerDrop={(event) =>
                   finishBranchPointerDrop({ event, row })
                 }
+                openGitRefCreateMenu={openGitRefCreateMenu}
                 openRowAfterDoubleClick={() => openRowAfterDoubleClick(row)}
                 openGitRefDeleteModal={openGitRefDeleteModal}
                 openBranchCreateModal={openBranchCreateModal}
@@ -3608,54 +3939,16 @@ const CommitHistory = ({
             ))}
           </div>
         </div>
-        <Dialog
-          open={branchCreateTarget !== null}
-          onOpenChange={(isOpen) => {
-            if (isOpen) {
-              return;
-            }
-
-            closeBranchCreateModal();
-          }}
-        >
-          {branchCreateTarget === null ? null : (
-            <DialogContent className="sm:max-w-sm">
-              <form className="grid gap-4" onSubmit={submitBranchName}>
-                <DialogHeader>
-                  <DialogTitle>Create Branch</DialogTitle>
-                  <DialogDescription>
-                    Create a branch tag for this commit.
-                  </DialogDescription>
-                </DialogHeader>
-                <Input
-                  autoFocus
-                  value={branchName}
-                  onChange={(event) => setBranchName(event.target.value)}
-                />
-                {shouldShowBranchNamePreview ? (
-                  <p className="branch-name-preview">
-                    Branch name will become: <code>{createdBranchName}</code>
-                  </p>
-                ) : null}
-                <DialogFooter>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={closeBranchCreateModal}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={createdBranchName.length === 0}
-                  >
-                    Create
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          )}
-        </Dialog>
+        <BranchCreateDialog
+          branchCreateTarget={branchCreateTarget}
+          createBranch={createBranch}
+          closeBranchCreateModal={closeBranchCreateModal}
+        />
+        <GitRefCreateDialog
+          gitRefCreateTarget={gitRefCreateTarget}
+          createGitRef={createGitRef}
+          closeGitRefCreateModal={closeGitRefCreateModal}
+        />
         <Dialog
           open={commitMessageTarget !== null}
           onOpenChange={(isOpen) => {

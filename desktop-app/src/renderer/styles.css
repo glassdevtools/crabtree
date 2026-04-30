@@ -794,6 +794,35 @@ textarea,
   font-weight: 650;
 }
 
+/* TODO: AI-PICKED-VALUE: These menu dimensions match the compact Git table controls without covering much of the graph. */
+.git-ref-create-menu {
+  position: fixed;
+  z-index: 80;
+  min-width: 138px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid #d9dee6;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.18);
+}
+
+.git-ref-create-menu-item {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 8px;
+  color: #202124;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.git-ref-create-menu-item:disabled {
+  color: #9aa1aa;
+  cursor: not-allowed;
+}
+
 .branch-merge-preview-message {
   display: inline-flex;
   align-items: center;

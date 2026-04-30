@@ -18,6 +18,7 @@ import {
   checkoutGitCommit,
   commitAllGitChanges,
   createGitBranch,
+  createGitRef,
   deleteGitBranch,
   deleteGitTag,
   mergeGitBranch,
@@ -674,6 +675,46 @@ test("creates and checks out a branch at the current HEAD", async () => {
     assert.equal(
       await runGit({ cwd: repoRoot, args: ["branch", "--show-current"] }),
       "created",
+    );
+  });
+});
+
+test("creates branch and tag refs at a commit without switching HEAD", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    const oldSha = await commitRepoFile({
+      repoRoot,
+      filePath: "file.txt",
+      content: "base\n",
+      message: "base",
+    });
+    await commitRepoFile({
+      repoRoot,
+      filePath: "file.txt",
+      content: "base\nnew\n",
+      message: "new",
+    });
+
+    await createGitRef({
+      repoRoot,
+      gitRefType: "branch",
+      name: "saved-branch",
+      sha: oldSha,
+    });
+    await createGitRef({
+      repoRoot,
+      gitRefType: "tag",
+      name: "saved-tag",
+      sha: oldSha,
+    });
+
+    assert.equal(await readSha({ cwd: repoRoot, ref: "saved-branch" }), oldSha);
+    assert.equal(
+      await readSha({ cwd: repoRoot, ref: "refs/tags/saved-tag^{commit}" }),
+      oldSha,
+    );
+    assert.equal(
+      await runGit({ cwd: repoRoot, args: ["branch", "--show-current"] }),
+      "main",
     );
   });
 });
