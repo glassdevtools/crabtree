@@ -24,7 +24,7 @@ It's easy to spin up 100 worktrees in Codex, but merging them back together is h
 Feel free to submit an Issue for suggestions, feedback, and bugs. For safety reason I won't be accepting PRs, but I will happily accept Prompt Requests in the form of [New Issues](https://github.com/glassdevtools/molttree/issues).
 
 
-## Preview
+## Download
 
 
 You can download MoltTree on our [Releases](https://github.com/glassdevtools/molttree/releases/latest) page or [Website](https://molttree.app)!
