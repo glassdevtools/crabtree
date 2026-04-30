@@ -88,6 +88,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import cursorAppIconUrl from "./assets/cursor-app-icon.png";
+import defaultAppIconUrl from "./assets/default-app-icon.png";
 import finderAppIconUrl from "./assets/finder-app-icon.png";
 import logoLoaderImageUrl from "./assets/logo-loader.png";
 import {
@@ -122,6 +123,7 @@ const COMMIT_HISTORY_HEADER_HEIGHT = 22;
 const DASHBOARD_REFRESH_INTERVAL_MS = 1000;
 const TOAST_POSITION = "bottom-center";
 const USER_GIT_UPDATE_TOAST_ID = "user-git-update";
+const LOADING_LOGO_LOADER_PROBABILITY = 0.1;
 const GITHUB_REPOSITORY_URL = packageInfo.repository.url.replace(/\.git$/, "");
 const MERGE_BRANCH_BUTTON_TITLE = "Merge this into HEAD";
 const COMMIT_GRAPH_ACTION_ICON_SIZE = 10;
@@ -4020,6 +4022,11 @@ const MoltTreeDesktopApp = () => {
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [userGitUpdateCount, setUserGitUpdateCount] = useState(0);
   const [userGitUpdateDescription, setUserGitUpdateDescription] = useState("");
+  const [initialLoadingImageUrl] = useState(() => {
+    return Math.random() < LOADING_LOGO_LOADER_PROBABILITY
+      ? logoLoaderImageUrl
+      : defaultAppIconUrl;
+  });
   const userGitUpdateCountRef = useRef(0);
   const isDashboardRefreshRunningRef = useRef(false);
   const shouldRefreshDashboardAgainRef = useRef(false);
@@ -4384,7 +4391,7 @@ const MoltTreeDesktopApp = () => {
               alt=""
               className="initial-loading-image"
               draggable={false}
-              src={logoLoaderImageUrl}
+              src={initialLoadingImageUrl}
             />
             <div className="initial-loading-status">
               <LoaderCircle
