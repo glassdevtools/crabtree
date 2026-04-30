@@ -1323,6 +1323,7 @@ const BranchTags = ({
   branchPointerSourcePath,
   deleteWarningMessageOfBranch,
   deleteWarningMessageOfTag,
+  shouldBlockDeleteOfBranch,
   openGitRefDeleteModal,
   startBranchPointerDrag,
   finishBranchPointerDrag,
@@ -1335,12 +1336,14 @@ const BranchTags = ({
   branchPointerSourcePath: string | null;
   deleteWarningMessageOfBranch: { [branch: string]: string };
   deleteWarningMessageOfTag: { [tag: string]: string };
+  shouldBlockDeleteOfBranch: { [branch: string]: boolean };
   openGitRefDeleteModal: (
     event: MouseEvent<HTMLButtonElement>,
     gitRefType: "branch" | "tag",
     name: string,
     oldSha: string,
     warningMessage: string | null,
+    shouldBlockDelete: boolean,
   ) => void;
   startBranchPointerDrag: ({
     event,
@@ -1408,6 +1411,8 @@ const BranchTags = ({
         const deleteWarningMessage = isTag
           ? (deleteWarningMessageOfTag[refName] ?? null)
           : (deleteWarningMessageOfBranch[refName] ?? null);
+        const shouldBlockDelete =
+          !isTag && shouldBlockDeleteOfBranch[refName] === true;
 
         if (isOriginBranch) {
           refClassName = "commit-ref commit-ref-origin";
@@ -1475,6 +1480,7 @@ const BranchTags = ({
                       refName,
                       commitSha,
                       deleteWarningMessage,
+                      shouldBlockDelete,
                     )
                   }
                 >
@@ -1762,6 +1768,7 @@ const CommitHistoryRow = ({
   isBranchMergeableOfBranch,
   deleteWarningMessageOfBranch,
   deleteWarningMessageOfTag,
+  shouldBlockDeleteOfBranch,
   updateBranchPointerDropTarget,
   clearBranchPointerDropTarget,
   finishBranchPointerDrop,
@@ -1790,6 +1797,7 @@ const CommitHistoryRow = ({
   isBranchMergeableOfBranch: { [branch: string]: boolean };
   deleteWarningMessageOfBranch: { [branch: string]: string };
   deleteWarningMessageOfTag: { [tag: string]: string };
+  shouldBlockDeleteOfBranch: { [branch: string]: boolean };
   updateBranchPointerDropTarget: (event: DragEvent<HTMLDivElement>) => void;
   clearBranchPointerDropTarget: (event: DragEvent<HTMLDivElement>) => void;
   finishBranchPointerDrop: (event: DragEvent<HTMLDivElement>) => void;
@@ -1804,6 +1812,7 @@ const CommitHistoryRow = ({
     name: string,
     oldSha: string,
     warningMessage: string | null,
+    shouldBlockDelete: boolean,
   ) => void;
   openBranchCreateModal: (
     event: MouseEvent<HTMLButtonElement>,
@@ -2271,6 +2280,7 @@ const CommitHistoryRow = ({
             })}
             deleteWarningMessageOfBranch={deleteWarningMessageOfBranch}
             deleteWarningMessageOfTag={deleteWarningMessageOfTag}
+            shouldBlockDeleteOfBranch={shouldBlockDeleteOfBranch}
             openGitRefDeleteModal={openGitRefDeleteModal}
             startBranchPointerDrag={startBranchPointerDrag}
             finishBranchPointerDrag={finishBranchPointerDrag}
@@ -3008,18 +3018,23 @@ const CommitHistory = ({
     // Finally explain each branch or tag that loses a useful Git anchor when deleted.
     const deleteWarningMessageOfBranch: { [branch: string]: string } = {};
     const deleteWarningMessageOfTag: { [tag: string]: string } = {};
+    const shouldBlockDeleteOfBranch: { [branch: string]: boolean } = {};
 
     for (const branch of Object.keys(branchShaOfBranch)) {
       const reasons: string[] = [];
 
       if (checkedOutBranchOfBranch[branch] === true) {
+        shouldBlockDeleteOfBranch[branch] = true;
         deleteWarningMessageOfBranch[branch] =
           "This branch is checked out in a worktree. Delete that worktree or switch its branch first.";
         continue;
       }
 
       if (branch === defaultBranch) {
-        reasons.push("it's the default branch");
+        shouldBlockDeleteOfBranch[branch] = true;
+        deleteWarningMessageOfBranch[branch] =
+          "This is the default branch, so you can't delete it.";
+        continue;
       }
 
       if (
@@ -3049,7 +3064,11 @@ const CommitHistory = ({
       }
     }
 
-    return { deleteWarningMessageOfBranch, deleteWarningMessageOfTag };
+    return {
+      deleteWarningMessageOfBranch,
+      deleteWarningMessageOfTag,
+      shouldBlockDeleteOfBranch,
+    };
   }, [commits, defaultBranch, worktrees]);
   const commitOfSha = useMemo(() => {
     const nextCommitOfSha: { [sha: string]: GitCommit } = {};
@@ -3537,12 +3556,10 @@ const CommitHistory = ({
     name: string,
     oldSha: string,
     warningMessage: string | null,
+    shouldBlockDelete: boolean,
   ) => {
     event.preventDefault();
     event.stopPropagation();
-    const shouldBlockDelete =
-      gitRefType === "branch" &&
-      worktrees.some((worktree) => worktree.branch === name);
     setGitRefDeleteTarget({
       gitRefType,
       name,
@@ -4086,6 +4103,9 @@ const CommitHistory = ({
                 }
                 deleteWarningMessageOfTag={
                   gitRefDeleteWarnings.deleteWarningMessageOfTag
+                }
+                shouldBlockDeleteOfBranch={
+                  gitRefDeleteWarnings.shouldBlockDeleteOfBranch
                 }
                 updateBranchPointerDropTarget={(event) =>
                   updateBranchPointerDropTarget({ event, row })

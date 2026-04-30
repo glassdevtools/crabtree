@@ -399,6 +399,24 @@ test("reads local branches as branch sync changes when origin tracking refs are 
   });
 });
 
+test("reads the remote default branch when origin head tracking ref is missing", async () => {
+  await withOriginRepo(async ({ repoRoot }) => {
+    await runGit({
+      cwd: repoRoot,
+      args: ["update-ref", "-d", "refs/remotes/origin/HEAD"],
+    });
+
+    const { repos, warnings, gitErrors } = await readRepoGraphs({
+      threads: [createThread({ id: "root-thread", cwd: repoRoot })],
+    });
+    const repo = repos[0];
+
+    assert.equal(warnings.length, 0);
+    assert.equal(gitErrors.length, 0);
+    assert.equal(repo?.defaultBranch, "main");
+  });
+});
+
 test("reads staged and unstaged change summaries for repo and worktree cwd values", async () => {
   await withOriginRepo(async ({ parentRoot, repoRoot }) => {
     await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
@@ -861,6 +879,27 @@ test("rejects deleting a branch checked out in a linked worktree", async () => {
 
     assert.equal(await readSha({ cwd: repoRoot, ref: "topic" }), topicSha);
     assert.equal(await readSha({ cwd: worktreeRoot, ref: "HEAD" }), topicSha);
+  });
+});
+
+test("rejects deleting the default branch", async () => {
+  await withOriginRepo(async ({ repoRoot }) => {
+    const mainSha = await readSha({ cwd: repoRoot, ref: "main" });
+    await runGit({
+      cwd: repoRoot,
+      args: ["update-ref", "-d", "refs/remotes/origin/HEAD"],
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "topic"] });
+
+    await assert.rejects(async () => {
+      await deleteGitBranch({
+        repoRoot,
+        branch: "main",
+        oldSha: mainSha,
+      });
+    }, /This is the default branch, so you can't delete it/);
+
+    assert.equal(await readSha({ cwd: repoRoot, ref: "main" }), mainSha);
   });
 });
 

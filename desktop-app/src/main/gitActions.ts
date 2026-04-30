@@ -59,6 +59,26 @@ const readNullableGitTextForPath = async ({
   }
 };
 
+const readDefaultBranchNameFromOriginHeadText = (originHeadText: string) => {
+  const originPrefix = "origin/";
+
+  if (originHeadText.startsWith(originPrefix)) {
+    return originHeadText.slice(originPrefix.length);
+  }
+
+  for (const line of originHeadText.split("\n")) {
+    const remoteHeadPrefix = "ref: refs/heads/";
+
+    if (!line.startsWith(remoteHeadPrefix)) {
+      continue;
+    }
+
+    return line.slice(remoteHeadPrefix.length).split("\t")[0] ?? null;
+  }
+
+  return originHeadText;
+};
+
 // -------------------------- Worktree and visibility helpers ---------------
 
 // Worktree state matters because a checked-out branch has to move through its own worktree.
@@ -460,10 +480,34 @@ export const deleteGitBranch = async ({
   branch,
   oldSha,
 }: GitDeleteBranchRequest) => {
+  const readDefaultBranch = async () => {
+    const originHead = await readNullableGitTextForPath({
+      path: repoRoot,
+      args: ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
+    });
+
+    if (originHead !== null) {
+      return readDefaultBranchNameFromOriginHeadText(originHead);
+    }
+
+    const remoteOriginHead = await readNullableGitTextForPath({
+      path: repoRoot,
+      args: ["ls-remote", "--symref", "origin", "HEAD"],
+    });
+
+    return remoteOriginHead === null
+      ? null
+      : readDefaultBranchNameFromOriginHeadText(remoteOriginHead);
+  };
+
   await runGitCommandForPath({
     path: repoRoot,
     args: ["check-ref-format", "--branch", branch],
   });
+
+  if (branch === (await readDefaultBranch())) {
+    throw new Error("This is the default branch, so you can't delete it.");
+  }
 
   const worktreePath = await readGitWorktreePathForBranch({
     repoRoot,

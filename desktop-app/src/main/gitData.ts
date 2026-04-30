@@ -17,6 +17,9 @@ const ORIGIN_FETCH_INTERVAL_MS = 30_000;
 const FIELD_SEPARATOR = "\u001f";
 const ZERO_SHA = "0000000000000000000000000000000000000000";
 const lastOriginFetchAttemptTimeOfRepoRoot: { [repoRoot: string]: number } = {};
+const defaultBranchCacheOfRepoRoot: {
+  [repoRoot: string]: { branch: string | null; readTime: number };
+} = {};
 
 type RepoSeed = {
   key: string;
@@ -82,23 +85,58 @@ const readIsGitWorkingTree = async ({ cwd }: { cwd: string }) => {
   return isInsideWorkTree === "true";
 };
 
+const readDefaultBranchNameFromOriginHeadText = (originHeadText: string) => {
+  const originPrefix = "origin/";
+
+  if (originHeadText.startsWith(originPrefix)) {
+    return originHeadText.slice(originPrefix.length);
+  }
+
+  for (const line of originHeadText.split("\n")) {
+    const remoteHeadPrefix = "ref: refs/heads/";
+
+    if (!line.startsWith(remoteHeadPrefix)) {
+      continue;
+    }
+
+    return line.slice(remoteHeadPrefix.length).split("\t")[0] ?? null;
+  }
+
+  return originHeadText;
+};
+
 const readDefaultBranch = async ({ root }: { root: string }) => {
   const originHead = await readNullableGitText({
     cwd: root,
     args: ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
   });
 
-  if (originHead === null) {
-    return null;
+  if (originHead !== null) {
+    return readDefaultBranchNameFromOriginHeadText(originHead);
   }
 
-  const originPrefix = "origin/";
+  const cachedDefaultBranch = defaultBranchCacheOfRepoRoot[root];
+  const now = Date.now();
 
-  if (originHead.startsWith(originPrefix)) {
-    return originHead.slice(originPrefix.length);
+  if (
+    cachedDefaultBranch !== undefined &&
+    now - cachedDefaultBranch.readTime < ORIGIN_FETCH_INTERVAL_MS
+  ) {
+    return cachedDefaultBranch.branch;
   }
 
-  return originHead;
+  const remoteOriginHead = await readNullableGitText({
+    cwd: root,
+    args: ["ls-remote", "--symref", "origin", "HEAD"],
+  });
+  const defaultBranch =
+    remoteOriginHead === null
+      ? null
+      : readDefaultBranchNameFromOriginHeadText(remoteOriginHead);
+
+  defaultBranchCacheOfRepoRoot[root] = { branch: defaultBranch, readTime: now };
+
+  return defaultBranch;
 };
 
 const readMainWorktreePath = async ({ root }: { root: string }) => {
