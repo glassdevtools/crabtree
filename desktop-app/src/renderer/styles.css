@@ -191,43 +191,6 @@ textarea,
   }
 }
 
-/* TODO: AI-PICKED-VALUE: These toast dimensions keep Git updates prominent without changing the neutral shadcn-style surface. */
-[data-sonner-toast][data-styled="true"].git-update-toast-shell {
-  width: min(360px, calc(100vw - 32px));
-  padding: 14px 16px;
-  border-color: var(--border);
-  background: var(--popover);
-  color: var(--popover-foreground);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
-}
-
-[data-sonner-toast][data-styled="true"].git-update-toast-shell [data-icon] {
-  width: 20px;
-  height: 20px;
-  margin-right: 8px;
-}
-
-[data-sonner-toast][data-styled="true"].git-update-toast-shell [data-title] {
-  color: var(--popover-foreground);
-  font-weight: 600;
-}
-
-[data-sonner-toast][data-styled="true"].git-update-toast-shell
-  [data-description] {
-  color: var(--muted-foreground);
-}
-
-[data-sonner-toast][data-styled="true"].git-update-toast-shell
-  .sonner-loading-wrapper {
-  --size: 17px;
-  color: var(--muted-foreground);
-}
-
-[data-sonner-toast][data-styled="true"].git-update-toast-shell
-  .sonner-loading-bar {
-  background: var(--muted-foreground);
-}
-
 .repo-header-controls {
   min-width: 0;
   display: flex;
@@ -363,6 +326,59 @@ textarea,
   color: var(--error-text);
 }
 
+/* Toast status icons align with the title line so long descriptions do not pull them down. */
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] {
+  align-items: flex-start;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-icon] {
+  margin-top: 1.75px;
+}
+
+[data-sonner-toaster]
+  [data-sonner-toast][data-styled="true"]
+  [data-description] {
+  color: inherit;
+}
+
+/* Promise toast results should replace the loading icon without a second animation. */
+[data-sonner-toaster]
+  [data-sonner-toast][data-promise="true"][data-type="success"]
+  [data-icon]
+  > svg,
+[data-sonner-toaster]
+  [data-sonner-toast][data-promise="true"][data-type="error"]
+  [data-icon]
+  > svg {
+  opacity: 1;
+  transform: none;
+  animation: none;
+}
+
+[data-sonner-toaster]
+  [data-sonner-toast][data-promise="true"][data-type="success"]
+  .sonner-loading-wrapper[data-visible="false"],
+[data-sonner-toaster]
+  [data-sonner-toast][data-promise="true"][data-type="error"]
+  .sonner-loading-wrapper[data-visible="false"],
+[data-sonner-toaster]
+  [data-sonner-toast][data-promise="true"][data-type="success"]
+  .sonner-loader[data-visible="false"],
+[data-sonner-toaster]
+  [data-sonner-toast][data-promise="true"][data-type="error"]
+  .sonner-loader[data-visible="false"] {
+  opacity: 0;
+  transform: none;
+  animation: none;
+  transition: none;
+}
+
+[data-sonner-toast][data-type="error"] [data-title],
+[data-sonner-toast][data-type="error"] [data-description] {
+  cursor: text;
+  user-select: text;
+}
+
 [data-sonner-toaster]
   [data-sonner-toast][data-styled="true"]:hover
   [data-close-button]:hover {
@@ -409,6 +425,40 @@ textarea,
 .repo-picker-select-content {
   width: var(--radix-select-trigger-width);
   max-width: min(220px, calc(100vw - 16px));
+}
+
+.electron-api-missing-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #f4f6f8;
+}
+
+.electron-api-missing-card {
+  width: min(420px, 100%);
+  gap: 10px;
+  padding: 18px;
+}
+
+.electron-api-missing-card h1 {
+  margin: 0;
+  color: #202124;
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.electron-api-missing-card p {
+  margin: 0;
+  color: #5f6670;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.electron-api-missing-card a {
+  color: #0a64c9;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .content-shell {
@@ -494,28 +544,45 @@ textarea,
   opacity: 0.38;
 }
 
-.repo-settings-button {
-  flex: 0 0 auto;
+/* TODO: AI-PICKED-VALUE: The modal width fits the About header and version row without making the window feel empty. */
+.about-modal {
+  width: min(320px, calc(100vw - 32px));
 }
 
-.settings-field {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  color: #343a43;
+.about-modal-fields {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.about-modal-field {
+  display: grid;
+  grid-template-columns: 82px 1fr;
+  gap: 10px;
+  align-items: baseline;
   font-size: 13px;
-  font-weight: 650;
+  line-height: 1.35;
 }
 
-.settings-select {
-  width: 160px;
-  background: #ffffff;
+.about-modal-field dt {
+  color: #202124;
+  font-weight: 700;
 }
 
-.settings-select:hover,
-.settings-select[aria-expanded="true"] {
-  background: #ffffff;
+.about-modal-field dd {
+  margin: 0;
+  color: #5f6670;
+  font-weight: 550;
+}
+
+.about-modal-link {
+  color: #0a64c9;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.about-modal-link:hover {
+  color: #084f9f;
 }
 
 .title-tooltip-trigger {
@@ -696,15 +763,6 @@ textarea,
   pointer-events: none;
 }
 
-.commit-graph-head-icon {
-  width: 16px;
-  height: 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #343a43;
-}
-
 .change-summary-modal {
   width: min(360px, calc(100vw - 32px));
 }
@@ -716,6 +774,19 @@ textarea,
 
 .branch-pointer-move-modal {
   width: 560px;
+}
+
+.branch-name-preview {
+  margin: -8px 0 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.branch-name-preview code {
+  color: var(--foreground);
+  font-family: inherit;
+  font-weight: 650;
 }
 
 .branch-merge-preview-message {
@@ -828,26 +899,25 @@ textarea,
   color: #202124;
 }
 
-.commit-branch-tags-cell-branch-drop-target {
-  outline: 2px solid #0a84ff;
-  outline-offset: -2px;
-  background: #eaf1ff;
-}
-
 .commit-history-row:nth-child(even) {
   background: #ffffff;
 }
 
 /* TODO: AI-PICKED-VALUE: This gray is a subtle hover state that keeps the compact table readable without adding row lines. */
-.commit-history-row:not(.commit-history-row-selected):hover {
+.commit-history-row:hover,
+.commit-history-row-branch-drop-target,
+.commit-history-row-branch-drop-target:nth-child(even) {
+  border-radius: 5px;
   background: #f3f4f6;
 }
 
-/* TODO: AI-PICKED-VALUE: This blue is intentionally brighter than the branch tag blue so the selected row is obvious without adding a line. */
-.commit-history-row-selected,
-.commit-history-row-selected:nth-child(even) {
+.commit-history-row-branch-drop-target {
   border-radius: 5px;
-  background: #dbeafe;
+}
+
+.commit-branch-tags-cell-branch-drop-target {
+  /* TODO: AI-PICKED-VALUE: This restores the blue branch-drop affordance without replacing the gray row highlight. */
+  box-shadow: inset 0 0 0 2px #0a84ff;
 }
 
 .commit-graph-cell {
@@ -874,6 +944,7 @@ textarea,
 }
 
 .commit-branch-tags-cell,
+.commit-code-locations-cell,
 .commit-actors-cell,
 .commit-description-cell,
 .commit-hash-cell,
@@ -886,12 +957,14 @@ textarea,
 }
 
 .commit-branch-tags-cell,
+.commit-code-locations-cell,
 .commit-actors-cell,
 .commit-description-cell {
   overflow: hidden;
 }
 
 .commit-branch-tags-cell,
+.commit-code-locations-cell,
 .commit-actors-cell {
   overflow-x: auto;
   overflow-y: hidden;
@@ -899,11 +972,13 @@ textarea,
 }
 
 .commit-branch-tags-cell::-webkit-scrollbar,
+.commit-code-locations-cell::-webkit-scrollbar,
 .commit-actors-cell::-webkit-scrollbar {
   display: none;
 }
 
 .commit-branch-tags-cell .commit-label-list,
+.commit-code-locations-cell .commit-label-list,
 .commit-actors-cell .commit-label-list {
   min-width: max-content;
   flex: 0 0 auto;
@@ -931,7 +1006,7 @@ textarea,
   overflow: hidden;
 }
 
-/* TODO: AI-PICKED-VALUE: These dividers make cwd groups read as separate actor clusters without adding row height. */
+/* TODO: AI-PICKED-VALUE: This matches the visible space between plain and highlighted chat groups. */
 .commit-thread-group-list {
   gap: 4px;
 }
@@ -976,10 +1051,12 @@ textarea,
   color: #343a43;
 }
 
+.commit-ref-clickable,
 .commit-ref-worktree {
   cursor: pointer;
 }
 
+.commit-ref-clickable:hover,
 .commit-ref-worktree:hover {
   background: #e3e7ed;
 }
@@ -1042,7 +1119,6 @@ textarea,
   min-height: 18px;
   display: inline-flex;
   align-items: center;
-  /* TODO: AI-PICKED-VALUE: This gives neighboring chat items inside a cwd group a little more breathing room without widening group breaks. */
   gap: 3px;
   min-width: max-content;
   flex: 0 0 auto;
@@ -1050,32 +1126,6 @@ textarea,
   border: 0;
   border-radius: 5px;
   box-sizing: border-box;
-}
-
-.commit-thread-group-highlighted {
-  background: transparent;
-}
-
-.commit-thread-group-highlighted::before {
-  content: "";
-  position: absolute;
-  inset: -1px -2px;
-  z-index: 0;
-  border-radius: inherit;
-  background: #fff8df;
-  background-clip: content-box;
-  pointer-events: none;
-}
-
-.commit-thread-group-highlighted .commit-thread-group-background-tooltip {
-  inset: -1px -2px;
-}
-
-.commit-thread-group-background-tooltip {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  border-radius: inherit;
 }
 
 .commit-thread-group .commit-thread-chat,
@@ -1111,6 +1161,17 @@ textarea,
   height: 10px;
   flex: 0 0 auto;
   overflow: visible;
+  color: #5f6670;
+  opacity: 0.62;
+}
+
+.commit-thread-chat-loading-icon {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  color: #5f6670;
+  opacity: 0.62;
+  animation: initial-loading-spin 900ms linear infinite;
 }
 
 .commit-thread-chat:focus {

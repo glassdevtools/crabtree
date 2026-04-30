@@ -25,6 +25,11 @@ export type CodexThread = {
   gitInfo: CodexGitInfo | null;
 };
 
+export type CodexThreadStatusChange = {
+  threadId: string;
+  status: CodexThreadStatus;
+};
+
 export type GitWorktree = {
   path: string;
   head: string | null;
@@ -66,6 +71,21 @@ export type GitMoveBranchRequest = {
   newSha: string;
 };
 
+export type GitSwitchBranchRequest = {
+  repoRoot: string;
+  path: string;
+  branch: string;
+  oldSha: string;
+  newSha: string;
+};
+
+export type GitDetachWorktreeBranchRequest = {
+  repoRoot: string;
+  path: string;
+  branch: string;
+  sha: string;
+};
+
 export type GitCheckoutCommitRequest = {
   repoRoot: string;
   sha: string;
@@ -89,6 +109,8 @@ export type GitBranchTagChange = {
   newSha: string | null;
 };
 
+export type GitMergeBranchResult = GitBranchTagChange;
+
 export type PathLauncher = "vscode" | "cursor" | "finder";
 
 export type OpenPathRequest = {
@@ -111,6 +133,7 @@ export type GitCommit = {
 export type RepoGraph = {
   key: string;
   root: string;
+  mainWorktreePath: string;
   originUrl: string | null;
   currentBranch: string | null;
   defaultBranch: string | null;
@@ -131,8 +154,12 @@ export type DashboardData = {
 
 export type MoltTreeApi = {
   readDashboard: () => Promise<DashboardData>;
+  watchCodexThreadStatus: (
+    onStatusChange: (codexThreadStatusChange: CodexThreadStatusChange) => void,
+  ) => () => void;
   openCodexThread: (threadId: string) => Promise<void>;
   openNewCodexThread: () => Promise<void>;
+  openExternalUrl: (url: string) => Promise<void>;
   openPath: (openPathRequest: OpenPathRequest) => Promise<void>;
   copyText: (text: string) => Promise<void>;
   stageGitChanges: (path: string) => Promise<void>;
@@ -147,6 +174,12 @@ export type MoltTreeApi = {
     gitDeleteBranchRequest: GitDeleteBranchRequest,
   ) => Promise<void>;
   moveGitBranch: (gitMoveBranchRequest: GitMoveBranchRequest) => Promise<void>;
+  switchGitBranch: (
+    gitSwitchBranchRequest: GitSwitchBranchRequest,
+  ) => Promise<void>;
+  detachGitWorktreeBranch: (
+    gitDetachWorktreeBranchRequest: GitDetachWorktreeBranchRequest,
+  ) => Promise<void>;
   checkoutGitCommit: (
     gitCheckoutCommitRequest: GitCheckoutCommitRequest,
   ) => Promise<void>;
@@ -161,5 +194,5 @@ export type MoltTreeApi = {
   ) => Promise<GitMergePreview>;
   mergeGitBranch: (
     gitMergeBranchRequest: GitMergeBranchRequest,
-  ) => Promise<void>;
+  ) => Promise<GitMergeBranchResult>;
 };

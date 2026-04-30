@@ -4,28 +4,36 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type {
+  CodexThreadStatusChange,
   GitBranchTagChange,
   GitCheckoutCommitRequest,
   GitCommitChangesRequest,
   GitCreateBranchRequest,
   GitDeleteBranchRequest,
+  GitDetachWorktreeBranchRequest,
   GitMergeBranchRequest,
   GitMoveBranchRequest,
+  GitSwitchBranchRequest,
   OpenPathRequest,
   PathLauncher,
 } from "../shared/types";
+import type { AppServerClient } from "./appServerClient";
+import { createAppServerClient } from "./appServerClient";
+import { convertThreadStatus } from "./codexThreads";
 import { readDashboardData } from "./dashboard";
 import {
   checkoutGitCommit,
   commitAllGitChanges,
   createGitBranch,
   deleteGitBranch,
+  detachGitWorktreeBranch,
   mergeGitBranch,
   moveGitBranch,
   previewGitMerge,
   pushGitBranchTagChanges,
   resetGitBranchTagChanges,
   stageGitChanges,
+  switchGitBranch,
   unstageGitChanges,
 } from "./gitActions";
 
@@ -35,6 +43,10 @@ const MAIN_WINDOW_WIDTH = 1320;
 const MAIN_WINDOW_HEIGHT = 860;
 const MAIN_WINDOW_MIN_WIDTH = 980;
 const MAIN_WINDOW_MIN_HEIGHT = 640;
+// The Codex app-server process stays warm so refreshes and status notifications do not pay the startup cost each time.
+let appServerClient: AppServerClient | null = null;
+let appServerClientPromise: Promise<AppServerClient> | null = null;
+let appServerClientVersion = 0;
 let dashboardReadPromise: ReturnType<typeof readDashboardData> | null = null;
 let shouldReadDashboardAgain = false;
 
@@ -56,6 +68,40 @@ const startAutoUpdates = () => {
   autoUpdater.checkForUpdatesAndNotify();
 };
 
+const readExternalUrl = (value: unknown) => {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error("url must be a non-empty string.");
+  }
+
+  const url = new URL(value);
+
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new Error("url must use http or https.");
+  }
+
+  return url.toString();
+};
+
+const openExternalUrlInBrowser = async (value: unknown) => {
+  await shell.openExternal(readExternalUrl(value));
+};
+
+const openExternalUrlInBrowserFromWindow = (value: unknown) => {
+  void openExternalUrlInBrowser(value).catch((error) => {
+    console.error("Failed to open external URL.", error);
+  });
+};
+
+const readIsInternalAppUrl = (url: string) => {
+  if (process.env.ELECTRON_RENDERER_URL) {
+    return (
+      new URL(url).origin === new URL(process.env.ELECTRON_RENDERER_URL).origin
+    );
+  }
+
+  return url.startsWith("file:");
+};
+
 const createMainWindow = () => {
   const mainWindow = new BrowserWindow({
     width: MAIN_WINDOW_WIDTH,
@@ -70,6 +116,19 @@ const createMainWindow = () => {
       nodeIntegration: false,
       sandbox: false,
     },
+  });
+
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    openExternalUrlInBrowserFromWindow(url);
+    return { action: "deny" };
+  });
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    if (readIsInternalAppUrl(url)) {
+      return;
+    }
+
+    event.preventDefault();
+    openExternalUrlInBrowserFromWindow(url);
   });
 
   if (process.env.ELECTRON_RENDERER_URL) {
@@ -89,11 +148,15 @@ const readDashboardDataWithoutOverlap = async () => {
 
   const currentDashboardReadPromise = (async () => {
     shouldReadDashboardAgain = false;
-    let dashboardData = await readDashboardData();
+    let dashboardData = await readDashboardData({
+      appServerClient: await readAppServerClient(),
+    });
 
     while (shouldReadDashboardAgain) {
       shouldReadDashboardAgain = false;
-      dashboardData = await readDashboardData();
+      dashboardData = await readDashboardData({
+        appServerClient: await readAppServerClient(),
+      });
     }
 
     return dashboardData;
@@ -112,6 +175,75 @@ const readDashboardDataWithoutOverlap = async () => {
 
 const isObject = (value: unknown): value is { [key: string]: unknown } => {
   return typeof value === "object" && value !== null;
+};
+
+const readAppServerClient = async () => {
+  if (appServerClient !== null) {
+    return appServerClient;
+  }
+
+  if (appServerClientPromise === null) {
+    appServerClientVersion += 1;
+    const appServerClientVersionForProcess = appServerClientVersion;
+
+    appServerClientPromise = createAppServerClient({
+      onNotification: (notification) => {
+        switch (notification.method) {
+          case "thread/status/changed": {
+            const value = notification.params;
+
+            if (
+              !isObject(value) ||
+              typeof value.threadId !== "string" ||
+              value.threadId.length === 0
+            ) {
+              return;
+            }
+
+            const codexThreadStatusChange: CodexThreadStatusChange = {
+              threadId: value.threadId,
+              status: convertThreadStatus(value.status),
+            };
+
+            for (const browserWindow of BrowserWindow.getAllWindows()) {
+              browserWindow.webContents.send(
+                "codex:threadStatusChanged",
+                codexThreadStatusChange,
+              );
+            }
+
+            return;
+          }
+        }
+      },
+      onClose: () => {
+        if (appServerClientVersion !== appServerClientVersionForProcess) {
+          return;
+        }
+
+        appServerClient = null;
+        appServerClientPromise = null;
+      },
+    });
+  }
+
+  const currentAppServerClientPromise = appServerClientPromise;
+
+  try {
+    const nextAppServerClient = await currentAppServerClientPromise;
+
+    if (appServerClientPromise === currentAppServerClientPromise) {
+      appServerClient = nextAppServerClient;
+    }
+
+    return nextAppServerClient;
+  } catch (error) {
+    if (appServerClientPromise === currentAppServerClientPromise) {
+      appServerClientPromise = null;
+    }
+
+    throw error;
+  }
 };
 
 const readGitCommitChangesRequest = (value: unknown) => {
@@ -213,6 +345,69 @@ const readGitMoveBranchRequest = (value: unknown) => {
   };
 
   return gitMoveBranchRequest;
+};
+
+const readGitSwitchBranchRequest = (value: unknown) => {
+  if (!isObject(value)) {
+    throw new Error("gitSwitchBranchRequest must be an object.");
+  }
+
+  if (
+    typeof value.repoRoot !== "string" ||
+    value.repoRoot.length === 0 ||
+    typeof value.path !== "string" ||
+    value.path.length === 0 ||
+    typeof value.branch !== "string" ||
+    value.branch.trim().length === 0 ||
+    typeof value.oldSha !== "string" ||
+    value.oldSha.length === 0 ||
+    typeof value.newSha !== "string" ||
+    value.newSha.length === 0
+  ) {
+    throw new Error(
+      "gitSwitchBranchRequest needs a repo root, path, branch, old sha, and new sha.",
+    );
+  }
+
+  const gitSwitchBranchRequest: GitSwitchBranchRequest = {
+    repoRoot: value.repoRoot,
+    path: value.path,
+    branch: value.branch.trim(),
+    oldSha: value.oldSha,
+    newSha: value.newSha,
+  };
+
+  return gitSwitchBranchRequest;
+};
+
+const readGitDetachWorktreeBranchRequest = (value: unknown) => {
+  if (!isObject(value)) {
+    throw new Error("gitDetachWorktreeBranchRequest must be an object.");
+  }
+
+  if (
+    typeof value.repoRoot !== "string" ||
+    value.repoRoot.length === 0 ||
+    typeof value.path !== "string" ||
+    value.path.length === 0 ||
+    typeof value.branch !== "string" ||
+    value.branch.trim().length === 0 ||
+    typeof value.sha !== "string" ||
+    value.sha.length === 0
+  ) {
+    throw new Error(
+      "gitDetachWorktreeBranchRequest needs a repo root, path, branch, and sha.",
+    );
+  }
+
+  const gitDetachWorktreeBranchRequest: GitDetachWorktreeBranchRequest = {
+    repoRoot: value.repoRoot,
+    path: value.path,
+    branch: value.branch.trim(),
+    sha: value.sha,
+  };
+
+  return gitDetachWorktreeBranchRequest;
 };
 
 const readGitCheckoutCommitRequest = (value: unknown) => {
@@ -339,6 +534,10 @@ ipcMain.handle("codex:openNewThread", async () => {
   await shell.openExternal("codex://new");
 });
 
+ipcMain.handle("external:openUrl", async (_event, value: unknown) => {
+  await openExternalUrlInBrowser(value);
+});
+
 ipcMain.handle("path:open", async (_event, value: unknown) => {
   const openPathRequest = readOpenPathRequest(value);
 
@@ -411,6 +610,19 @@ ipcMain.handle("git:moveBranch", async (_event, value: unknown) => {
   await moveGitBranch(gitMoveBranchRequest);
 });
 
+ipcMain.handle("git:switchBranch", async (_event, value: unknown) => {
+  const gitSwitchBranchRequest = readGitSwitchBranchRequest(value);
+
+  await switchGitBranch(gitSwitchBranchRequest);
+});
+
+ipcMain.handle("git:detachWorktreeBranch", async (_event, value: unknown) => {
+  const gitDetachWorktreeBranchRequest =
+    readGitDetachWorktreeBranchRequest(value);
+
+  await detachGitWorktreeBranch(gitDetachWorktreeBranchRequest);
+});
+
 ipcMain.handle("git:checkoutCommit", async (_event, value: unknown) => {
   const gitCheckoutCommitRequest = readGitCheckoutCommitRequest(value);
 
@@ -438,7 +650,7 @@ ipcMain.handle("git:previewMerge", async (_event, value: unknown) => {
 ipcMain.handle("git:mergeBranch", async (_event, value: unknown) => {
   const gitMergeBranchRequest = readGitMergeBranchRequest(value);
 
-  await mergeGitBranch(gitMergeBranchRequest);
+  return await mergeGitBranch(gitMergeBranchRequest);
 });
 
 app.whenReady().then(() => {
@@ -450,6 +662,16 @@ app.whenReady().then(() => {
       createMainWindow();
     }
   });
+});
+
+app.on("before-quit", () => {
+  const currentAppServerClient = appServerClient;
+  appServerClient = null;
+  appServerClientPromise = null;
+
+  if (currentAppServerClient !== null) {
+    currentAppServerClient.close();
+  }
 });
 
 app.on("window-all-closed", () => {

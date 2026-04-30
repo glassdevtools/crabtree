@@ -4,17 +4,12 @@ import { Tooltip as TooltipPrimitive } from "radix-ui";
 import { cn } from "@/lib/utils";
 
 function TooltipProvider({
-  // TODO: AI-PICKED-VALUE: This delay makes hover titles appear faster while still avoiding most accidental opens when the mouse crosses dense rows.
-  delayDuration = 650,
-  skipDelayDuration = 0,
   disableHoverableContent = true,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
   return (
     <TooltipPrimitive.Provider
       data-slot="tooltip-provider"
-      delayDuration={delayDuration}
-      skipDelayDuration={skipDelayDuration}
       disableHoverableContent={disableHoverableContent}
       {...props}
     />

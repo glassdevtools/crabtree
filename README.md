@@ -60,6 +60,7 @@ npm run build:website
 - Git graph, branches, commits, thread markers, and file change actions: `simple-git`.
 - Non-archived thread list, thread history, new threads, and sending messages: Codex app-server.
 - Simple start/resume/run flows: Codex app-server in v1; Codex SDK is only a possible future wrapper.
+- Cross-process running thread detection: Codex app-server status events plus the latest task marker in each thread rollout file.
 - Open a thread in Codex Desktop: deep link, using `codex://threads/<thread-id>`.
 - Open a new Codex thread: deep link, using `codex://new`.
 - Lookup thread id by working directory, branch, or commit: Codex app-server thread data.

@@ -1,13 +1,17 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { IpcRendererEvent } from "electron";
 import type {
+  CodexThreadStatusChange,
   DashboardData,
   GitBranchTagChange,
   GitCheckoutCommitRequest,
   GitCommitChangesRequest,
   GitCreateBranchRequest,
   GitDeleteBranchRequest,
+  GitDetachWorktreeBranchRequest,
   GitMergeBranchRequest,
   GitMoveBranchRequest,
+  GitSwitchBranchRequest,
   MoltTreeApi,
   OpenPathRequest,
 } from "../shared/types";
@@ -19,11 +23,28 @@ const api: MoltTreeApi = {
 
     return dashboardData;
   },
+  watchCodexThreadStatus: (onStatusChange) => {
+    const listener = (
+      _event: IpcRendererEvent,
+      codexThreadStatusChange: CodexThreadStatusChange,
+    ) => {
+      onStatusChange(codexThreadStatusChange);
+    };
+
+    ipcRenderer.on("codex:threadStatusChanged", listener);
+
+    return () => {
+      ipcRenderer.removeListener("codex:threadStatusChanged", listener);
+    };
+  },
   openCodexThread: async (threadId: string) => {
     await ipcRenderer.invoke("codex:openThread", threadId);
   },
   openNewCodexThread: async () => {
     await ipcRenderer.invoke("codex:openNewThread");
+  },
+  openExternalUrl: async (url: string) => {
+    await ipcRenderer.invoke("external:openUrl", url);
   },
   openPath: async (openPathRequest: OpenPathRequest) => {
     await ipcRenderer.invoke("path:open", openPathRequest);
@@ -54,6 +75,17 @@ const api: MoltTreeApi = {
   moveGitBranch: async (gitMoveBranchRequest: GitMoveBranchRequest) => {
     await ipcRenderer.invoke("git:moveBranch", gitMoveBranchRequest);
   },
+  switchGitBranch: async (gitSwitchBranchRequest: GitSwitchBranchRequest) => {
+    await ipcRenderer.invoke("git:switchBranch", gitSwitchBranchRequest);
+  },
+  detachGitWorktreeBranch: async (
+    gitDetachWorktreeBranchRequest: GitDetachWorktreeBranchRequest,
+  ) => {
+    await ipcRenderer.invoke(
+      "git:detachWorktreeBranch",
+      gitDetachWorktreeBranchRequest,
+    );
+  },
   checkoutGitCommit: async (
     gitCheckoutCommitRequest: GitCheckoutCommitRequest,
   ) => {
@@ -73,7 +105,7 @@ const api: MoltTreeApi = {
     return await ipcRenderer.invoke("git:previewMerge", gitMergeBranchRequest);
   },
   mergeGitBranch: async (gitMergeBranchRequest: GitMergeBranchRequest) => {
-    await ipcRenderer.invoke("git:mergeBranch", gitMergeBranchRequest);
+    return await ipcRenderer.invoke("git:mergeBranch", gitMergeBranchRequest);
   },
 };
 

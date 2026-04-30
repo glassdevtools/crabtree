@@ -19,12 +19,14 @@ import {
   commitAllGitChanges,
   createGitBranch,
   deleteGitBranch,
+  detachGitWorktreeBranch,
   mergeGitBranch,
   moveGitBranch,
   previewGitMerge,
   pushGitBranchTagChanges,
   resetGitBranchTagChanges,
   stageGitChanges,
+  switchGitBranch,
   unstageGitChanges,
 } from "../src/main/gitActions";
 import { readGitChangesOfCwd, readRepoGraphs } from "../src/main/gitData";
@@ -357,6 +359,96 @@ test("reads staged and unstaged change summaries for repo and worktree cwd value
   });
 });
 
+test("uses the main worktree as the repo root for linked worktree threads", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    await commitRepoFile({
+      repoRoot,
+      filePath: "base.txt",
+      content: "base\n",
+      message: "base",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
+    const featureSha = await commitRepoFile({
+      repoRoot,
+      filePath: "feature.txt",
+      content: "feature\n",
+      message: "feature",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "main"] });
+    const worktreeRoot = `${repoRoot}-feature-worktree`;
+
+    await runGit({
+      cwd: repoRoot,
+      args: ["worktree", "add", worktreeRoot, "feature"],
+    });
+
+    const { repos, warnings, gitErrors } = await readRepoGraphs({
+      threads: [createThread({ id: "worktree-thread", cwd: worktreeRoot })],
+    });
+    const repo = repos[0];
+
+    assert.equal(warnings.length, 0);
+    assert.equal(gitErrors.length, 0);
+    assert.equal(repo?.root, repoRoot);
+    assert.equal(repo?.mainWorktreePath, repoRoot);
+    assert.equal(repo?.currentBranch, "main");
+    assert.deepEqual(repo?.threadIds, ["worktree-thread"]);
+    assert.equal(repo?.worktrees[0]?.path, worktreeRoot);
+    assert.equal(repo?.worktrees[0]?.branch, "feature");
+    assert.equal(repo?.worktrees[0]?.head, featureSha);
+  });
+});
+
+test("reads main worktree changes even when every thread is in a linked worktree", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    await commitRepoFile({
+      repoRoot,
+      filePath: "base.txt",
+      content: "base\n",
+      message: "base",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
+    await commitRepoFile({
+      repoRoot,
+      filePath: "feature.txt",
+      content: "feature\n",
+      message: "feature",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "main"] });
+    const worktreeRoot = `${repoRoot}-feature-worktree`;
+
+    await runGit({
+      cwd: repoRoot,
+      args: ["worktree", "add", worktreeRoot, "feature"],
+    });
+
+    const threads = [
+      createThread({ id: "worktree-thread", cwd: worktreeRoot }),
+    ];
+    const repoGraphResult = await readRepoGraphs({ threads });
+
+    await appendRepoFile({
+      repoRoot,
+      filePath: "base.txt",
+      content: "main unstaged\n",
+    });
+    await appendRepoFile({
+      repoRoot: worktreeRoot,
+      filePath: "feature.txt",
+      content: "worktree unstaged\n",
+    });
+
+    const { gitChangesOfCwd, gitErrors } = await readGitChangesOfCwd({
+      threads,
+      repos: repoGraphResult.repos,
+    });
+
+    assert.equal(gitErrors.length, 0);
+    assert.equal(gitChangesOfCwd[repoRoot]?.unstaged.added, 1);
+    assert.equal(gitChangesOfCwd[worktreeRoot]?.unstaged.added, 1);
+  });
+});
+
 // -------------------------- Local working tree actions ---------------
 
 test("stages and unstages all changes in a repo path", async () => {
@@ -477,7 +569,7 @@ test("keeps a successful commit when a colocated branch tag moves first", async 
   });
 });
 
-test("creates a branch at the current HEAD", async () => {
+test("creates and checks out a branch at the current HEAD", async () => {
   await withRepo(async ({ repoRoot }) => {
     const headSha = await commitRepoFile({
       repoRoot,
@@ -491,6 +583,94 @@ test("creates a branch at the current HEAD", async () => {
     assert.equal(
       await readSha({ cwd: repoRoot, ref: "refs/heads/created" }),
       headSha,
+    );
+    assert.equal(
+      await runGit({ cwd: repoRoot, args: ["branch", "--show-current"] }),
+      "created",
+    );
+  });
+});
+
+test("switches a dirty detached worktree to an existing branch at the same commit", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    const headSha = await commitRepoFile({
+      repoRoot,
+      filePath: "file.txt",
+      content: "one\n",
+      message: "initial",
+    });
+    await runGit({ cwd: repoRoot, args: ["branch", "target", headSha] });
+    const worktreeRoot = `${repoRoot}-detached-worktree`;
+
+    await runGit({
+      cwd: repoRoot,
+      args: ["worktree", "add", "--detach", worktreeRoot, headSha],
+    });
+    await appendRepoFile({
+      repoRoot: worktreeRoot,
+      filePath: "file.txt",
+      content: "dirty\n",
+    });
+
+    await switchGitBranch({
+      repoRoot,
+      path: worktreeRoot,
+      branch: "target",
+      oldSha: headSha,
+      newSha: headSha,
+    });
+
+    assert.equal(
+      await runGit({ cwd: worktreeRoot, args: ["branch", "--show-current"] }),
+      "target",
+    );
+    assert.equal(
+      await runGit({ cwd: worktreeRoot, args: ["status", "--porcelain"] }),
+      "M file.txt",
+    );
+  });
+});
+
+test("detaches a dirty worktree branch at the same commit", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    const headSha = await commitRepoFile({
+      repoRoot,
+      filePath: "file.txt",
+      content: "one\n",
+      message: "initial",
+    });
+    await runGit({ cwd: repoRoot, args: ["branch", "target", headSha] });
+    const worktreeRoot = `${repoRoot}-target-worktree`;
+
+    await runGit({
+      cwd: repoRoot,
+      args: ["worktree", "add", worktreeRoot, "target"],
+    });
+    await appendRepoFile({
+      repoRoot: worktreeRoot,
+      filePath: "file.txt",
+      content: "dirty\n",
+    });
+
+    await detachGitWorktreeBranch({
+      repoRoot,
+      path: worktreeRoot,
+      branch: "target",
+      sha: headSha,
+    });
+
+    assert.equal(
+      await runGit({ cwd: worktreeRoot, args: ["branch", "--show-current"] }),
+      "",
+    );
+    assert.equal(await readSha({ cwd: worktreeRoot, ref: "HEAD" }), headSha);
+    assert.equal(
+      await readSha({ cwd: repoRoot, ref: "refs/heads/target" }),
+      headSha,
+    );
+    assert.equal(
+      await runGit({ cwd: worktreeRoot, args: ["status", "--porcelain"] }),
+      "M file.txt",
     );
   });
 });
@@ -792,7 +972,7 @@ test("previews and merges a branch into HEAD", async () => {
       message: "feature",
     });
     await runGit({ cwd: repoRoot, args: ["switch", "main"] });
-    await commitRepoFile({
+    const oldSha = await commitRepoFile({
       repoRoot,
       filePath: "main.txt",
       content: "main\n",
@@ -805,7 +985,18 @@ test("previews and merges a branch into HEAD", async () => {
     assert.equal(preview.removed, 0);
     assert.equal(preview.conflictCount, 0);
 
-    await mergeGitBranch({ repoRoot, branch: "feature" });
+    const branchTagChange = await mergeGitBranch({
+      repoRoot,
+      branch: "feature",
+    });
+    const newSha = await readSha({ cwd: repoRoot, ref: "HEAD" });
+
+    assert.deepEqual(branchTagChange, {
+      repoRoot,
+      branch: "main",
+      oldSha,
+      newSha,
+    });
 
     assert.equal(
       await runGit({
@@ -818,6 +1009,39 @@ test("previews and merges a branch into HEAD", async () => {
       await readRepoFile({ repoRoot, filePath: "feature.txt" }),
       "feature\n",
     );
+  });
+});
+
+test("returns the current branch tag change for fast-forward merges", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    const oldSha = await commitRepoFile({
+      repoRoot,
+      filePath: "base.txt",
+      content: "base\n",
+      message: "base",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
+    const newSha = await commitRepoFile({
+      repoRoot,
+      filePath: "feature.txt",
+      content: "feature\n",
+      message: "feature",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "main"] });
+
+    const branchTagChange = await mergeGitBranch({
+      repoRoot,
+      branch: "feature",
+    });
+
+    assert.deepEqual(branchTagChange, {
+      repoRoot,
+      branch: "main",
+      oldSha,
+      newSha,
+    });
+    assert.equal(await readSha({ cwd: repoRoot, ref: "HEAD" }), newSha);
+    assert.equal(await readSha({ cwd: repoRoot, ref: "main" }), newSha);
   });
 });
 
@@ -851,6 +1075,33 @@ test("rejects merge when the branch is already in HEAD", async () => {
     await assert.rejects(async () => {
       await mergeGitBranch({ repoRoot, branch: "feature" });
     }, /already in HEAD/);
+  });
+});
+
+test("rejects merge when HEAD is detached", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    const oldSha = await commitRepoFile({
+      repoRoot,
+      filePath: "base.txt",
+      content: "base\n",
+      message: "base",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
+    await commitRepoFile({
+      repoRoot,
+      filePath: "feature.txt",
+      content: "feature\n",
+      message: "feature",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "--detach", oldSha] });
+
+    await assert.rejects(async () => {
+      await previewGitMerge({ repoRoot, branch: "feature" });
+    }, /HEAD must be on a branch/);
+    await assert.rejects(async () => {
+      await mergeGitBranch({ repoRoot, branch: "feature" });
+    }, /HEAD must be on a branch/);
+    assert.equal(await readSha({ cwd: repoRoot, ref: "HEAD" }), oldSha);
   });
 });
 
