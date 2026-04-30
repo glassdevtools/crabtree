@@ -27,7 +27,7 @@ Feel free to submit an [Issue](https://github.com/glassdevtools/molttree/issues)
 ## Download
 
 
-You can download MoltTree on our [Releases](https://github.com/glassdevtools/molttree/releases/latest) page or [Website](https://molttree.app)!
+You can download MoltTree on our [Website](https://molttree.app)!
 
 <div align="center">
 	<img
