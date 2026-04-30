@@ -45,7 +45,7 @@ import type {
   PathLauncher,
   RepoGraph,
 } from "../shared/types";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -3835,8 +3835,7 @@ const CommitHistory = ({
 
     const branchPointerTarget = readBranchPointerTarget({ row });
     const isSameBranchPointerPlace =
-      activeBranchPointerDrag.oldSha === branchPointerTarget.sha &&
-      activeBranchPointerDrag.sourcePath === branchPointerTarget.path;
+      activeBranchPointerDrag.oldSha === branchPointerTarget.sha;
 
     if (
       activeBranchPointerDrag.repoRoot !== repoRoot ||
@@ -3879,8 +3878,7 @@ const CommitHistory = ({
 
     const branchPointerTarget = readBranchPointerTarget({ row });
     const isSameBranchPointerPlace =
-      activeBranchPointerDrag.oldSha === branchPointerTarget.sha &&
-      activeBranchPointerDrag.sourcePath === branchPointerTarget.path;
+      activeBranchPointerDrag.oldSha === branchPointerTarget.sha;
 
     if (
       activeBranchPointerDrag.repoRoot !== repoRoot ||
@@ -5374,7 +5372,6 @@ const MoltTreeDesktopApp = () => {
       ? readBranchSyncPushWarningMessages({
           branchSyncChanges: branchSyncChangesInConfirmation,
           commits: branchSyncConfirmationRepo.commits,
-          worktrees: branchSyncConfirmationRepo.worktrees,
         })
       : [];
   const branchSyncActionText =
@@ -5594,6 +5591,7 @@ const MoltTreeDesktopApp = () => {
               </ul>
               {branchSyncPushWarningMessages.length === 0 ? null : (
                 <Alert className="git-action-warning" variant="destructive">
+                  <AlertTitle>Warnings:</AlertTitle>
                   {branchSyncPushWarningMessages.map((warningMessage) => (
                     <AlertDescription key={warningMessage}>
                       {warningMessage}

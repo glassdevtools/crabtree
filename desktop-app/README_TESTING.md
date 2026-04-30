@@ -55,7 +55,7 @@ This file is the short checklist for Git behavior in MoltTree. Tests should prov
 - Warn before deleting the only local branch/tag/worktree ref that keeps commits visible.
 - Reject moving the only local branch/tag/worktree ref that keeps commits visible.
 - Reject switching away from an unreachable detached HEAD.
-- Warn before pushing remote updates that would hide commits from the visible graph.
+- Warn before pushing remote updates that remove the last branch or tag from a commit.
 - Reject reset/pull actions that would hide local-only commits unless another local ref keeps them visible.
 
 ## Minimum Test Coverage

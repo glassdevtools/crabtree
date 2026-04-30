@@ -1,8 +1,4 @@
-import type {
-  GitBranchSyncChange,
-  GitCommit,
-  GitWorktree,
-} from "../shared/types";
+import type { GitBranchSyncChange, GitCommit } from "../shared/types";
 
 const cleanRefName = (ref: string) => {
   const headPrefix = "HEAD -> ";
@@ -24,18 +20,38 @@ const cleanRefName = (ref: string) => {
   return ref;
 };
 
-// Push warnings mirror the visible graph so the user sees the risk before choosing to push.
+const joinNames = (names: string[]) => {
+  if (names.length <= 2) {
+    return names.join(" and ");
+  }
+
+  return `${names.slice(0, names.length - 1).join(", ")}, and ${names[names.length - 1]}`;
+};
+
+// Push warnings tell the user when a push removes the last branch or tag from a commit.
 export const readBranchSyncPushWarningMessages = ({
   branchSyncChanges,
   commits,
-  worktrees,
 }: {
   branchSyncChanges: GitBranchSyncChange[];
   commits: GitCommit[];
-  worktrees: GitWorktree[];
 }) => {
   const commitOfSha: { [sha: string]: GitCommit } = {};
+  const isChangedOriginRefOfName: { [refName: string]: boolean } = {};
+  const branchNamesOfSha: { [sha: string]: string[] } = {};
+  const shortShaOfSha: { [sha: string]: string } = {};
   const warningMessages: string[] = [];
+
+  for (const branchSyncChange of branchSyncChanges) {
+    if (
+      branchSyncChange.gitRefType !== "branch" ||
+      branchSyncChange.originSha === null
+    ) {
+      continue;
+    }
+
+    isChangedOriginRefOfName[`origin/${branchSyncChange.name}`] = true;
+  }
 
   for (const commit of commits) {
     commitOfSha[commit.sha] = commit;
@@ -77,16 +93,15 @@ export const readBranchSyncPushWarningMessages = ({
     return false;
   };
 
-  const readWillDropOldOriginTipFromGraph = ({
-    branch,
+  const readWillRemoveLastBranchOrTagFromOldOriginTip = ({
     oldSha,
     newSha,
   }: {
-    branch: string;
     oldSha: string;
-    newSha: string;
+    newSha: string | null;
   }) => {
     if (
+      newSha !== null &&
       readIsAncestorInGraph({
         ancestorSha: oldSha,
         descendantSha: newSha,
@@ -95,8 +110,7 @@ export const readBranchSyncPushWarningMessages = ({
       return false;
     }
 
-    const changedOriginRef = `origin/${branch}`;
-    const rootShas = [newSha];
+    const rootShas = newSha === null ? [] : [newSha];
 
     for (const commit of commits) {
       if (commit.localBranches.length > 0) {
@@ -106,20 +120,16 @@ export const readBranchSyncPushWarningMessages = ({
       for (const ref of commit.refs) {
         const refName = cleanRefName(ref);
 
-        if (refName === "origin/HEAD" || refName === changedOriginRef) {
+        if (
+          refName === "HEAD" ||
+          refName === "origin/HEAD" ||
+          isChangedOriginRefOfName[refName] === true
+        ) {
           continue;
         }
 
         rootShas.push(commit.sha);
       }
-    }
-
-    for (const worktree of worktrees) {
-      if (worktree.head === null) {
-        continue;
-      }
-
-      rootShas.push(worktree.head);
     }
 
     for (const rootSha of rootShas) {
@@ -139,10 +149,8 @@ export const readBranchSyncPushWarningMessages = ({
   for (const branchSyncChange of branchSyncChanges) {
     if (
       branchSyncChange.gitRefType !== "branch" ||
-      branchSyncChange.localSha === null ||
       branchSyncChange.originSha === null ||
-      !readWillDropOldOriginTipFromGraph({
-        branch: branchSyncChange.name,
+      !readWillRemoveLastBranchOrTagFromOldOriginTip({
         oldSha: branchSyncChange.originSha,
         newSha: branchSyncChange.localSha,
       })
@@ -150,14 +158,31 @@ export const readBranchSyncPushWarningMessages = ({
       continue;
     }
 
-    const oldCommit = commitOfSha[branchSyncChange.originSha];
-    const oldShortSha =
-      oldCommit === undefined
-        ? branchSyncChange.originSha.slice(0, 7)
-        : oldCommit.shortSha;
+    if (branchNamesOfSha[branchSyncChange.originSha] === undefined) {
+      branchNamesOfSha[branchSyncChange.originSha] = [];
+    }
+
+    branchNamesOfSha[branchSyncChange.originSha].push(branchSyncChange.name);
+
+    if (shortShaOfSha[branchSyncChange.originSha] === undefined) {
+      const oldCommit = commitOfSha[branchSyncChange.originSha];
+      shortShaOfSha[branchSyncChange.originSha] =
+        oldCommit === undefined
+          ? branchSyncChange.originSha.slice(0, 7)
+          : oldCommit.shortSha;
+    }
+  }
+
+  for (const sha of Object.keys(branchNamesOfSha)) {
+    const branchNames = branchNamesOfSha[sha];
+    const shortSha = shortShaOfSha[sha];
+
+    if (branchNames === undefined || shortSha === undefined) {
+      continue;
+    }
 
     warningMessages.push(
-      `Are you sure you want to push? Moving ${branchSyncChange.name} branch from ${oldShortSha} will drop that commit from the graph.`,
+      `${shortSha} will disappear from the tree because ${joinNames(branchNames)} won't be there to point to it anymore.`,
     );
   }
 
