@@ -1871,7 +1871,7 @@ test("pushes an origin-only tag sync change by deleting it from origin", async (
   });
 });
 
-test("rejects pushing a branch sync update that would hide the old origin tip", async () => {
+test("pushes a branch sync update that would hide the old origin tip", async () => {
   await withOriginRepo(async ({ repoRoot, originRoot, mainSha }) => {
     await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
     const oldSha = await commitRepoFile({
@@ -1884,21 +1884,23 @@ test("rejects pushing a branch sync update that would hide the old origin tip", 
     await runGit({ cwd: repoRoot, args: ["switch", "main"] });
     await runGit({ cwd: repoRoot, args: ["branch", "-f", "feature", mainSha] });
 
-    await assert.rejects(async () => {
-      await pushGitBranchSyncChanges([
-        {
-          repoRoot,
-          gitRefType: "branch",
-          name: "feature",
-          localSha: mainSha,
-          originSha: oldSha,
-        },
-      ]);
-    }, /hide commits/);
+    await pushGitBranchSyncChanges([
+      {
+        repoRoot,
+        gitRefType: "branch",
+        name: "feature",
+        localSha: mainSha,
+        originSha: oldSha,
+      },
+    ]);
 
     assert.equal(
       await readSha({ cwd: originRoot, ref: "refs/heads/feature" }),
-      oldSha,
+      mainSha,
+    );
+    assert.equal(
+      await readSha({ cwd: repoRoot, ref: "refs/remotes/origin/feature" }),
+      mainSha,
     );
   });
 });

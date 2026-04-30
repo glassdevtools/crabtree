@@ -1183,18 +1183,6 @@ export const pushGitBranchSyncChanges = async (
       if (originHead !== expectedOriginSha) {
         throw new Error(`${name} moved. Refresh and try again.`);
       }
-
-      await ensureOldShaStaysVisibleAfterRefChange({
-        repoRoot,
-        oldSha: expectedOriginSha,
-        changedRef: originBranchRef,
-        replacementSha: targetSha,
-        changedLocalBranch: null,
-        rootRefs: ["refs/remotes/origin"],
-        shouldIncludeWorktreeHeads: false,
-        message:
-          "Pushing this branch update would hide commits from the graph. Move or tag another branch first.",
-      });
     } else {
       const originHead = await readNullableGitTextForPath({
         path: repoRoot,

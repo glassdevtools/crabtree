@@ -16,6 +16,7 @@
     "src/main/dashboardRefresh.ts",
     "src/main/gitActions.ts",
     "src/main/gitData.ts",
+    "src/renderer/branchSyncWarnings.ts",
     "src/renderer/threadGroups.ts",
     "src/shared/types.ts"
   ]

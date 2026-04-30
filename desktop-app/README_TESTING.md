@@ -46,8 +46,8 @@ This file is the short checklist for Git behavior in MoltTree. Tests should prov
 
 ## Safety Rules To Test
 
-- Never allow an action that makes commits disappear from the visible graph.
-- Never trust the renderer as the only safety gate; backend Git actions need their own checks.
+- Never allow an action that makes commits disappear from the visible graph unless the confirmation explains the exact ref and commit that will disappear.
+- Backend Git actions need their own checks for blocked safety rules.
 - Reject stale `oldSha` requests.
 - Reject checkout, merge, reset, and checked-out branch moves when the worktree is dirty.
 - Reject pull requests when the selected head branch is not pushed or moved.
@@ -55,7 +55,7 @@ This file is the short checklist for Git behavior in MoltTree. Tests should prov
 - Warn before deleting the only local branch/tag/worktree ref that keeps commits visible.
 - Reject moving the only local branch/tag/worktree ref that keeps commits visible.
 - Reject switching away from an unreachable detached HEAD.
-- Reject pushing remote updates or deletes that would hide commits from origin's visible branch graph.
+- Warn before pushing remote updates that would hide commits from the visible graph.
 - Reject reset/pull actions that would hide local-only commits unless another local ref keeps them visible.
 
 ## Minimum Test Coverage

@@ -96,6 +96,7 @@ import {
   readIsGitChangeSummaryEmpty,
   readIsWorktreeCwd,
 } from "./threadGroups";
+import { readBranchSyncPushWarningMessages } from "./branchSyncWarnings";
 import type { ThreadGroup } from "./threadGroups";
 import {
   readIsAnalyticsPrivateMode,
@@ -5355,6 +5356,21 @@ const MoltTreeDesktopApp = () => {
             branchSyncConfirmation.repoRoot,
           ),
         });
+  const branchSyncConfirmationRepo =
+    branchSyncConfirmation === null || dashboardData === null
+      ? null
+      : (dashboardData.repos.find(
+          (repo) => repo.root === branchSyncConfirmation.repoRoot,
+        ) ?? null);
+  const branchSyncPushWarningMessages =
+    branchSyncConfirmation?.action === "push" &&
+    branchSyncConfirmationRepo !== null
+      ? readBranchSyncPushWarningMessages({
+          branchSyncChanges: branchSyncChangesInConfirmation,
+          commits: branchSyncConfirmationRepo.commits,
+          worktrees: branchSyncConfirmationRepo.worktrees,
+        })
+      : [];
   const branchSyncActionText =
     branchSyncConfirmation === null
       ? null
@@ -5570,6 +5586,15 @@ const MoltTreeDesktopApp = () => {
                   </li>
                 ))}
               </ul>
+              {branchSyncPushWarningMessages.length === 0 ? null : (
+                <Alert className="git-action-warning" variant="destructive">
+                  {branchSyncPushWarningMessages.map((warningMessage) => (
+                    <AlertDescription key={warningMessage}>
+                      {warningMessage}
+                    </AlertDescription>
+                  ))}
+                </Alert>
+              )}
             </>
           )}
         </ConfirmationDialog>
