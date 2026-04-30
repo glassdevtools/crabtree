@@ -1159,6 +1159,10 @@ textarea,
   transform: rotate(90deg);
 }
 
+.commit-graph-merge-action-icon {
+  transform: scaleX(-1);
+}
+
 .commit-ref-draggable {
   cursor: grab;
 }

@@ -2401,6 +2401,7 @@ const CommitHistoryRow = ({
                     }
                   >
                     <LuGitPullRequestArrow
+                      className="commit-graph-merge-action-icon"
                       size={COMMIT_GRAPH_ACTION_ICON_SIZE}
                       strokeWidth={COMMIT_GRAPH_ACTION_ICON_STROKE_WIDTH}
                     />
@@ -4157,6 +4158,13 @@ const CommitHistory = ({
             headSha: gitPullRequestCreateTarget.sha,
             title,
             description,
+          });
+          trackDesktopAction({
+            eventName: "pull_request_created",
+            properties: {
+              has_description: description.length > 0,
+              source: "commit_context_menu",
+            },
           });
           closeGitPullRequestCreateModal();
         } catch (error) {

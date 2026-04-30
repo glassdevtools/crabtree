@@ -27,6 +27,7 @@ Desktop events are identified with a random install ID stored in Electron user d
 | `repo_opened`                | `surface`, `app_version`, `launcher`, `source`                             |
 | `repo_selected`              | `surface`, `app_version`                                                   |
 | `path_launcher_changed`      | `surface`, `app_version`, `launcher`                                       |
+| `pull_request_created`       | `surface`, `app_version`, `has_description`, `source`                      |
 | `chat_opened`                | `surface`, `app_version`                                                   |
 | `change_summary_opened`      | `surface`, `app_version`                                                   |
 | `codex_chats_filter_changed` | `surface`, `app_version`, `is_enabled`                                     |

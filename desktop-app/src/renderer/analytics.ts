@@ -22,6 +22,7 @@ type DesktopAnalyticsEventName =
   | "github_clicked"
   | "head_switched"
   | "path_launcher_changed"
+  | "pull_request_created"
   | "repo_opened"
   | "repo_selected"
   | "tag_created"

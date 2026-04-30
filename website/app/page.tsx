@@ -34,7 +34,7 @@ const featureItems = [
   {
     title: "Git power tools",
     descriptionLines: [
-      "Commit, branch, merge, push, and pull. No IDE needed. Access power tools like one-click merges, and moving branch tags by simply dragging.",
+      "Commit, branch, merge, push, and pull. No IDE needed. Access power tools like one-click merges and moving branch tags by simply dragging.",
     ],
   },
   {
@@ -62,8 +62,8 @@ const questionItems = [
     have changes?
   </>,
   <>
-    Which <span className="featureToken featureTokenChat">chats</span> have
-    changes?
+    Which <span className="featureToken featureTokenChat">chats</span> were
+    merged yet?
   </>,
   "And more...",
 ];
