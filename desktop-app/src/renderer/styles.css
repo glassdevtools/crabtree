@@ -513,17 +513,20 @@ textarea,
 }
 
 /* TODO: AI-PICKED-VALUE: The modal width fits the About header and version row without making the window feel empty. */
-.about-modal {
+.about-modal,
+.settings-modal {
   width: min(320px, calc(100vw - 32px));
 }
 
-.about-modal-fields {
+.about-modal-fields,
+.settings-modal-fields {
   display: grid;
   gap: 8px;
   margin: 0;
 }
 
-.about-modal-field {
+.about-modal-field,
+.settings-modal-field {
   display: grid;
   grid-template-columns: 82px 1fr;
   gap: 10px;
@@ -532,25 +535,49 @@ textarea,
   line-height: 1.35;
 }
 
-.about-modal-field dt {
+.about-modal-field dt,
+.settings-modal-field dt {
   color: #202124;
   font-weight: 700;
 }
 
-.about-modal-field dd {
+.about-modal-field dd,
+.settings-modal-field dd {
   margin: 0;
   color: #5f6670;
   font-weight: 550;
 }
 
-.about-modal-link {
+.about-modal-link,
+.settings-modal-link {
   color: #0a64c9;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
-.about-modal-link:hover {
+.about-modal-link:hover,
+.settings-modal-link:hover {
   color: #084f9f;
+}
+
+.private-mode-setting {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: flex-start;
+  padding-bottom: 4px;
+}
+
+.private-mode-setting-text {
+  display: grid;
+  gap: 5px;
+}
+
+.private-mode-setting-text p {
+  margin: 0;
+  color: #5f6670;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .title-tooltip-trigger {

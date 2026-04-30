@@ -1,8 +1,8 @@
 import {
   CircleArrowLeft,
   CircleArrowUp,
-  Info,
   LoaderCircle,
+  Settings,
   Tag,
   Trash2,
 } from "lucide-react";
@@ -49,6 +49,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -64,6 +65,7 @@ import {
   EmptyMedia,
 } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -91,6 +93,11 @@ import {
   readIsWorktreeCwd,
 } from "./threadGroups";
 import type { ThreadGroup } from "./threadGroups";
+import {
+  readIsAnalyticsPrivateMode,
+  setAnalyticsPrivateMode,
+  trackDesktopAction,
+} from "./analytics";
 import packageInfo from "../../package.json";
 
 // The history view is a SourceTree-style row table. Git owns the commits; the renderer only assigns lanes.
@@ -1608,6 +1615,7 @@ const ChatRobotTags = ({
   const openThread = async (threadId: string) => {
     try {
       await window.molttree.openCodexThread(threadId);
+      trackDesktopAction({ eventName: "chat_opened", properties: {} });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to open chat.";
@@ -3486,6 +3494,7 @@ const CommitHistory = ({
     event.dataTransfer.setData("text/plain", branch);
     branchPointerDragRef.current = nextBranchPointerDrag;
     setBranchPointerDropTargetRowId(null);
+    trackDesktopAction({ eventName: "branch_dragged", properties: {} });
   };
   const finishBranchPointerDrag = () => {
     branchPointerDragRef.current = null;
@@ -3694,6 +3703,10 @@ const CommitHistory = ({
     event.preventDefault();
     event.stopPropagation();
     setChangeSummaryTarget(changeSummaryTarget);
+    trackDesktopAction({
+      eventName: "change_summary_opened",
+      properties: {},
+    });
   };
   const closeChangeSummaryModal = () => {
     setChangeSummaryTarget(null);
@@ -3732,6 +3745,10 @@ const CommitHistory = ({
               });
               break;
           }
+          trackDesktopAction({
+            eventName: "branch_created",
+            properties: { target_type: branchCreateTarget.type },
+          });
           closeBranchCreateModal();
         } catch (error) {
           return error instanceof Error
@@ -3763,6 +3780,13 @@ const CommitHistory = ({
             gitRefType: gitRefCreateTarget.gitRefType,
             name,
             sha: gitRefCreateTarget.sha,
+          });
+          trackDesktopAction({
+            eventName:
+              gitRefCreateTarget.gitRefType === "branch"
+                ? "branch_created"
+                : "tag_created",
+            properties: { target_type: "commit" },
           });
           closeGitRefCreateModal();
         } catch (error) {
@@ -3805,6 +3829,12 @@ const CommitHistory = ({
             }
           }
 
+          trackDesktopAction({
+            eventName: "changes_committed",
+            properties: {
+              did_move_branch: commitMessageTarget.branchTarget !== null,
+            },
+          });
           closeCommitMessageModal();
         } catch (error) {
           return error instanceof Error
@@ -3845,6 +3875,13 @@ const CommitHistory = ({
               });
               break;
           }
+          trackDesktopAction({
+            eventName:
+              deleteTarget.gitRefType === "branch"
+                ? "branch_deleted"
+                : "tag_deleted",
+            properties: { had_warning: deleteTarget.warningMessage !== null },
+          });
         } catch (error) {
           return error instanceof Error
             ? error.message
@@ -3860,6 +3897,10 @@ const CommitHistory = ({
   const openCodePath = async (path: string) => {
     try {
       await window.molttree.openPath({ path, launcher: pathLauncher });
+      trackDesktopAction({
+        eventName: "repo_opened",
+        properties: { launcher: pathLauncher, source: "commit_history" },
+      });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to open path.";
@@ -3904,6 +3945,14 @@ const CommitHistory = ({
             repoRoot,
             branch: request.branch,
           });
+          trackDesktopAction({
+            eventName: "branch_merged",
+            properties: {
+              added_lines: request.preview.added,
+              removed_lines: request.preview.removed,
+              conflict_count: request.preview.conflictCount,
+            },
+          });
         } catch (error) {
           return error instanceof Error
             ? error.message
@@ -3944,6 +3993,10 @@ const CommitHistory = ({
                 oldSha: request.oldSha,
                 newSha: request.newSha,
               });
+              trackDesktopAction({
+                eventName: "branch_moved",
+                properties: { had_warning: request.warningMessage !== null },
+              });
               break;
             case "blockedCheckedOutBranch":
               return branchPointerOperationText.description;
@@ -3976,6 +4029,13 @@ const CommitHistory = ({
           await window.molttree.checkoutGitCommit({
             repoRoot,
             sha: row.commit.sha,
+          });
+          trackDesktopAction({
+            eventName: "head_switched",
+            properties: {
+              target_type:
+                row.commit.localBranches.length > 0 ? "branch" : "commit",
+            },
           });
         } catch (error) {
           return error instanceof Error
@@ -4074,7 +4134,12 @@ const CommitHistory = ({
                 type="button"
                 aria-pressed={shouldShowChatOnly}
                 onClick={() => {
-                  setShouldShowChatOnly(!shouldShowChatOnly);
+                  const nextShouldShowChatOnly = !shouldShowChatOnly;
+                  setShouldShowChatOnly(nextShouldShowChatOnly);
+                  trackDesktopAction({
+                    eventName: "codex_chats_filter_changed",
+                    properties: { is_enabled: nextShouldShowChatOnly },
+                  });
                 }}
               >
                 Codex Chats
@@ -4493,7 +4558,10 @@ const MoltTreeDesktopApp = () => {
   >(null);
   const [branchSyncConfirmation, setBranchSyncConfirmation] =
     useState<BranchSyncConfirmation | null>(null);
-  const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isPrivateMode, setIsPrivateMode] = useState(
+    readIsAnalyticsPrivateMode,
+  );
   const [initialLoadingImageUrl] = useState(() => {
     const randomLoadingImageValue = Math.random();
     const rareLoadingImageIndex = Math.floor(
@@ -4821,6 +4889,11 @@ const MoltTreeDesktopApp = () => {
               break;
           }
 
+          trackDesktopAction({
+            eventName:
+              action === "push" ? "branches_pushed" : "branches_pulled",
+            properties: { change_count: changes.length },
+          });
           gitSuccessMessage = branchSyncActionText.successMessage;
         } catch (error) {
           gitErrorMessage =
@@ -4892,6 +4965,10 @@ const MoltTreeDesktopApp = () => {
         path: selectedRepo.root,
         launcher: pathLauncher,
       });
+      trackDesktopAction({
+        eventName: "repo_opened",
+        properties: { launcher: pathLauncher, source: "header" },
+      });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to open repo.";
@@ -4900,13 +4977,23 @@ const MoltTreeDesktopApp = () => {
   };
   const changeSelectedRepoRoot = (repoRoot: string) => {
     setSelectedRepoRoot(repoRoot);
+    trackDesktopAction({ eventName: "repo_selected", properties: {} });
   };
   const changePathLauncher = (value: string) => {
     const nextPathLauncher = readPathLauncher(value);
 
     if (nextPathLauncher !== null) {
       setPathLauncher(nextPathLauncher);
+      trackDesktopAction({
+        eventName: "path_launcher_changed",
+        properties: { launcher: nextPathLauncher },
+      });
     }
+  };
+  const changePrivateMode = (checked: boolean | "indeterminate") => {
+    const nextIsPrivateMode = checked === true;
+    setAnalyticsPrivateMode(nextIsPrivateMode);
+    setIsPrivateMode(nextIsPrivateMode);
   };
   const selectedRepoBranchSyncChanges =
     selectedRepo === null
@@ -5006,13 +5093,13 @@ const MoltTreeDesktopApp = () => {
             </>
           )}
           <button
-            aria-label="Open About"
+            aria-label="Open Settings"
             className="repo-action-control"
             type="button"
-            onClick={() => setIsAboutModalOpen(true)}
+            onClick={() => setIsSettingsModalOpen(true)}
           >
-            <Info aria-hidden="true" size={18} strokeWidth={1.75} />
-            <span>About</span>
+            <Settings aria-hidden="true" size={18} strokeWidth={1.75} />
+            <span>Settings</span>
           </button>
         </div>
       </div>
@@ -5056,24 +5143,50 @@ const MoltTreeDesktopApp = () => {
             </>
           )}
         </ConfirmationDialog>
-        <Dialog open={isAboutModalOpen} onOpenChange={setIsAboutModalOpen}>
-          <DialogContent aria-describedby={undefined} className="about-modal">
+        <Dialog
+          open={isSettingsModalOpen}
+          onOpenChange={setIsSettingsModalOpen}
+        >
+          <DialogContent
+            aria-describedby={undefined}
+            className="settings-modal"
+          >
             <DialogHeader>
-              <DialogTitle>About MoltTree</DialogTitle>
+              <DialogTitle>Settings</DialogTitle>
             </DialogHeader>
-            <dl className="about-modal-fields">
-              <div className="about-modal-field">
+            <div className="settings-modal-fields">
+              <div className="private-mode-setting">
+                <Checkbox
+                  id="private-mode"
+                  checked={isPrivateMode}
+                  onCheckedChange={changePrivateMode}
+                />
+                <div className="private-mode-setting-text">
+                  <Label htmlFor="private-mode">Private mode</Label>
+                  <p>
+                    Send completely anonymous metrics that help us improve the
+                    app?
+                  </p>
+                </div>
+              </div>
+            </div>
+            <dl className="settings-modal-fields">
+              <div className="settings-modal-field">
                 <dt>Version:</dt>
                 <dd>v{packageInfo.version}</dd>
               </div>
-              <div className="about-modal-field">
+              <div className="settings-modal-field">
                 <dt>GitHub:</dt>
                 <dd>
                   <a
-                    className="about-modal-link"
+                    className="settings-modal-link"
                     href={GITHUB_REPOSITORY_URL}
                     onClick={(event) => {
                       event.preventDefault();
+                      trackDesktopAction({
+                        eventName: "github_clicked",
+                        properties: { button_location: "settings" },
+                      });
                       void window.molttree.openExternalUrl(
                         GITHUB_REPOSITORY_URL,
                       );

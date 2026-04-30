@@ -241,9 +241,9 @@ const HomePage = () => {
           draggable={false}
         />
         <p>&copy; 2026 Glass Devtools, Inc.</p>
-        <ClientGithubLink href={repoUrl} ariaLabel="GitHub" location="footer">
+        <a href={repoUrl} aria-label="GitHub">
           <IoLogoGithub aria-hidden="true" />
-        </ClientGithubLink>
+        </a>
       </footer>
     </main>
   );

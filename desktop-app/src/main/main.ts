@@ -19,6 +19,7 @@ import type {
   PathLauncher,
 } from "../shared/types";
 import type { AppServerClient } from "./appServerClient";
+import { readOrCreateAnalyticsInstallId } from "./analyticsStore";
 import { createAppServerClient } from "./appServerClient";
 import { convertThreadStatus } from "./codexThreads";
 import { readDashboardData } from "./dashboard";
@@ -554,6 +555,12 @@ const readGitBranchSyncChanges = (value: unknown) => {
 
 ipcMain.handle("dashboard:read", async () => {
   return await readDashboardDataWithoutOverlap();
+});
+
+ipcMain.handle("analytics:readInstallId", async () => {
+  return await readOrCreateAnalyticsInstallId({
+    userDataPath: app.getPath("userData"),
+  });
 });
 
 ipcMain.handle("codex:openThread", async (_event, threadId: unknown) => {

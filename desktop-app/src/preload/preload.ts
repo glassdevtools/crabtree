@@ -24,6 +24,9 @@ const api: MoltTreeApi = {
 
     return dashboardData;
   },
+  readAnalyticsInstallId: async () => {
+    return await ipcRenderer.invoke("analytics:readInstallId");
+  },
   watchCodexThreadStatus: (onStatusChange) => {
     const listener = (
       _event: IpcRendererEvent,

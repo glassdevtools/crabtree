@@ -1,7 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
-import posthog from "posthog-js";
+import {
+  trackWebsiteGithubClicked,
+  type WebsiteButtonLocation,
+} from "../src/analytics";
 
 export const ClientGithubLink = ({
   children,
@@ -14,16 +17,21 @@ export const ClientGithubLink = ({
   className?: string;
   ariaLabel?: string;
   href: string;
-  location: "nav" | "hero" | "cta" | "footer";
+  location: WebsiteButtonLocation;
 }) => {
   const handleClick = () => {
-    posthog.capture("github_clicked", {
-      location,
+    trackWebsiteGithubClicked({
+      buttonLocation: location,
     });
   };
 
   return (
-    <a className={className} href={href} aria-label={ariaLabel} onClick={handleClick}>
+    <a
+      className={className}
+      href={href}
+      aria-label={ariaLabel}
+      onClick={handleClick}
+    >
       {children}
     </a>
   );
