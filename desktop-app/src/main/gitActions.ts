@@ -16,6 +16,7 @@ import type {
 } from "../shared/types";
 
 const FIELD_SEPARATOR = "\u001f";
+const ZERO_SHA = "0000000000000000000000000000000000000000";
 
 type GitWorktreePointer = {
   path: string;
@@ -98,7 +99,7 @@ const readGitWorktrees = async ({ repoRoot }: { repoRoot: string }) => {
     }
 
     if (key === "HEAD") {
-      head = value;
+      head = value === ZERO_SHA ? null : value;
       continue;
     }
 
@@ -415,6 +416,17 @@ export const deleteGitBranch = async ({
     path: repoRoot,
     args: ["check-ref-format", "--branch", branch],
   });
+
+  const worktreePath = await readGitWorktreePathForBranch({
+    repoRoot,
+    branch,
+  });
+
+  if (worktreePath !== null) {
+    throw new Error(
+      "This branch is checked out in a worktree. Switch or detach that worktree before deleting it.",
+    );
+  }
 
   await deleteGitRef({
     repoRoot,
@@ -850,7 +862,7 @@ export const pushGitBranchSyncChanges = async (
     localSha,
     originSha,
   } of gitBranchSyncChanges) {
-    if (localSha === null) {
+    if (localSha === null || localSha === ZERO_SHA || originSha === ZERO_SHA) {
       continue;
     }
 
@@ -957,7 +969,12 @@ export const revertGitBranchSyncChanges = async (
     localSha,
     originSha,
   } of gitBranchSyncChanges) {
-    if (originSha === null) {
+    if (
+      localSha === null ||
+      originSha === null ||
+      localSha === ZERO_SHA ||
+      originSha === ZERO_SHA
+    ) {
       continue;
     }
 
@@ -992,14 +1009,6 @@ export const revertGitBranchSyncChanges = async (
 
     if (currentLocalSha !== localSha) {
       throw new Error(`${branch} moved. Refresh and try again.`);
-    }
-
-    if (currentLocalSha === null) {
-      await runGitCommandForPath({
-        path: repoRoot,
-        args: ["branch", branch, remoteSha],
-      });
-      continue;
     }
 
     await ensureOldShaStaysVisibleAfterRefChange({

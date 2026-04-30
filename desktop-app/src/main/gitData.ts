@@ -12,7 +12,11 @@ import type {
 // Git is the source of truth for graph structure. Codex only tells us which thread belongs near a branch, commit, or worktree.
 // TODO: AI-PICKED-VALUE: Reading commits in pages of 1000 keeps Git responses bounded while still walking to the root.
 const COMMIT_PAGE_SIZE = 1000;
+// TODO: AI-PICKED-VALUE: Fetching origin every 30 seconds keeps remote branch state current without turning one-second dashboard refreshes into network polling.
+const ORIGIN_FETCH_INTERVAL_MS = 30_000;
 const FIELD_SEPARATOR = "\u001f";
+const ZERO_SHA = "0000000000000000000000000000000000000000";
+const lastOriginFetchAttemptTimeOfRepoRoot: { [repoRoot: string]: number } = {};
 
 type RepoSeed = {
   key: string;
@@ -246,7 +250,7 @@ const readWorktrees = async ({
     }
 
     if (key === "HEAD") {
-      head = value;
+      head = value === ZERO_SHA ? null : value;
       continue;
     }
 
@@ -350,31 +354,29 @@ const readGitBranchSyncChanges = async ({
     ],
   });
   const remoteShaOfBranch: { [branch: string]: string } = {};
-  const localShaOfBranch: { [branch: string]: string } = {};
   const branchSyncChanges: GitBranchSyncChange[] = [];
   const originPrefix = "origin/";
 
-  if (originBranchText === null) {
-    return branchSyncChanges;
-  }
+  if (originBranchText !== null) {
+    for (const line of originBranchText.split("\n")) {
+      if (line.length === 0) {
+        continue;
+      }
 
-  for (const line of originBranchText.split("\n")) {
-    if (line.length === 0) {
-      continue;
+      const [remoteBranch, remoteSha] = line.split(FIELD_SEPARATOR);
+
+      if (
+        remoteBranch === undefined ||
+        remoteSha === undefined ||
+        remoteSha === ZERO_SHA ||
+        remoteBranch === "origin/HEAD" ||
+        !remoteBranch.startsWith(originPrefix)
+      ) {
+        continue;
+      }
+
+      remoteShaOfBranch[remoteBranch.slice(originPrefix.length)] = remoteSha;
     }
-
-    const [remoteBranch, remoteSha] = line.split(FIELD_SEPARATOR);
-
-    if (
-      remoteBranch === undefined ||
-      remoteSha === undefined ||
-      remoteBranch === "origin/HEAD" ||
-      !remoteBranch.startsWith(originPrefix)
-    ) {
-      continue;
-    }
-
-    remoteShaOfBranch[remoteBranch.slice(originPrefix.length)] = remoteSha;
   }
 
   for (const line of localBranchText.split("\n")) {
@@ -384,11 +386,14 @@ const readGitBranchSyncChanges = async ({
 
     const [branch, localSha] = line.split(FIELD_SEPARATOR);
 
-    if (branch === undefined || localSha === undefined) {
+    if (
+      branch === undefined ||
+      localSha === undefined ||
+      localSha === ZERO_SHA
+    ) {
       continue;
     }
 
-    localShaOfBranch[branch] = localSha;
     const remoteSha = remoteShaOfBranch[branch];
 
     if (remoteSha === localSha) {
@@ -403,37 +408,40 @@ const readGitBranchSyncChanges = async ({
     });
   }
 
-  for (const branch of Object.keys(remoteShaOfBranch)) {
-    if (localShaOfBranch[branch] !== undefined) {
-      continue;
-    }
-
-    const remoteSha = remoteShaOfBranch[branch];
-
-    if (remoteSha === undefined) {
-      continue;
-    }
-
-    branchSyncChanges.push({
-      repoRoot: repoSeed.root,
-      branch,
-      localSha: null,
-      originSha: remoteSha,
-    });
-  }
-
   return branchSyncChanges;
 };
 
 const fetchOriginBranches = async ({ repoSeed }: { repoSeed: RepoSeed }) => {
   if (repoSeed.originUrl === null) {
-    return;
+    return null;
   }
 
-  await runGit({
-    cwd: repoSeed.root,
-    args: ["fetch", "origin", "--prune"],
-  });
+  const now = Date.now();
+  const lastOriginFetchAttemptTime =
+    lastOriginFetchAttemptTimeOfRepoRoot[repoSeed.root];
+
+  if (
+    lastOriginFetchAttemptTime !== undefined &&
+    now - lastOriginFetchAttemptTime < ORIGIN_FETCH_INTERVAL_MS
+  ) {
+    return null;
+  }
+
+  lastOriginFetchAttemptTimeOfRepoRoot[repoSeed.root] = now;
+
+  try {
+    await runGit({
+      cwd: repoSeed.root,
+      args: ["fetch", "origin", "--prune"],
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown Git error.";
+
+    return `${repoSeed.root}: Failed to fetch origin. Branch sync state may be stale. ${message}`;
+  }
+
+  return null;
 };
 
 export const readGitChangesOfCwd = async ({
@@ -518,7 +526,7 @@ const readCommits = async ({
   });
   const worktreeHeads = worktrees
     .map((worktree) => worktree.head)
-    .filter((head): head is string => head !== null);
+    .filter((head): head is string => head !== null && head !== ZERO_SHA);
   const historyRoots = [
     ...splitLines(refText),
     ...(rootHead === null ? [] : [rootHead]),
@@ -546,7 +554,7 @@ const readCommits = async ({
 
     const sha = cwdSha ?? thread.gitInfo?.sha;
 
-    if (sha === undefined || sha === null) {
+    if (sha === undefined || sha === null || sha === ZERO_SHA) {
       continue;
     }
 
@@ -699,7 +707,12 @@ export const readRepoGraphs = async ({
         repoSeed,
         threads: threadsInRepo,
       });
-      await fetchOriginBranches({ repoSeed });
+      const originFetchWarning = await fetchOriginBranches({ repoSeed });
+
+      if (originFetchWarning !== null) {
+        warnings.push(originFetchWarning);
+      }
+
       const [commits, branchSyncChanges, isShallowRepositoryText] =
         await Promise.all([
           readCommits({ repoSeed, threads: threadsInRepo, worktrees }),

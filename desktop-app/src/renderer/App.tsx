@@ -209,7 +209,9 @@ const readActionableBranchSyncChanges = ({
       );
     case "revert":
       return branchSyncChanges.filter(
-        (branchSyncChange) => branchSyncChange.originSha !== null,
+        (branchSyncChange) =>
+          branchSyncChange.localSha !== null &&
+          branchSyncChange.originSha !== null,
       );
   }
 };
@@ -423,6 +425,7 @@ type GitRefDeleteTarget = {
   name: string;
   oldSha: string;
   warningMessage: string | null;
+  shouldBlockDelete: boolean;
 };
 
 type BranchCreateTarget = {
@@ -2401,6 +2404,8 @@ const CommitHistory = ({
     const commitOfSha: { [sha: string]: GitCommit } = {};
     const branchShaOfBranch: { [branch: string]: string } = {};
     const tagShaOfTag: { [tag: string]: string } = {};
+    const hasWorktreeOfSha: { [sha: string]: boolean } = {};
+    const checkedOutBranchOfBranch: { [branch: string]: boolean } = {};
     const rootShas: {
       sha: string;
       ignoredRefKey: string | null;
@@ -2497,6 +2502,16 @@ const CommitHistory = ({
       }
     }
 
+    for (const worktree of worktrees) {
+      if (worktree.head !== null) {
+        hasWorktreeOfSha[worktree.head] = true;
+      }
+
+      if (worktree.branch !== null) {
+        checkedOutBranchOfBranch[worktree.branch] = true;
+      }
+    }
+
     // Then collect the refs that would keep commits visible.
     for (const commit of commits) {
       for (const localBranch of commit.localBranches) {
@@ -2540,8 +2555,18 @@ const CommitHistory = ({
     for (const branch of Object.keys(branchShaOfBranch)) {
       const reasons: string[] = [];
 
+      if (checkedOutBranchOfBranch[branch] === true) {
+        deleteWarningMessageOfBranch[branch] =
+          "This branch is checked out in a worktree. Switch or detach that worktree before deleting it.";
+        continue;
+      }
+
       if (branch === defaultBranch) {
         reasons.push("it's the default branch");
+      }
+
+      if (hasWorktreeOfSha[branchShaOfBranch[branch]] === true) {
+        reasons.push("there is a worktree based on this commit");
       }
 
       if (
@@ -2580,7 +2605,7 @@ const CommitHistory = ({
     }
 
     return { deleteWarningMessageOfBranch, deleteWarningMessageOfTag };
-  }, [commits, defaultBranch]);
+  }, [commits, defaultBranch, worktrees]);
   const commitOfSha = useMemo(() => {
     const nextCommitOfSha: { [sha: string]: GitCommit } = {};
 
@@ -3058,7 +3083,16 @@ const CommitHistory = ({
   ) => {
     event.preventDefault();
     event.stopPropagation();
-    setGitRefDeleteTarget({ gitRefType, name, oldSha, warningMessage });
+    const shouldBlockDelete =
+      gitRefType === "branch" &&
+      worktrees.some((worktree) => worktree.branch === name);
+    setGitRefDeleteTarget({
+      gitRefType,
+      name,
+      oldSha,
+      warningMessage,
+      shouldBlockDelete,
+    });
   };
   const closeGitRefDeleteModal = () => {
     setGitRefDeleteTarget(null);
@@ -3722,6 +3756,7 @@ const CommitHistory = ({
                 </AlertDialogCancel>
                 <AlertDialogAction
                   variant="destructive"
+                  disabled={gitRefDeleteTarget.shouldBlockDelete}
                   onClick={deleteSelectedGitRef}
                 >
                   Delete

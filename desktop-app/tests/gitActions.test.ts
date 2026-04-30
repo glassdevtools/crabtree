@@ -286,7 +286,43 @@ test("reads repo graphs with commits, worktrees, and branch sync changes", async
   });
 });
 
-test("reads a missing local branch as an origin-only branch sync change", async () => {
+test("reads repo graphs when a linked worktree branch is missing", async () => {
+  await withOriginRepo(async ({ parentRoot, repoRoot }) => {
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
+    await commitRepoFile({
+      repoRoot,
+      filePath: "feature.txt",
+      content: "feature\n",
+      message: "feature",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "main"] });
+    const worktreeRoot = join(parentRoot, "feature-worktree");
+    await runGit({
+      cwd: repoRoot,
+      args: ["worktree", "add", worktreeRoot, "feature"],
+    });
+    const gitCommonDir = await runGit({
+      cwd: repoRoot,
+      args: ["rev-parse", "--git-common-dir"],
+    });
+    await rm(join(repoRoot, gitCommonDir, "refs/heads/feature"), {
+      force: true,
+    });
+
+    const { repos, warnings, gitErrors } = await readRepoGraphs({
+      threads: [createThread({ id: "root-thread", cwd: repoRoot })],
+    });
+    const repo = repos[0];
+
+    assert.equal(warnings.length, 0);
+    assert.equal(gitErrors.length, 0);
+    assert.equal(repo?.worktrees[0]?.path, worktreeRoot);
+    assert.equal(repo?.worktrees[0]?.branch, "feature");
+    assert.equal(repo?.worktrees[0]?.head, null);
+  });
+});
+
+test("does not read a missing local branch as a branch sync change", async () => {
   await withOriginRepo(async ({ repoRoot }) => {
     await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
     const oldSha = await commitRepoFile({
@@ -306,9 +342,7 @@ test("reads a missing local branch as an origin-only branch sync change", async 
 
     assert.equal(warnings.length, 0);
     assert.equal(gitErrors.length, 0);
-    assert.deepEqual(repo?.branchSyncChanges, [
-      { repoRoot, branch: "feature", localSha: null, originSha: oldSha },
-    ]);
+    assert.deepEqual(repo?.branchSyncChanges, []);
   });
 });
 
@@ -331,6 +365,34 @@ test("reads a missing origin branch as a local-only branch sync change", async (
     assert.equal(gitErrors.length, 0);
     assert.deepEqual(repo?.branchSyncChanges, [
       { repoRoot, branch: "feature", localSha, originSha: null },
+    ]);
+  });
+});
+
+test("reads local branches as branch sync changes when origin tracking refs are empty", async () => {
+  await withOriginRepo(async ({ repoRoot, mainSha }) => {
+    await runGit({
+      cwd: repoRoot,
+      args: ["update-ref", "-d", "refs/remotes/origin/HEAD"],
+    });
+    await runGit({
+      cwd: repoRoot,
+      args: ["update-ref", "-d", "refs/remotes/origin/main"],
+    });
+    await runGit({
+      cwd: repoRoot,
+      args: ["remote", "set-url", "origin", "/tmp/molttree-missing-origin.git"],
+    });
+    const { repos, warnings, gitErrors } = await readRepoGraphs({
+      threads: [createThread({ id: "root-thread", cwd: repoRoot })],
+    });
+    const repo = repos[0];
+
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0] ?? "", /Failed to fetch origin/);
+    assert.equal(gitErrors.length, 0);
+    assert.deepEqual(repo?.branchSyncChanges, [
+      { repoRoot, branch: "main", localSha: mainSha, originSha: null },
     ]);
   });
 });
@@ -753,7 +815,7 @@ test("deletes a branch when it is the only ref that keeps a commit visible", asy
   });
 });
 
-test("deletes a checked-out branch", async () => {
+test("rejects deleting a checked-out branch", async () => {
   await withRepo(async ({ repoRoot }) => {
     await runGit({ cwd: repoRoot, args: ["switch", "-c", "topic"] });
     const topicSha = await commitRepoFile({
@@ -763,13 +825,44 @@ test("deletes a checked-out branch", async () => {
       message: "topic",
     });
 
-    await deleteGitBranch({
+    await assert.rejects(async () => {
+      await deleteGitBranch({
+        repoRoot,
+        branch: "topic",
+        oldSha: topicSha,
+      });
+    }, /checked out in a worktree/);
+
+    assert.equal(await readSha({ cwd: repoRoot, ref: "topic" }), topicSha);
+  });
+});
+
+test("rejects deleting a branch checked out in a linked worktree", async () => {
+  await withOriginRepo(async ({ parentRoot, repoRoot }) => {
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "topic"] });
+    const topicSha = await commitRepoFile({
       repoRoot,
-      branch: "topic",
-      oldSha: topicSha,
+      filePath: "topic.txt",
+      content: "topic\n",
+      message: "topic",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "main"] });
+    const worktreeRoot = join(parentRoot, "topic-worktree");
+    await runGit({
+      cwd: repoRoot,
+      args: ["worktree", "add", worktreeRoot, "topic"],
     });
 
-    assert.equal(await readOptionalSha({ cwd: repoRoot, ref: "topic" }), null);
+    await assert.rejects(async () => {
+      await deleteGitBranch({
+        repoRoot,
+        branch: "topic",
+        oldSha: topicSha,
+      });
+    }, /checked out in a worktree/);
+
+    assert.equal(await readSha({ cwd: repoRoot, ref: "topic" }), topicSha);
+    assert.equal(await readSha({ cwd: worktreeRoot, ref: "HEAD" }), topicSha);
   });
 });
 
@@ -1341,30 +1434,6 @@ test("rejects pushing a branch sync update that would hide the old origin tip", 
   });
 });
 
-test("push ignores an origin-only branch sync change", async () => {
-  await withOriginRepo(async ({ repoRoot, originRoot }) => {
-    await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
-    const oldSha = await commitRepoFile({
-      repoRoot,
-      filePath: "feature.txt",
-      content: "feature\n",
-      message: "feature",
-    });
-    await runGit({ cwd: repoRoot, args: ["push", "-u", "origin", "feature"] });
-    await runGit({ cwd: repoRoot, args: ["switch", "main"] });
-    await runGit({ cwd: repoRoot, args: ["branch", "-D", "feature"] });
-
-    await pushGitBranchSyncChanges([
-      { repoRoot, branch: "feature", localSha: null, originSha: oldSha },
-    ]);
-
-    assert.equal(
-      await readSha({ cwd: originRoot, ref: "refs/heads/feature" }),
-      oldSha,
-    );
-  });
-});
-
 test("rejects reverting a local branch when its local tip would disappear", async () => {
   await withOriginRepo(async ({ repoRoot }) => {
     await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
@@ -1427,7 +1496,7 @@ test("reverts a local branch when another ref keeps the local tip visible", asyn
   });
 });
 
-test("recreates a missing local branch from origin during revert", async () => {
+test("revert ignores an origin-only branch sync change", async () => {
   await withOriginRepo(async ({ repoRoot }) => {
     await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
     const oldSha = await commitRepoFile({
@@ -1444,6 +1513,9 @@ test("recreates a missing local branch from origin during revert", async () => {
       { repoRoot, branch: "feature", localSha: null, originSha: oldSha },
     ]);
 
-    assert.equal(await readSha({ cwd: repoRoot, ref: "feature" }), oldSha);
+    assert.equal(
+      await readOptionalSha({ cwd: repoRoot, ref: "feature" }),
+      null,
+    );
   });
 });

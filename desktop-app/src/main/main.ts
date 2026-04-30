@@ -512,6 +512,7 @@ const readGitBranchSyncChanges = (value: unknown) => {
   }
 
   const gitBranchSyncChanges: GitBranchSyncChange[] = [];
+  const zeroSha = "0000000000000000000000000000000000000000";
 
   for (const changeValue of value) {
     if (!isObject(changeValue)) {
@@ -525,10 +526,12 @@ const readGitBranchSyncChanges = (value: unknown) => {
       changeValue.branch.length === 0 ||
       (changeValue.localSha !== null &&
         (typeof changeValue.localSha !== "string" ||
-          changeValue.localSha.length === 0)) ||
+          changeValue.localSha.length === 0 ||
+          changeValue.localSha === zeroSha)) ||
       (changeValue.originSha !== null &&
         (typeof changeValue.originSha !== "string" ||
-          changeValue.originSha.length === 0)) ||
+          changeValue.originSha.length === 0 ||
+          changeValue.originSha === zeroSha)) ||
       (changeValue.localSha === null && changeValue.originSha === null)
     ) {
       throw new Error(
