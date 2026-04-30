@@ -65,6 +65,10 @@ import {
 } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import {
+  NativeSelect,
+  NativeSelectOption,
+} from "@/components/ui/native-select";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -556,11 +560,20 @@ type GitRefCreateMenuTarget = {
   y: number;
   sha: string | null;
   isEnabled: boolean;
+  pullRequestTarget: GitPullRequestCreateTarget | null;
 };
 
 type GitRefCreateTarget = {
   gitRefType: "branch" | "tag";
   sha: string;
+};
+
+type GitPullRequestCreateTarget = {
+  sha: string;
+  subject: string;
+  baseBranches: string[];
+  headBranches: string[];
+  defaultBaseBranch: string | null;
 };
 
 type CommitBranchTarget = {
@@ -776,6 +789,87 @@ const cleanRefName = (ref: string) => {
 
 const readIsHeadRef = (ref: string) => {
   return ref === "HEAD" || ref.startsWith("HEAD -> ");
+};
+
+// Pull requests use pushed origin branches so the app never has to push from the create-PR flow.
+const readOriginBranchName = (ref: string) => {
+  const originPrefix = "origin/";
+  const refName = cleanRefName(ref);
+
+  if (refName === "origin/HEAD" || !refName.startsWith(originPrefix)) {
+    return null;
+  }
+
+  return refName.slice(originPrefix.length);
+};
+
+const readPushedBranchNamesForCommit = (commit: GitCommit) => {
+  const isPushedBranchOfBranch: { [branch: string]: boolean } = {};
+  const isBranchAddedOfBranch: { [branch: string]: boolean } = {};
+  const branches: string[] = [];
+
+  for (const ref of commit.refs) {
+    const branch = readOriginBranchName(ref);
+
+    if (branch !== null) {
+      isPushedBranchOfBranch[branch] = true;
+    }
+  }
+
+  for (const branch of commit.localBranches) {
+    if (
+      isPushedBranchOfBranch[branch] !== true ||
+      isBranchAddedOfBranch[branch] === true
+    ) {
+      continue;
+    }
+
+    isBranchAddedOfBranch[branch] = true;
+    branches.push(branch);
+  }
+
+  return branches;
+};
+
+const readPushedBranchNames = ({
+  commits,
+  defaultBranch,
+}: {
+  commits: GitCommit[];
+  defaultBranch: string | null;
+}) => {
+  const isBranchAddedOfBranch: { [branch: string]: boolean } = {};
+  const branches: string[] = [];
+  const pushBranch = (branch: string) => {
+    if (isBranchAddedOfBranch[branch] === true) {
+      return;
+    }
+
+    isBranchAddedOfBranch[branch] = true;
+    branches.push(branch);
+  };
+
+  if (defaultBranch !== null) {
+    for (const commit of commits) {
+      for (const ref of commit.refs) {
+        if (readOriginBranchName(ref) === defaultBranch) {
+          pushBranch(defaultBranch);
+        }
+      }
+    }
+  }
+
+  for (const commit of commits) {
+    for (const ref of commit.refs) {
+      const branch = readOriginBranchName(ref);
+
+      if (branch !== null) {
+        pushBranch(branch);
+      }
+    }
+  }
+
+  return branches;
 };
 
 const createCommitGraph = ({
@@ -2772,6 +2866,214 @@ const CommitMessageDialog = ({
   );
 };
 
+// This dialog gathers the GitHub PR fields while the main process validates the pushed refs again before creating it.
+const GitPullRequestCreateDialog = ({
+  gitPullRequestCreateTarget,
+  createPullRequest,
+  closeGitPullRequestCreateModal,
+}: {
+  gitPullRequestCreateTarget: GitPullRequestCreateTarget | null;
+  createPullRequest: ({
+    gitPullRequestCreateTarget,
+    baseBranch,
+    headBranch,
+    title,
+    description,
+  }: {
+    gitPullRequestCreateTarget: GitPullRequestCreateTarget;
+    baseBranch: string;
+    headBranch: string;
+    title: string;
+    description: string;
+  }) => Promise<void>;
+  closeGitPullRequestCreateModal: () => void;
+}) => {
+  const [baseBranch, setBaseBranch] = useState("");
+  const [headBranch, setHeadBranch] = useState("");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const createdTitle = title.trim();
+  const createdDescription = description.trim();
+
+  useEffect(() => {
+    if (gitPullRequestCreateTarget === null) {
+      return;
+    }
+
+    const nextHeadBranch = gitPullRequestCreateTarget.headBranches[0] ?? "";
+    let nextBaseBranch = "";
+
+    if (
+      gitPullRequestCreateTarget.defaultBaseBranch !== null &&
+      gitPullRequestCreateTarget.defaultBaseBranch !== nextHeadBranch &&
+      gitPullRequestCreateTarget.baseBranches.includes(
+        gitPullRequestCreateTarget.defaultBaseBranch,
+      )
+    ) {
+      nextBaseBranch = gitPullRequestCreateTarget.defaultBaseBranch;
+    }
+
+    if (nextBaseBranch.length === 0) {
+      for (const branch of gitPullRequestCreateTarget.baseBranches) {
+        if (branch === nextHeadBranch) {
+          continue;
+        }
+
+        nextBaseBranch = branch;
+        break;
+      }
+    }
+
+    setBaseBranch(nextBaseBranch);
+    setHeadBranch(nextHeadBranch);
+    setTitle("");
+    setDescription("");
+  }, [gitPullRequestCreateTarget]);
+
+  const submitPullRequest = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (gitPullRequestCreateTarget === null) {
+      return;
+    }
+
+    await createPullRequest({
+      gitPullRequestCreateTarget,
+      baseBranch,
+      headBranch,
+      title: createdTitle,
+      description: createdDescription,
+    });
+  };
+
+  const isMissingHeadBranch =
+    gitPullRequestCreateTarget !== null &&
+    gitPullRequestCreateTarget.headBranches.length === 0;
+  const isMissingBaseBranch =
+    gitPullRequestCreateTarget !== null &&
+    gitPullRequestCreateTarget.baseBranches.length === 0;
+  const isFormDisabled = isMissingHeadBranch || isMissingBaseBranch;
+  const isSameBranch =
+    baseBranch.length > 0 && headBranch.length > 0 && baseBranch === headBranch;
+
+  return (
+    <Dialog
+      open={gitPullRequestCreateTarget !== null}
+      onOpenChange={(isOpen) => {
+        if (isOpen) {
+          return;
+        }
+
+        closeGitPullRequestCreateModal();
+      }}
+    >
+      {gitPullRequestCreateTarget === null ? null : (
+        <DialogContent className="git-pull-request-modal">
+          <form className="grid gap-4" onSubmit={submitPullRequest}>
+            <DialogHeader>
+              <DialogTitle>Create Pull Request</DialogTitle>
+              <DialogDescription>
+                Create a pull request on GitHub from a pushed branch at this
+                commit.
+              </DialogDescription>
+            </DialogHeader>
+            {isMissingHeadBranch ? (
+              <Alert className="git-action-warning" variant="destructive">
+                <AlertDescription>
+                  You need to create and push a branch on this commit to start a
+                  PR.
+                </AlertDescription>
+              </Alert>
+            ) : null}
+            {isMissingBaseBranch ? (
+              <Alert className="git-action-warning" variant="destructive">
+                <AlertDescription>
+                  You need a pushed branch to merge into.
+                </AlertDescription>
+              </Alert>
+            ) : null}
+            {isSameBranch ? (
+              <Alert className="git-action-warning" variant="destructive">
+                <AlertDescription>
+                  Choose two different branches for this pull request.
+                </AlertDescription>
+              </Alert>
+            ) : null}
+            <label className="git-pull-request-field">
+              <span className="git-pull-request-label">Branch to merge</span>
+              <NativeSelect
+                disabled={isFormDisabled}
+                value={headBranch}
+                onChange={(event) => setHeadBranch(event.target.value)}
+              >
+                {gitPullRequestCreateTarget.headBranches.map((branch) => (
+                  <NativeSelectOption value={branch} key={branch}>
+                    {branch}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </label>
+            <label className="git-pull-request-field">
+              <span className="git-pull-request-label">Pull request into</span>
+              <NativeSelect
+                disabled={isFormDisabled}
+                value={baseBranch}
+                onChange={(event) => setBaseBranch(event.target.value)}
+              >
+                {gitPullRequestCreateTarget.baseBranches.map((branch) => (
+                  <NativeSelectOption value={branch} key={branch}>
+                    {branch}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </label>
+            <label className="git-pull-request-field">
+              <span className="git-pull-request-label">Title</span>
+              <Input
+                autoFocus={!isFormDisabled}
+                disabled={isFormDisabled}
+                placeholder={gitPullRequestCreateTarget.subject}
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+              />
+            </label>
+            <label className="git-pull-request-field">
+              <span className="git-pull-request-label">Description</span>
+              <textarea
+                className="git-pull-request-description"
+                disabled={isFormDisabled}
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+              />
+            </label>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={closeGitPullRequestCreateModal}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={
+                  isFormDisabled ||
+                  isSameBranch ||
+                  baseBranch.length === 0 ||
+                  headBranch.length === 0 ||
+                  createdTitle.length === 0
+                }
+              >
+                Create
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      )}
+    </Dialog>
+  );
+};
+
 const CommitHistory = ({
   commits,
   worktrees,
@@ -2823,6 +3125,8 @@ const CommitHistory = ({
     useState<GitRefCreateMenuTarget | null>(null);
   const [gitRefCreateTarget, setGitRefCreateTarget] =
     useState<GitRefCreateTarget | null>(null);
+  const [gitPullRequestCreateTarget, setGitPullRequestCreateTarget] =
+    useState<GitPullRequestCreateTarget | null>(null);
   const [commitMessageTarget, setCommitMessageTarget] =
     useState<CommitMessageTarget | null>(null);
   const [changeSummaryTarget, setChangeSummaryTarget] =
@@ -2868,6 +3172,10 @@ const CommitHistory = ({
         gitChangesOfCwd,
       }),
     [commits, gitChangesOfCwd, threadOfId, worktrees],
+  );
+  const pullRequestBaseBranches = useMemo(
+    () => readPushedBranchNames({ commits, defaultBranch }),
+    [commits, defaultBranch],
   );
   const headChangeSummary = gitChangesOfCwd[repoRoot];
   const headTotalChangeSummary =
@@ -3658,6 +3966,15 @@ const CommitHistory = ({
     setGitRefCreateMenuTarget({
       sha: row.isCommitRow ? row.commit.sha : null,
       isEnabled: row.isCommitRow,
+      pullRequestTarget: row.isCommitRow
+        ? {
+            sha: row.commit.sha,
+            subject: row.commit.subject,
+            baseBranches: pullRequestBaseBranches,
+            headBranches: readPushedBranchNamesForCommit(row.commit),
+            defaultBaseBranch: defaultBranch,
+          }
+        : null,
       x: event.clientX,
       y: event.clientY,
     });
@@ -3678,6 +3995,20 @@ const CommitHistory = ({
   };
   const closeGitRefCreateModal = () => {
     setGitRefCreateTarget(null);
+  };
+  const openGitPullRequestCreateModal = () => {
+    if (
+      gitRefCreateMenuTarget === null ||
+      gitRefCreateMenuTarget.pullRequestTarget === null
+    ) {
+      return;
+    }
+
+    setGitPullRequestCreateTarget(gitRefCreateMenuTarget.pullRequestTarget);
+    setGitRefCreateMenuTarget(null);
+  };
+  const closeGitPullRequestCreateModal = () => {
+    setGitPullRequestCreateTarget(null);
   };
   const openCommitMessageModal = (
     event: MouseEvent<HTMLButtonElement>,
@@ -3777,6 +4108,57 @@ const CommitHistory = ({
         return null;
       },
     );
+  };
+  const createPullRequest = async ({
+    gitPullRequestCreateTarget,
+    baseBranch,
+    headBranch,
+    title,
+    description,
+  }: {
+    gitPullRequestCreateTarget: GitPullRequestCreateTarget;
+    baseBranch: string;
+    headBranch: string;
+    title: string;
+    description: string;
+  }) => {
+    let pullRequestUrl: string | null = null;
+
+    await runUserGitUpdateThenRefreshDashboard(
+      "Creating pull request",
+      "Created pull request.",
+      async () => {
+        try {
+          pullRequestUrl = await window.molttree.createGitPullRequest({
+            repoRoot,
+            baseBranch,
+            headBranch,
+            headSha: gitPullRequestCreateTarget.sha,
+            title,
+            description,
+          });
+          closeGitPullRequestCreateModal();
+        } catch (error) {
+          return error instanceof Error
+            ? error.message
+            : "Failed to create pull request.";
+        }
+
+        return null;
+      },
+    );
+
+    if (pullRequestUrl === null) {
+      return;
+    }
+
+    try {
+      await window.molttree.openExternalUrl(pullRequestUrl);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to open pull request.";
+      showErrorMessage(message);
+    }
   };
   const createCommit = async ({
     commitMessageTarget,
@@ -4035,6 +4417,17 @@ const CommitHistory = ({
             <Tag size={10} strokeWidth={1.75} />
             <span>Add tag</span>
           </Button>
+          <Button
+            className="git-ref-create-menu-item"
+            variant="ghost"
+            size="sm"
+            type="button"
+            disabled={!gitRefCreateMenuTarget.isEnabled}
+            onClick={openGitPullRequestCreateModal}
+          >
+            <LuGitPullRequestArrow size={10} strokeWidth={1.75} />
+            <span>Add pull request</span>
+          </Button>
         </div>
       )}
       <Card className="commit-history gap-0 py-0 ring-0" ref={commitHistoryRef}>
@@ -4218,6 +4611,11 @@ const CommitHistory = ({
           gitRefCreateTarget={gitRefCreateTarget}
           createGitRef={createGitRef}
           closeGitRefCreateModal={closeGitRefCreateModal}
+        />
+        <GitPullRequestCreateDialog
+          gitPullRequestCreateTarget={gitPullRequestCreateTarget}
+          createPullRequest={createPullRequest}
+          closeGitPullRequestCreateModal={closeGitPullRequestCreateModal}
         />
         <CommitMessageDialog
           commitMessageTarget={commitMessageTarget}

@@ -735,6 +735,50 @@ textarea,
   width: min(360px, calc(100vw - 32px));
 }
 
+.git-pull-request-modal {
+  width: min(460px, calc(100vw - 32px));
+}
+
+.git-pull-request-field {
+  display: grid;
+  gap: 5px;
+}
+
+.git-pull-request-label {
+  color: #343a43;
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.git-pull-request-field [data-slot="native-select-wrapper"] {
+  width: 100%;
+}
+
+.git-pull-request-description {
+  min-height: 112px;
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  background: transparent;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  outline: none;
+}
+
+.git-pull-request-description:focus-visible {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+}
+
+.git-pull-request-description:disabled {
+  cursor: not-allowed;
+  background: var(--input);
+  opacity: 0.5;
+}
+
 .git-action-warning {
   border: 0;
   user-select: text;

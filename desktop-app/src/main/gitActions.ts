@@ -1,10 +1,13 @@
 import { simpleGit } from "simple-git";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import type {
   GitBranchSyncChange,
   GitBranchTagChange,
   GitCheckoutCommitRequest,
   GitCommitChangesRequest,
   GitCreateBranchRequest,
+  GitCreatePullRequestRequest,
   GitCreateRefRequest,
   GitDeleteBranchRequest,
   GitDeleteTagRequest,
@@ -17,6 +20,7 @@ import type {
 
 const FIELD_SEPARATOR = "\u001f";
 const ZERO_SHA = "0000000000000000000000000000000000000000";
+const execFileAsync = promisify(execFile);
 
 type GitWorktreePointer = {
   path: string;
@@ -57,6 +61,21 @@ const readNullableGitTextForPath = async ({
   } catch {
     return null;
   }
+};
+
+const runGitHubCliForPath = async ({
+  path,
+  args,
+}: {
+  path: string;
+  args: string[];
+}) => {
+  const { stdout } = await execFileAsync("gh", args, {
+    cwd: path,
+    encoding: "utf8",
+  });
+
+  return stdout.trim();
 };
 
 const readDefaultBranchNameFromOriginHeadText = (originHeadText: string) => {
@@ -571,6 +590,101 @@ const parseGitChangeLineCounts = (stdout: string) => {
   }
 
   return lineCounts;
+};
+
+// -------------------------- GitHub pull request actions ---------------
+
+// PR creation checks the origin refs first so GitHub CLI never starts from stale row data.
+const readOriginBranchCommitSha = async ({
+  repoRoot,
+  branch,
+  label,
+}: {
+  repoRoot: string;
+  branch: string;
+  label: string;
+}) => {
+  await runGitCommandForPath({
+    path: repoRoot,
+    args: ["check-ref-format", "--branch", branch],
+  });
+
+  const sha = await readNullableGitTextForPath({
+    path: repoRoot,
+    args: ["rev-parse", "--verify", `refs/remotes/origin/${branch}^{commit}`],
+  });
+
+  if (sha === null) {
+    throw new Error(`${label} branch must exist on origin.`);
+  }
+
+  return sha;
+};
+
+const readPullRequestUrlFromGithubCliText = (text: string) => {
+  for (const value of text.split(/\s+/)) {
+    if (value.startsWith("https://") || value.startsWith("http://")) {
+      return value;
+    }
+  }
+
+  return null;
+};
+
+export const createGitPullRequest = async ({
+  repoRoot,
+  baseBranch,
+  headBranch,
+  headSha,
+  title,
+  description,
+}: GitCreatePullRequestRequest) => {
+  if (baseBranch === headBranch) {
+    throw new Error("Pull request branches must be different.");
+  }
+
+  const expectedHeadSha = await readGitTextForPath({
+    path: repoRoot,
+    args: ["rev-parse", "--verify", `${headSha}^{commit}`],
+  });
+  const pushedHeadSha = await readOriginBranchCommitSha({
+    repoRoot,
+    branch: headBranch,
+    label: "Head",
+  });
+
+  if (pushedHeadSha !== expectedHeadSha) {
+    throw new Error(`${headBranch} moved. Refresh and try again.`);
+  }
+
+  await readOriginBranchCommitSha({
+    repoRoot,
+    branch: baseBranch,
+    label: "Base",
+  });
+
+  const text = await runGitHubCliForPath({
+    path: repoRoot,
+    args: [
+      "pr",
+      "create",
+      "--base",
+      baseBranch,
+      "--head",
+      headBranch,
+      "--title",
+      title,
+      "--body",
+      description,
+    ],
+  });
+  const pullRequestUrl = readPullRequestUrlFromGithubCliText(text);
+
+  if (pullRequestUrl === null) {
+    throw new Error("GitHub did not return a pull request URL.");
+  }
+
+  return pullRequestUrl;
 };
 
 // -------------------------- Merge actions ---------------

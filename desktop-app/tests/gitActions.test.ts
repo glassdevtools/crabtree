@@ -18,6 +18,7 @@ import {
   checkoutGitCommit,
   commitAllGitChanges,
   createGitBranch,
+  createGitPullRequest,
   createGitRef,
   deleteGitBranch,
   deleteGitTag,
@@ -1287,6 +1288,86 @@ test("rejects checkout when the working tree is dirty", async () => {
     await assert.rejects(async () => {
       await checkoutGitCommit({ repoRoot, sha: firstSha });
     }, /clean/);
+  });
+});
+
+// -------------------------- GitHub pull requests ---------------
+
+test("rejects pull requests when the head branch is not pushed", async () => {
+  await withOriginRepo(async ({ repoRoot }) => {
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
+    const featureSha = await commitRepoFile({
+      repoRoot,
+      filePath: "feature.txt",
+      content: "feature\n",
+      message: "feature",
+    });
+
+    await assert.rejects(async () => {
+      await createGitPullRequest({
+        repoRoot,
+        baseBranch: "main",
+        headBranch: "feature",
+        headSha: featureSha,
+        title: "Feature",
+        description: "",
+      });
+    }, /Head branch must exist on origin/);
+  });
+});
+
+test("rejects pull requests when the pushed head branch moved", async () => {
+  await withOriginRepo(async ({ repoRoot }) => {
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
+    const oldSha = await commitRepoFile({
+      repoRoot,
+      filePath: "feature.txt",
+      content: "feature\n",
+      message: "feature",
+    });
+    await runGit({ cwd: repoRoot, args: ["push", "-u", "origin", "feature"] });
+    await commitRepoFile({
+      repoRoot,
+      filePath: "feature.txt",
+      content: "feature\nnew\n",
+      message: "feature new",
+    });
+    await runGit({ cwd: repoRoot, args: ["push", "origin", "feature"] });
+
+    await assert.rejects(async () => {
+      await createGitPullRequest({
+        repoRoot,
+        baseBranch: "main",
+        headBranch: "feature",
+        headSha: oldSha,
+        title: "Feature",
+        description: "",
+      });
+    }, /feature moved/);
+  });
+});
+
+test("rejects pull requests when the base branch is not pushed", async () => {
+  await withOriginRepo(async ({ repoRoot }) => {
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
+    const featureSha = await commitRepoFile({
+      repoRoot,
+      filePath: "feature.txt",
+      content: "feature\n",
+      message: "feature",
+    });
+    await runGit({ cwd: repoRoot, args: ["push", "-u", "origin", "feature"] });
+
+    await assert.rejects(async () => {
+      await createGitPullRequest({
+        repoRoot,
+        baseBranch: "missing",
+        headBranch: "feature",
+        headSha: featureSha,
+        title: "Feature",
+        description: "",
+      });
+    }, /Base branch must exist on origin/);
   });
 });
 
