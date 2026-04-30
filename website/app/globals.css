@@ -118,21 +118,12 @@ img {
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  border-bottom: 1px solid rgba(31, 35, 31, 0.06);
+  border-bottom: 1px solid rgba(31, 35, 31, 0.1);
   padding: 8px max(24px, calc((100vw - 1120px) / 2));
-  background: transparent;
-  isolation: isolate;
-  overflow: hidden;
-}
-
-.topNav::before {
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  background: rgba(255, 255, 255, 0.68);
-  backdrop-filter: blur(32px) saturate(1.8);
-  -webkit-backdrop-filter: blur(32px) saturate(1.8);
-  content: "";
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(48px) saturate(1.9) contrast(0.92);
+  -webkit-backdrop-filter: blur(48px) saturate(1.9) contrast(0.92);
+  box-shadow: 0 8px 24px rgba(16, 20, 16, 0.06);
 }
 
 .wordmark {
@@ -358,7 +349,7 @@ img {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 56px 0 48px;
+  padding: 84px 0 76px;
 }
 
 h1,
@@ -620,6 +611,8 @@ h1.heroTitle {
 }
 
 .bottomCtaActions {
+  align-items: center;
+  justify-content: center;
   margin-bottom: 0;
 }
 
@@ -635,7 +628,7 @@ h1.heroTitle {
   width: min(1120px, 100%);
   margin: 0 auto;
   border-top: 1px solid #e5eadf;
-  padding: 28px 24px;
+  padding: 28px 32px;
   color: #101410;
 }
 
@@ -700,7 +693,7 @@ h1.heroTitle {
   }
 
   .heroIntro {
-    padding: 24px 0 36px;
+    padding: 48px 0 60px;
   }
 
   .hero__actions {
@@ -736,11 +729,19 @@ h1.heroTitle {
 
   .bottomCtaActions {
     width: 100%;
+    align-items: center;
     flex-direction: column;
+    flex-wrap: nowrap;
+    justify-content: center;
+  }
+
+  .bottomCtaActions .ctaButton {
+    margin-right: auto;
+    margin-left: auto;
   }
 
   .siteFooter {
-    padding: 24px 16px;
+    padding: 24px 20px;
   }
 }
 

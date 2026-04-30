@@ -33,7 +33,7 @@ const featureItems = [
   {
     title: "Git power tools",
     descriptionLines: [
-      "Commit, branch, merge, push, and pull. No IDE needed. Access power tools like moving branch tags by simply dragging, and one-click merges without leaving the app or opening your IDE.",
+      "Commit, branch, merge, push, and pull. No IDE needed. Access power tools like one-click merges without leaving the app or opening your IDE, and moving branch tags by simply dragging.",
     ],
   },
   {
@@ -158,7 +158,7 @@ const HomePage = () => {
       >
         <div className="sectionInner">
           <div className="sectionHeader">
-            <h2 id="questions-title">Answers questions like:</h2>
+            <h2 id="questions-title">Answer questions like:</h2>
           </div>
           <ul className="questionList">
             {questionItems.map((questionItem, index) => (
