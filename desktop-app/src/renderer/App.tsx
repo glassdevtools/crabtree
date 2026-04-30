@@ -138,8 +138,6 @@ const RARE_LOADING_IMAGE_URLS = [
 ];
 const GITHUB_REPOSITORY_URL = packageInfo.repository.url.replace(/\.git$/, "");
 const MERGE_BRANCH_BUTTON_TITLE = "Merge this into HEAD";
-const CHECKED_OUT_BY_HEAD_MESSAGE =
-  "This branch is checked out by HEAD. Switch HEAD to another branch first.";
 const CHECKED_OUT_BY_WORKTREE_MESSAGE =
   "This branch is checked out in a worktree. Delete that worktree or switch its branch first.";
 const COMMIT_GRAPH_ACTION_ICON_SIZE = 10;
@@ -289,7 +287,7 @@ const readBranchPointerOperation = ({
   }
 
   return checkedOutBranchPath === mainWorktreePath
-    ? "blockedCheckedOutByHead"
+    ? "moveBranchPointer"
     : "blockedCheckedOutByWorktree";
 };
 
@@ -311,16 +309,6 @@ const readBranchPointerOperationText = ({
         buttonText: "Move",
         shouldBlock: false,
       };
-    case "blockedCheckedOutByHead":
-      return {
-        title: "Move Branch Pointer",
-        message: `Move the ${branch} branch pointer?`,
-        description: CHECKED_OUT_BY_HEAD_MESSAGE,
-        loadingDescription: "Moving branch",
-        successMessage: "Moved branch.",
-        buttonText: "Move",
-        shouldBlock: true,
-      };
     case "blockedCheckedOutByWorktree":
       return {
         title: "Move Branch Pointer",
@@ -332,20 +320,6 @@ const readBranchPointerOperationText = ({
         shouldBlock: true,
       };
   }
-};
-
-const readCheckedOutBranchWarningMessage = ({
-  branch,
-  currentBranch,
-}: {
-  branch: string;
-  currentBranch: string | null;
-}) => {
-  if (branch === currentBranch) {
-    return CHECKED_OUT_BY_HEAD_MESSAGE;
-  }
-
-  return CHECKED_OUT_BY_WORKTREE_MESSAGE;
 };
 
 const readActionableBranchSyncChanges = ({
@@ -557,7 +531,6 @@ type BranchPointerDrag = {
 
 type BranchPointerOperation =
   | "moveBranchPointer"
-  | "blockedCheckedOutByHead"
   | "blockedCheckedOutByWorktree";
 
 type BranchPointerMove = {
@@ -3394,10 +3367,6 @@ const CommitHistory = ({
       }
     }
 
-    if (currentBranch !== null) {
-      checkedOutBranchOfBranch[currentBranch] = true;
-    }
-
     // Then collect the refs that would keep commits visible.
     for (const commit of commits) {
       for (const localBranch of commit.localBranches) {
@@ -3444,8 +3413,7 @@ const CommitHistory = ({
 
       if (checkedOutBranchOfBranch[branch] === true) {
         shouldBlockDeleteOfBranch[branch] = true;
-        deleteWarningMessageOfBranch[branch] =
-          readCheckedOutBranchWarningMessage({ branch, currentBranch });
+        deleteWarningMessageOfBranch[branch] = CHECKED_OUT_BY_WORKTREE_MESSAGE;
         continue;
       }
 
@@ -3488,7 +3456,7 @@ const CommitHistory = ({
       deleteWarningMessageOfTag,
       shouldBlockDeleteOfBranch,
     };
-  }, [commits, currentBranch, defaultBranch, worktrees]);
+  }, [commits, defaultBranch, worktrees]);
   const commitOfSha = useMemo(() => {
     const nextCommitOfSha: { [sha: string]: GitCommit } = {};
 
@@ -4427,7 +4395,6 @@ const CommitHistory = ({
                 properties: { had_warning: request.warningMessage !== null },
               });
               break;
-            case "blockedCheckedOutByHead":
             case "blockedCheckedOutByWorktree":
               return branchPointerOperationText.description;
           }
@@ -4814,7 +4781,7 @@ const CommitHistory = ({
                 }?`
           }
           confirmButtonText="Delete"
-          confirmButtonVariant="destructive"
+          confirmButtonVariant="default"
           isConfirmDisabled={gitRefDeleteTarget?.shouldBlockDelete === true}
           confirmButtonAction={deleteSelectedGitRef}
         >

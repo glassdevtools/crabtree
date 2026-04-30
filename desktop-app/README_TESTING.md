@@ -22,7 +22,7 @@ This file is the short checklist for Git behavior in MoltTree. Tests should prov
 - Delete a local branch tag.
 - Delete a normal Git tag.
 - Drag a branch tag to another commit.
-- Move a checked-out branch with `git reset --keep`.
+- Detach HEAD before deleting or moving the current branch.
 - Switch HEAD to a commit with detached checkout.
 - Preview merging a branch into HEAD.
 - Merge a branch into HEAD.
@@ -51,7 +51,7 @@ This file is the short checklist for Git behavior in MoltTree. Tests should prov
 - Reject stale `oldSha` requests.
 - Reject checkout, merge, reset, and checked-out branch moves when the worktree is dirty.
 - Reject pull requests when the selected head branch is not pushed or moved.
-- Warn before deleting checked-out branches.
+- Block deleting or moving branches checked out in another worktree.
 - Warn before deleting the only local branch/tag/worktree ref that keeps commits visible.
 - Reject moving the only local branch/tag/worktree ref that keeps commits visible.
 - Reject switching away from an unreachable detached HEAD.

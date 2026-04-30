@@ -1085,7 +1085,7 @@ test("deletes a branch when it is the only ref that keeps a commit visible", asy
   });
 });
 
-test("rejects deleting a checked-out branch", async () => {
+test("deletes the current branch by detaching HEAD", async () => {
   await withRepo(async ({ repoRoot }) => {
     await runGit({ cwd: repoRoot, args: ["switch", "-c", "topic"] });
     const topicSha = await commitRepoFile({
@@ -1095,15 +1095,18 @@ test("rejects deleting a checked-out branch", async () => {
       message: "topic",
     });
 
-    await assert.rejects(async () => {
-      await deleteGitBranch({
-        repoRoot,
-        branch: "topic",
-        oldSha: topicSha,
-      });
-    }, /checked out by HEAD/);
+    await deleteGitBranch({
+      repoRoot,
+      branch: "topic",
+      oldSha: topicSha,
+    });
 
-    assert.equal(await readSha({ cwd: repoRoot, ref: "topic" }), topicSha);
+    assert.equal(await readOptionalSha({ cwd: repoRoot, ref: "topic" }), null);
+    assert.equal(
+      await runGit({ cwd: repoRoot, args: ["branch", "--show-current"] }),
+      "",
+    );
+    assert.equal(await readSha({ cwd: repoRoot, ref: "HEAD" }), topicSha);
   });
 });
 
@@ -1136,7 +1139,7 @@ test("rejects deleting a branch checked out in a linked worktree", async () => {
   });
 });
 
-test("rejects deleting the current branch from a linked worktree as HEAD", async () => {
+test("deletes the current branch from a linked worktree by detaching HEAD", async () => {
   await withOriginRepo(async ({ parentRoot, repoRoot }) => {
     await runGit({ cwd: repoRoot, args: ["switch", "-c", "topic"] });
     const topicSha = await commitRepoFile({
@@ -1152,14 +1155,17 @@ test("rejects deleting the current branch from a linked worktree as HEAD", async
       args: ["worktree", "add", worktreeRoot, "topic"],
     });
 
-    await assert.rejects(async () => {
-      await deleteGitBranch({
-        repoRoot: worktreeRoot,
-        branch: "topic",
-        oldSha: topicSha,
-      });
-    }, /checked out by HEAD/);
+    await deleteGitBranch({
+      repoRoot: worktreeRoot,
+      branch: "topic",
+      oldSha: topicSha,
+    });
 
+    assert.equal(await readOptionalSha({ cwd: repoRoot, ref: "topic" }), null);
+    assert.equal(
+      await runGit({ cwd: worktreeRoot, args: ["branch", "--show-current"] }),
+      "",
+    );
     assert.equal(await readSha({ cwd: worktreeRoot, ref: "HEAD" }), topicSha);
   });
 });
@@ -1354,7 +1360,7 @@ test("moves a branch when its old tip would disappear from the graph", async () 
   });
 });
 
-test("rejects moving a checked-out branch", async () => {
+test("moves the current branch by detaching HEAD", async () => {
   await withRepo(async ({ repoRoot }) => {
     const oldSha = await commitRepoFile({
       repoRoot,
@@ -1371,24 +1377,64 @@ test("rejects moving a checked-out branch", async () => {
     });
     await runGit({ cwd: repoRoot, args: ["switch", "main"] });
 
-    await assert.rejects(async () => {
-      await moveGitBranch({
-        repoRoot,
-        branch: "main",
-        oldSha,
-        newSha: targetSha,
-      });
-    }, /checked out by HEAD/);
+    await moveGitBranch({
+      repoRoot,
+      branch: "main",
+      oldSha,
+      newSha: targetSha,
+    });
 
     assert.equal(
       await runGit({ cwd: repoRoot, args: ["branch", "--show-current"] }),
-      "main",
+      "",
     );
     assert.equal(await readSha({ cwd: repoRoot, ref: "HEAD" }), oldSha);
+    assert.equal(await readSha({ cwd: repoRoot, ref: "main" }), targetSha);
   });
 });
 
-test("rejects moving a checked-out branch before checking worktree dirtiness", async () => {
+test("rejects moving a branch checked out in another worktree", async () => {
+  await withOriginRepo(async ({ parentRoot, repoRoot }) => {
+    await commitRepoFile({
+      repoRoot,
+      filePath: "file.txt",
+      content: "base\n",
+      message: "base",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "topic"] });
+    const topicSha = await commitRepoFile({
+      repoRoot,
+      filePath: "topic.txt",
+      content: "topic\n",
+      message: "topic",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "main"] });
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "target"] });
+    const targetSha = await commitRepoFile({
+      repoRoot,
+      filePath: "file.txt",
+      content: "base\ntarget\n",
+      message: "target",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "main"] });
+    const worktreeRoot = join(parentRoot, "topic-worktree");
+    await runGit({
+      cwd: repoRoot,
+      args: ["worktree", "add", worktreeRoot, "topic"],
+    });
+
+    await assert.rejects(async () => {
+      await moveGitBranch({
+        repoRoot,
+        branch: "topic",
+        oldSha: topicSha,
+        newSha: targetSha,
+      });
+    }, /checked out in a worktree/);
+  });
+});
+
+test("moves the current branch with dirty changes by detaching HEAD", async () => {
   await withRepo(async ({ repoRoot }) => {
     const oldSha = await commitRepoFile({
       repoRoot,
@@ -1410,16 +1456,19 @@ test("rejects moving a checked-out branch before checking worktree dirtiness", a
       content: "dirty\n",
     });
 
-    await assert.rejects(async () => {
-      await moveGitBranch({
-        repoRoot,
-        branch: "main",
-        oldSha,
-        newSha: targetSha,
-      });
-    }, /checked out by HEAD/);
+    await moveGitBranch({
+      repoRoot,
+      branch: "main",
+      oldSha,
+      newSha: targetSha,
+    });
 
-    assert.equal(await readSha({ cwd: repoRoot, ref: "main" }), oldSha);
+    assert.equal(await readSha({ cwd: repoRoot, ref: "main" }), targetSha);
+    assert.equal(await readSha({ cwd: repoRoot, ref: "HEAD" }), oldSha);
+    assert.equal(
+      await readRepoFile({ repoRoot, filePath: "file.txt" }),
+      "base\ndirty\n",
+    );
   });
 });
 

@@ -20,8 +20,6 @@ import type {
 
 const FIELD_SEPARATOR = "\u001f";
 const ZERO_SHA = "0000000000000000000000000000000000000000";
-const CHECKED_OUT_BY_HEAD_MESSAGE =
-  "This branch is checked out by HEAD. Switch HEAD to another branch first.";
 const CHECKED_OUT_BY_WORKTREE_MESSAGE =
   "This branch is checked out in a worktree. Delete that worktree or switch its branch first.";
 const execFileAsync = promisify(execFile);
@@ -202,25 +200,34 @@ const readGitBranchCheckoutPlace = async ({
   const worktrees = await readGitWorktrees({ repoRoot });
 
   for (const worktree of worktrees) {
-    if (worktree.branch !== branch) {
-      continue;
+    if (worktree.branch === branch) {
+      return "worktree";
     }
-
-    return "worktree";
   }
 
   return null;
 };
 
-const readCheckedOutBranchErrorMessage = (
-  checkoutPlace: GitBranchCheckoutPlace,
-) => {
-  switch (checkoutPlace) {
-    case "head":
-      return CHECKED_OUT_BY_HEAD_MESSAGE;
-    case "worktree":
-      return CHECKED_OUT_BY_WORKTREE_MESSAGE;
+const detachHeadFromCurrentBranch = async ({
+  repoRoot,
+  expectedHeadSha,
+}: {
+  repoRoot: string;
+  expectedHeadSha: string;
+}) => {
+  const headSha = await readGitTextForPath({
+    path: repoRoot,
+    args: ["rev-parse", "HEAD"],
+  });
+
+  if (headSha !== expectedHeadSha) {
+    throw new Error("HEAD moved. Refresh and try again.");
   }
+
+  await runGitCommandForPath({
+    path: repoRoot,
+    args: ["switch", "--detach", expectedHeadSha],
+  });
 };
 
 export const readGitMainWorktreePathForPath = async ({
@@ -512,8 +519,7 @@ export const createGitRef = async ({
   });
 };
 
-// Branches and tags share this path so both delete actions get the same stale-ref check.
-const deleteGitRef = async ({
+const readVerifiedGitRefForDelete = async ({
   repoRoot,
   refName,
   gitRef,
@@ -541,6 +547,20 @@ const deleteGitRef = async ({
     throw new Error(`${refName} moved. Refresh and try again.`);
   }
 
+  return { expectedOldSha, refHead };
+};
+
+const deleteVerifiedGitRef = async ({
+  repoRoot,
+  refName,
+  gitRef,
+  refHead,
+}: {
+  repoRoot: string;
+  refName: string;
+  gitRef: string;
+  refHead: string;
+}) => {
   await runGitCommandForPath({
     path: repoRoot,
     args: [
@@ -552,6 +572,28 @@ const deleteGitRef = async ({
       refHead,
     ],
   });
+};
+
+// Branches and tags share this path so both delete actions get the same stale-ref check.
+const deleteGitRef = async ({
+  repoRoot,
+  refName,
+  gitRef,
+  oldSha,
+}: {
+  repoRoot: string;
+  refName: string;
+  gitRef: string;
+  oldSha: string;
+}) => {
+  const { refHead } = await readVerifiedGitRefForDelete({
+    repoRoot,
+    refName,
+    gitRef,
+    oldSha,
+  });
+
+  await deleteVerifiedGitRef({ repoRoot, refName, gitRef, refHead });
 };
 
 // Branch and tag deletion need an old sha because deleting a stale ref can hide commits the user did not mean to touch.
@@ -594,15 +636,30 @@ export const deleteGitBranch = async ({
     branch,
   });
 
-  if (checkoutPlace !== null) {
-    throw new Error(readCheckedOutBranchErrorMessage(checkoutPlace));
+  if (checkoutPlace === "worktree") {
+    throw new Error(CHECKED_OUT_BY_WORKTREE_MESSAGE);
   }
 
-  await deleteGitRef({
+  const gitRef = `refs/heads/${branch}`;
+  const { expectedOldSha, refHead } = await readVerifiedGitRefForDelete({
     repoRoot,
     refName: branch,
-    gitRef: `refs/heads/${branch}`,
+    gitRef,
     oldSha,
+  });
+
+  if (checkoutPlace === "head") {
+    await detachHeadFromCurrentBranch({
+      repoRoot,
+      expectedHeadSha: expectedOldSha,
+    });
+  }
+
+  await deleteVerifiedGitRef({
+    repoRoot,
+    refName: branch,
+    gitRef,
+    refHead,
   });
 };
 
@@ -895,8 +952,15 @@ export const moveGitBranch = async ({
     branch,
   });
 
-  if (checkoutPlace !== null) {
-    throw new Error(readCheckedOutBranchErrorMessage(checkoutPlace));
+  if (checkoutPlace === "worktree") {
+    throw new Error(CHECKED_OUT_BY_WORKTREE_MESSAGE);
+  }
+
+  if (checkoutPlace === "head") {
+    await detachHeadFromCurrentBranch({
+      repoRoot,
+      expectedHeadSha: expectedOldSha,
+    });
   }
 
   await runGitCommandForPath({
