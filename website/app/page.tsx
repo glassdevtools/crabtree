@@ -199,10 +199,7 @@ const HomePage = () => {
 
       <section className="bottomCta" aria-labelledby="cta-title">
         <div className="bottomCtaInner">
-          <h2 id="cta-title">
-            Save time on your{" "}
-            <span className="featureToken featureTokenBranch">branches</span>.
-          </h2>
+          <h2 id="cta-title">Save time in Codex.</h2>
           <p>
             There&apos;s a better way to manage your branches and worktrees.
           </p>

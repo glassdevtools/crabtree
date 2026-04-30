@@ -893,6 +893,27 @@ textarea,
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
+.branch-tag-change-list .branch-pointer-change-row {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.branch-pointer-change-commit {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.branch-pointer-change-commit code {
+  flex: 0 0 auto;
+}
+
+.branch-pointer-change-subject {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .commit-history-row {
   position: relative;
   z-index: 2;

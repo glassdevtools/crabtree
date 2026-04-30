@@ -3880,18 +3880,22 @@ const CommitHistory = ({
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <ul className="branch-tag-change-list">
-                <li>
+                <li className="branch-pointer-change-row">
                   <strong>From</strong>
-                  <span>
-                    <code>{branchPointerMove.oldShortSha}</code>{" "}
-                    {branchPointerMove.oldSubject}
+                  <span className="branch-pointer-change-commit">
+                    <code>{branchPointerMove.oldShortSha}</code>
+                    <span className="branch-pointer-change-subject">
+                      {branchPointerMove.oldSubject}
+                    </span>
                   </span>
                 </li>
-                <li>
+                <li className="branch-pointer-change-row">
                   <strong>To</strong>
-                  <span>
-                    <code>{branchPointerMove.newShortSha}</code>{" "}
-                    {branchPointerMove.newSubject}
+                  <span className="branch-pointer-change-commit">
+                    <code>{branchPointerMove.newShortSha}</code>
+                    <span className="branch-pointer-change-subject">
+                      {branchPointerMove.newSubject}
+                    </span>
                   </span>
                 </li>
               </ul>
