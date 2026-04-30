@@ -476,6 +476,7 @@ type BranchPointerMove = {
   newShortSha: string;
   newSubject: string;
   willMoveCheckedOutWorktree: boolean;
+  warningMessage: string | null;
 };
 
 type GitRefDeleteTarget = {
@@ -1249,7 +1250,6 @@ const readCommitBranchTarget = ({
 const BranchTags = ({
   refs,
   localBranches,
-  defaultBranch,
   commitSha,
   commitShortSha,
   commitSubject,
@@ -1262,7 +1262,6 @@ const BranchTags = ({
 }: {
   refs: string[];
   localBranches: string[];
-  defaultBranch: string | null;
   commitSha: string;
   commitShortSha: string;
   commitSubject: string;
@@ -1293,7 +1292,22 @@ const BranchTags = ({
   }) => void;
   finishBranchPointerDrag: () => void;
 }) => {
-  const normalRefs = refs.filter((ref) => ref !== "HEAD");
+  const refsWithLocalBranches = [...refs];
+  const isRefOfName: { [name: string]: boolean } = {};
+
+  for (const ref of refs) {
+    isRefOfName[cleanRefName(ref)] = true;
+  }
+
+  for (const localBranch of localBranches) {
+    if (isRefOfName[localBranch] === true) {
+      continue;
+    }
+
+    refsWithLocalBranches.push(localBranch);
+  }
+
+  const normalRefs = refsWithLocalBranches.filter((ref) => ref !== "HEAD");
   const orderedRefs = [
     ...normalRefs.filter(
       (ref) =>
@@ -1323,8 +1337,7 @@ const BranchTags = ({
         const isTag = ref.startsWith("tag: ");
         const isOriginBranch = refName.startsWith("origin/");
         let refClassName = "commit-ref commit-ref-local";
-        const shouldShowDeleteButton =
-          isTag || (isLocalBranch && refName !== defaultBranch);
+        const shouldShowDeleteButton = isTag || isLocalBranch;
         const deleteWarningMessage = isTag
           ? (deleteWarningMessageOfTag[refName] ?? null)
           : (deleteWarningMessageOfBranch[refName] ?? null);
@@ -1674,7 +1687,6 @@ const CommitHistoryRow = ({
   mainWorktreePath,
   worktrees,
   currentBranch,
-  defaultBranch,
   isHeadClean,
   threadOfId,
   gitChangesOfCwd,
@@ -1702,7 +1714,6 @@ const CommitHistoryRow = ({
   mainWorktreePath: string;
   worktrees: GitWorktree[];
   currentBranch: string | null;
-  defaultBranch: string | null;
   isHeadClean: boolean;
   threadOfId: { [id: string]: CodexThread };
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
@@ -1856,14 +1867,16 @@ const CommitHistoryRow = ({
       }
 
       const gitChangeSummary = gitChangesOfCwd[thread.cwd];
+      const isMainWorktreeThread =
+        thread.cwd.length > 0 &&
+        readIsCwdInsidePath({ cwd: thread.cwd, path: mainWorktreePath }) &&
+        !readIsWorktreeCwd({ cwd: thread.cwd, worktrees });
 
       if (
         !hasChangedMainWorktreeThreadGroup &&
-        thread.cwd.length > 0 &&
+        isMainWorktreeThread &&
         gitChangeSummary !== undefined &&
-        !readIsGitChangeSummaryEmpty(gitChangeSummary) &&
-        readIsCwdInsidePath({ cwd: thread.cwd, path: mainWorktreePath }) &&
-        !readIsWorktreeCwd({ cwd: thread.cwd, worktrees })
+        !readIsGitChangeSummaryEmpty(gitChangeSummary)
       ) {
         hasChangedMainWorktreeThreadGroup = true;
       }
@@ -1875,6 +1888,7 @@ const CommitHistoryRow = ({
       const threadBranch = thread.gitInfo?.branch ?? null;
 
       if (
+        !isMainWorktreeThread &&
         threadBranch !== null &&
         readIsLocalBranch({
           branch: threadBranch,
@@ -1932,7 +1946,7 @@ const CommitHistoryRow = ({
     }
   }
 
-  const rowRefs =
+  const rowCommitRefs =
     row.threadGroup === null
       ? commit.refs.filter((ref) => {
           const refName = cleanRefName(ref);
@@ -1949,6 +1963,21 @@ const CommitHistoryRow = ({
             })
           );
         })
+      : [];
+  const rowRefNameOfName: { [name: string]: boolean } = {};
+
+  for (const rowCommitRef of rowCommitRefs) {
+    rowRefNameOfName[cleanRefName(rowCommitRef)] = true;
+  }
+
+  const rowRefs =
+    row.threadGroup === null
+      ? [
+          ...rowCommitRefs,
+          ...rowLocalBranches.filter(
+            (localBranch) => rowRefNameOfName[localBranch] !== true,
+          ),
+        ]
       : isMainWorktreeThreadGroupRow
         ? shouldOwnMainWorktreeHead
           ? currentBranch === null
@@ -2159,7 +2188,6 @@ const CommitHistoryRow = ({
           <BranchTags
             refs={rowRefs}
             localBranches={rowLocalBranches}
-            defaultBranch={defaultBranch}
             commitSha={commit.sha}
             commitShortSha={commit.shortSha}
             commitSubject={commit.subject}
@@ -2575,15 +2603,17 @@ const CommitHistory = ({
     for (const branch of Object.keys(branchShaOfBranch)) {
       const reasons: string[] = [];
 
+      if (branch === defaultBranch) {
+        reasons.push("it's the default branch");
+      }
+
       if (
         !readIsShaVisibleAfterDelete({
           sha: branchShaOfBranch[branch],
           deletedRefKey: readBranchRefKey(branch),
         })
       ) {
-        reasons.push(
-          "it's the only thing pointing to this commit, so deleting it might drop it from the tree",
-        );
+        reasons.push("it's the only thing keeping this commit in the graph");
       }
 
       const warningMessage = readWarningMessage(reasons);
@@ -2594,9 +2624,7 @@ const CommitHistory = ({
     }
 
     for (const tag of Object.keys(tagShaOfTag)) {
-      const reasons = [
-        "it's a version tag, which usually shouldn't be deleted",
-      ];
+      const reasons = ["it's a version tag"];
 
       if (
         !readIsShaVisibleAfterDelete({
@@ -2604,9 +2632,7 @@ const CommitHistory = ({
           deletedRefKey: readTagRefKey(tag),
         })
       ) {
-        reasons.push(
-          "it's the only thing pointing to this commit, so deleting it might drop it from the tree",
-        );
+        reasons.push("it's the only thing keeping this commit in the graph");
       }
 
       const warningMessage = readWarningMessage(reasons);
@@ -2617,7 +2643,7 @@ const CommitHistory = ({
     }
 
     return { deleteWarningMessageOfBranch, deleteWarningMessageOfTag };
-  }, [commits]);
+  }, [commits, defaultBranch]);
   const commitOfSha = useMemo(() => {
     const nextCommitOfSha: { [sha: string]: GitCommit } = {};
 
@@ -2662,7 +2688,7 @@ const CommitHistory = ({
 
     return false;
   };
-  const readIsBranchMoveSafe = ({
+  const readBranchPointerMoveWarningMessage = ({
     branch,
     oldSha,
     newSha,
@@ -2677,7 +2703,7 @@ const CommitHistory = ({
         descendantSha: newSha,
       })
     ) {
-      return true;
+      return null;
     }
 
     for (const commit of commits) {
@@ -2689,7 +2715,7 @@ const CommitHistory = ({
             descendantSha: commit.sha,
           })
         ) {
-          return true;
+          return null;
         }
       }
 
@@ -2701,7 +2727,7 @@ const CommitHistory = ({
             descendantSha: commit.sha,
           })
         ) {
-          return true;
+          return null;
         }
       }
     }
@@ -2715,11 +2741,11 @@ const CommitHistory = ({
           descendantSha: worktree.head,
         })
       ) {
-        return true;
+        return null;
       }
     }
 
-    return false;
+    return "We don't recommend moving this because it's the only thing keeping this commit in the graph.";
   };
   const readIsBranchCheckedOut = (branch: string) => {
     if (currentBranch === branch) {
@@ -2997,20 +3023,8 @@ const CommitHistory = ({
     }
 
     event.preventDefault();
-    if (
-      readIsBranchMoveSafe({
-        branch: activeBranchPointerDrag.branch,
-        oldSha: activeBranchPointerDrag.oldSha,
-        newSha: branchPointerTarget.sha,
-      })
-    ) {
-      event.dataTransfer.dropEffect = "move";
-      setBranchPointerDropTargetRowId(row.id);
-      return;
-    }
-
-    event.dataTransfer.dropEffect = "none";
-    setBranchPointerDropTargetRowId(null);
+    event.dataTransfer.dropEffect = "move";
+    setBranchPointerDropTargetRowId(row.id);
   };
   const clearBranchPointerDropTarget = (event: DragEvent<HTMLDivElement>) => {
     const relatedTarget = event.relatedTarget;
@@ -3052,20 +3066,6 @@ const CommitHistory = ({
       return;
     }
 
-    if (
-      !readIsBranchMoveSafe({
-        branch: activeBranchPointerDrag.branch,
-        oldSha: activeBranchPointerDrag.oldSha,
-        newSha: branchPointerTarget.sha,
-      })
-    ) {
-      showErrorMessage(
-        `Moving ${activeBranchPointerDrag.branch} would make ${activeBranchPointerDrag.oldShortSha} unreachable from local branches, tags, or detached worktrees. Create another branch first.`,
-      );
-      finishBranchPointerDrag();
-      return;
-    }
-
     setBranchPointerMove({
       repoRoot,
       sourcePath: activeBranchPointerDrag.sourcePath,
@@ -3080,6 +3080,11 @@ const CommitHistory = ({
       willMoveCheckedOutWorktree: readIsBranchCheckedOut(
         activeBranchPointerDrag.branch,
       ),
+      warningMessage: readBranchPointerMoveWarningMessage({
+        branch: activeBranchPointerDrag.branch,
+        oldSha: activeBranchPointerDrag.oldSha,
+        newSha: branchPointerTarget.sha,
+      }),
     });
     finishBranchPointerDrag();
   };
@@ -3575,7 +3580,6 @@ const CommitHistory = ({
                 mainWorktreePath={mainWorktreePath}
                 worktrees={worktrees}
                 currentBranch={currentBranch}
-                defaultBranch={defaultBranch}
                 isHeadClean={isHeadClean}
                 threadOfId={threadOfId}
                 gitChangesOfCwd={gitChangesOfCwd}
@@ -3912,6 +3916,13 @@ const CommitHistory = ({
                       ? "This branch is checked out in a clean worktree, so Git will reset that worktree to the target commit."
                       : "No worktree files will be changed."}
               </AlertDialogDescription>
+              {branchPointerMove.warningMessage === null ? null : (
+                <Alert className="git-ref-delete-warning" variant="destructive">
+                  <AlertDescription>
+                    {branchPointerMove.warningMessage}
+                  </AlertDescription>
+                </Alert>
+              )}
               <AlertDialogFooter>
                 <AlertDialogCancel onClick={closeBranchPointerMoveModal}>
                   Cancel

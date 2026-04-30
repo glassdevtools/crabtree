@@ -598,18 +598,6 @@ export const moveGitBranch = async ({
     throw new Error("Branch moved. Refresh and try again.");
   }
 
-  await ensureOldShaStaysVisibleAfterRefChange({
-    repoRoot,
-    oldSha: expectedOldSha,
-    changedRef: branchRef,
-    replacementSha: targetSha,
-    changedLocalBranch: branch,
-    rootRefs: ["refs/heads", "refs/remotes", "refs/tags"],
-    shouldIncludeWorktreeHeads: true,
-    message:
-      "Moving this branch would hide commits from the graph. Move or tag another branch first.",
-  });
-
   const worktreePath = await readGitWorktreePathForBranch({
     repoRoot,
     branch,
@@ -700,18 +688,6 @@ export const switchGitBranch = async ({
   }
 
   if (branchHead !== targetSha) {
-    await ensureOldShaStaysVisibleAfterRefChange({
-      repoRoot,
-      oldSha: expectedOldSha,
-      changedRef: branchRef,
-      replacementSha: targetSha,
-      changedLocalBranch: branch,
-      rootRefs: ["refs/heads", "refs/remotes", "refs/tags"],
-      shouldIncludeWorktreeHeads: true,
-      message:
-        "Moving this branch would hide commits from the graph. Move or tag another branch first.",
-    });
-
     if (checkedOutWorktreePath === worktreePath) {
       await runGitCommandForPath({
         path: worktreePath,

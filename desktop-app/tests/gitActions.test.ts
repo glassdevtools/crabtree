@@ -891,7 +891,7 @@ test("moves a branch to a descendant commit", async () => {
   });
 });
 
-test("rejects moving a branch when its old tip would disappear from the graph", async () => {
+test("moves a branch when its old tip would disappear from the graph", async () => {
   await withRepo(async ({ repoRoot }) => {
     const baseSha = await commitRepoFile({
       repoRoot,
@@ -908,16 +908,14 @@ test("rejects moving a branch when its old tip would disappear from the graph", 
     });
     await runGit({ cwd: repoRoot, args: ["switch", "main"] });
 
-    await assert.rejects(async () => {
-      await moveGitBranch({
-        repoRoot,
-        branch: "topic",
-        oldSha: topicSha,
-        newSha: baseSha,
-      });
-    }, /hide commits/);
+    await moveGitBranch({
+      repoRoot,
+      branch: "topic",
+      oldSha: topicSha,
+      newSha: baseSha,
+    });
 
-    assert.equal(await readSha({ cwd: repoRoot, ref: "topic" }), topicSha);
+    assert.equal(await readSha({ cwd: repoRoot, ref: "topic" }), baseSha);
   });
 });
 
