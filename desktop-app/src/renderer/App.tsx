@@ -138,6 +138,10 @@ const RARE_LOADING_IMAGE_URLS = [
 ];
 const GITHUB_REPOSITORY_URL = packageInfo.repository.url.replace(/\.git$/, "");
 const MERGE_BRANCH_BUTTON_TITLE = "Merge this into HEAD";
+const CHECKED_OUT_BY_HEAD_MESSAGE =
+  "This branch is checked out by HEAD. Switch HEAD to another branch first.";
+const CHECKED_OUT_BY_WORKTREE_MESSAGE =
+  "This branch is checked out in a worktree. Delete that worktree or switch its branch first.";
 const COMMIT_GRAPH_ACTION_ICON_SIZE = 10;
 // TODO: AI-PICKED-VALUE: A light stroke makes the graph actions read as buttons instead of status markers.
 const COMMIT_GRAPH_ACTION_ICON_STROKE_WIDTH = 2;
@@ -275,14 +279,18 @@ const readGitWarningReasonText = (reasons: string[]) => {
 
 const readBranchPointerOperation = ({
   checkedOutBranchPath,
+  mainWorktreePath,
 }: {
   checkedOutBranchPath: string | null;
+  mainWorktreePath: string;
 }): BranchPointerOperation => {
-  if (checkedOutBranchPath !== null) {
-    return "blockedCheckedOutBranch";
+  if (checkedOutBranchPath === null) {
+    return "moveBranchPointer";
   }
 
-  return "moveBranchPointer";
+  return checkedOutBranchPath === mainWorktreePath
+    ? "blockedCheckedOutByHead"
+    : "blockedCheckedOutByWorktree";
 };
 
 const readBranchPointerOperationText = ({
@@ -303,18 +311,41 @@ const readBranchPointerOperationText = ({
         buttonText: "Move",
         shouldBlock: false,
       };
-    case "blockedCheckedOutBranch":
+    case "blockedCheckedOutByHead":
       return {
         title: "Move Branch Pointer",
         message: `Move the ${branch} branch pointer?`,
-        description:
-          "This branch is checked out in a worktree. Delete that worktree or switch its branch first.",
+        description: CHECKED_OUT_BY_HEAD_MESSAGE,
+        loadingDescription: "Moving branch",
+        successMessage: "Moved branch.",
+        buttonText: "Move",
+        shouldBlock: true,
+      };
+    case "blockedCheckedOutByWorktree":
+      return {
+        title: "Move Branch Pointer",
+        message: `Move the ${branch} branch pointer?`,
+        description: CHECKED_OUT_BY_WORKTREE_MESSAGE,
         loadingDescription: "Moving branch",
         successMessage: "Moved branch.",
         buttonText: "Move",
         shouldBlock: true,
       };
   }
+};
+
+const readCheckedOutBranchWarningMessage = ({
+  branch,
+  currentBranch,
+}: {
+  branch: string;
+  currentBranch: string | null;
+}) => {
+  if (branch === currentBranch) {
+    return CHECKED_OUT_BY_HEAD_MESSAGE;
+  }
+
+  return CHECKED_OUT_BY_WORKTREE_MESSAGE;
 };
 
 const readActionableBranchSyncChanges = ({
@@ -524,7 +555,10 @@ type BranchPointerDrag = {
   oldSubject: string;
 };
 
-type BranchPointerOperation = "moveBranchPointer" | "blockedCheckedOutBranch";
+type BranchPointerOperation =
+  | "moveBranchPointer"
+  | "blockedCheckedOutByHead"
+  | "blockedCheckedOutByWorktree";
 
 type BranchPointerMove = {
   repoRoot: string;
@@ -3408,7 +3442,7 @@ const CommitHistory = ({
       if (checkedOutBranchOfBranch[branch] === true) {
         shouldBlockDeleteOfBranch[branch] = true;
         deleteWarningMessageOfBranch[branch] =
-          "This branch is checked out in a worktree. Delete that worktree or switch its branch first.";
+          readCheckedOutBranchWarningMessage({ branch, currentBranch });
         continue;
       }
 
@@ -3451,7 +3485,7 @@ const CommitHistory = ({
       deleteWarningMessageOfTag,
       shouldBlockDeleteOfBranch,
     };
-  }, [commits, defaultBranch, worktrees]);
+  }, [commits, currentBranch, defaultBranch, worktrees]);
   const commitOfSha = useMemo(() => {
     const nextCommitOfSha: { [sha: string]: GitCommit } = {};
 
@@ -3900,6 +3934,7 @@ const CommitHistory = ({
       newSubject: branchPointerTarget.subject,
       operation: readBranchPointerOperation({
         checkedOutBranchPath,
+        mainWorktreePath,
       }),
       warningMessage: readBranchPointerMoveWarningMessage({
         branch: activeBranchPointerDrag.branch,
@@ -4389,7 +4424,8 @@ const CommitHistory = ({
                 properties: { had_warning: request.warningMessage !== null },
               });
               break;
-            case "blockedCheckedOutBranch":
+            case "blockedCheckedOutByHead":
+            case "blockedCheckedOutByWorktree":
               return branchPointerOperationText.description;
           }
         } catch (error) {

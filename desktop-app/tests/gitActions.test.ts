@@ -536,10 +536,20 @@ test("reads staged and unstaged change summaries for repo and worktree cwd value
       content: "root staged\n",
     });
     await runGit({ cwd: repoRoot, args: ["add", "--", "base.txt"] });
+    await writeRepoFile({
+      repoRoot,
+      filePath: "root-untracked.txt",
+      content: "root untracked one\nroot untracked two\n",
+    });
     await appendRepoFile({
       repoRoot: worktreeRoot,
       filePath: "feature.txt",
       content: "worktree unstaged\n",
+    });
+    await writeRepoFile({
+      repoRoot: worktreeRoot,
+      filePath: "worktree-untracked.txt",
+      content: "worktree untracked one\nworktree untracked two",
     });
 
     const { gitChangesOfCwd, gitErrors } = await readGitChangesOfCwd({
@@ -549,9 +559,9 @@ test("reads staged and unstaged change summaries for repo and worktree cwd value
 
     assert.equal(gitErrors.length, 0);
     assert.equal(gitChangesOfCwd[repoRoot]?.staged.added, 1);
-    assert.equal(gitChangesOfCwd[repoRoot]?.unstaged.added, 0);
+    assert.equal(gitChangesOfCwd[repoRoot]?.unstaged.added, 2);
     assert.equal(gitChangesOfCwd[worktreeRoot]?.staged.added, 0);
-    assert.equal(gitChangesOfCwd[worktreeRoot]?.unstaged.added, 1);
+    assert.equal(gitChangesOfCwd[worktreeRoot]?.unstaged.added, 3);
   });
 });
 
@@ -1091,7 +1101,7 @@ test("rejects deleting a checked-out branch", async () => {
         branch: "topic",
         oldSha: topicSha,
       });
-    }, /checked out in a worktree/);
+    }, /checked out by HEAD/);
 
     assert.equal(await readSha({ cwd: repoRoot, ref: "topic" }), topicSha);
   });
@@ -1340,7 +1350,7 @@ test("rejects moving a checked-out branch", async () => {
         oldSha,
         newSha: targetSha,
       });
-    }, /checked out in a worktree/);
+    }, /checked out by HEAD/);
 
     assert.equal(
       await runGit({ cwd: repoRoot, args: ["branch", "--show-current"] }),
@@ -1379,7 +1389,7 @@ test("rejects moving a checked-out branch before checking worktree dirtiness", a
         oldSha,
         newSha: targetSha,
       });
-    }, /checked out in a worktree/);
+    }, /checked out by HEAD/);
 
     assert.equal(await readSha({ cwd: repoRoot, ref: "main" }), oldSha);
   });

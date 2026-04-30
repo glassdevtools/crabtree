@@ -20,6 +20,10 @@ import type {
 
 const FIELD_SEPARATOR = "\u001f";
 const ZERO_SHA = "0000000000000000000000000000000000000000";
+const CHECKED_OUT_BY_HEAD_MESSAGE =
+  "This branch is checked out by HEAD. Switch HEAD to another branch first.";
+const CHECKED_OUT_BY_WORKTREE_MESSAGE =
+  "This branch is checked out in a worktree. Delete that worktree or switch its branch first.";
 const execFileAsync = promisify(execFile);
 
 type GitWorktreePointer = {
@@ -175,6 +179,40 @@ const readGitWorktreePathForBranch = async ({
   }
 
   return null;
+};
+
+type GitBranchCheckoutPlace = "head" | "worktree";
+
+const readGitBranchCheckoutPlace = async ({
+  repoRoot,
+  branch,
+}: {
+  repoRoot: string;
+  branch: string;
+}) => {
+  const worktrees = await readGitWorktrees({ repoRoot });
+  const mainWorktree = worktrees[0];
+
+  for (const worktree of worktrees) {
+    if (worktree.branch !== branch) {
+      continue;
+    }
+
+    return worktree.path === mainWorktree?.path ? "head" : "worktree";
+  }
+
+  return null;
+};
+
+const readCheckedOutBranchErrorMessage = (
+  checkoutPlace: GitBranchCheckoutPlace,
+) => {
+  switch (checkoutPlace) {
+    case "head":
+      return CHECKED_OUT_BY_HEAD_MESSAGE;
+    case "worktree":
+      return CHECKED_OUT_BY_WORKTREE_MESSAGE;
+  }
 };
 
 export const readGitMainWorktreePathForPath = async ({
@@ -543,15 +581,13 @@ export const deleteGitBranch = async ({
     throw new Error("This is the default branch, so you can't delete it.");
   }
 
-  const worktreePath = await readGitWorktreePathForBranch({
+  const checkoutPlace = await readGitBranchCheckoutPlace({
     repoRoot,
     branch,
   });
 
-  if (worktreePath !== null) {
-    throw new Error(
-      "This branch is checked out in a worktree. Delete that worktree or switch its branch first.",
-    );
+  if (checkoutPlace !== null) {
+    throw new Error(readCheckedOutBranchErrorMessage(checkoutPlace));
   }
 
   await deleteGitRef({
@@ -846,15 +882,13 @@ export const moveGitBranch = async ({
     throw new Error("Branch moved. Refresh and try again.");
   }
 
-  const worktreePath = await readGitWorktreePathForBranch({
+  const checkoutPlace = await readGitBranchCheckoutPlace({
     repoRoot,
     branch,
   });
 
-  if (worktreePath !== null) {
-    throw new Error(
-      "This branch is checked out in a worktree. Delete that worktree or switch its branch first.",
-    );
+  if (checkoutPlace !== null) {
+    throw new Error(readCheckedOutBranchErrorMessage(checkoutPlace));
   }
 
   await runGitCommandForPath({

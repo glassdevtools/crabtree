@@ -1,4 +1,5 @@
-import { stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
+import { join } from "node:path";
 import { simpleGit } from "simple-git";
 import type {
   GitBranchSyncChange,
@@ -422,14 +423,86 @@ const parseGitChangeLineCounts = (stdout: string) => {
   return lineCounts;
 };
 
+const parseGitStatusUntrackedPaths = (stdout: string) => {
+  const paths: string[] = [];
+
+  for (const entry of stdout.split("\0")) {
+    if (!entry.startsWith("?? ")) {
+      continue;
+    }
+
+    const path = entry.slice(3);
+
+    if (path.length === 0) {
+      continue;
+    }
+
+    paths.push(path);
+  }
+
+  return paths;
+};
+
+const readFileAddedLineCount = async (path: string) => {
+  const bytes = await readFile(path);
+
+  if (bytes.length === 0 || bytes.includes(0)) {
+    return 0;
+  }
+
+  let lineCount = 0;
+
+  for (const byte of bytes) {
+    if (byte === 10) {
+      lineCount += 1;
+    }
+  }
+
+  return bytes[bytes.length - 1] === 10 ? lineCount : lineCount + 1;
+};
+
+const readUntrackedGitChangeLineCounts = async ({ cwd }: { cwd: string }) => {
+  const [repoRoot, status] = await Promise.all([
+    readGitText({ cwd, args: ["rev-parse", "--show-toplevel"] }),
+    runGit({
+      cwd,
+      args: ["status", "--porcelain=v1", "-uall", "-z", "--", "."],
+    }),
+  ]);
+  const untrackedPaths = parseGitStatusUntrackedPaths(status.stdout);
+  const addedLineCounts = await readValuesWithGitReadLimit({
+    items: untrackedPaths,
+    readItem: async (untrackedPath) => {
+      const path = join(repoRoot, untrackedPath);
+      const pathStat = await stat(path);
+
+      if (!pathStat.isFile()) {
+        return 0;
+      }
+
+      return await readFileAddedLineCount(path);
+    },
+  });
+
+  return {
+    added: addedLineCounts.reduce((total, count) => total + count, 0),
+    removed: 0,
+  };
+};
+
 const readGitChangeSummary = async ({ cwd }: { cwd: string }) => {
-  const [unstaged, staged] = await Promise.all([
+  const [unstaged, staged, untracked] = await Promise.all([
     runGit({ cwd, args: ["diff", "--numstat", "--", "."] }),
     runGit({ cwd, args: ["diff", "--cached", "--numstat", "--", "."] }),
+    readUntrackedGitChangeLineCounts({ cwd }),
   ]);
+  const unstagedLineCounts = parseGitChangeLineCounts(unstaged.stdout.trim());
   const changeSummary: GitChangeSummary = {
     staged: parseGitChangeLineCounts(staged.stdout.trim()),
-    unstaged: parseGitChangeLineCounts(unstaged.stdout.trim()),
+    unstaged: {
+      added: unstagedLineCounts.added + untracked.added,
+      removed: unstagedLineCounts.removed + untracked.removed,
+    },
   };
 
   return changeSummary;
