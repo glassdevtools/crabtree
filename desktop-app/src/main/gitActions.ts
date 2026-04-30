@@ -862,7 +862,7 @@ export const pushGitBranchSyncChanges = async (
     localSha,
     originSha,
   } of gitBranchSyncChanges) {
-    if (localSha === null || localSha === ZERO_SHA || originSha === ZERO_SHA) {
+    if (localSha === ZERO_SHA || originSha === ZERO_SHA) {
       continue;
     }
 
@@ -874,6 +874,46 @@ export const pushGitBranchSyncChanges = async (
     const branchRef = `refs/heads/${branch}`;
     const originBranchRef = `refs/remotes/origin/${branch}`;
     const remoteBranchRef = `refs/heads/${branch}`;
+
+    if (localSha === null) {
+      if (originSha === null) {
+        continue;
+      }
+
+      const expectedOriginSha = await readGitTextForPath({
+        path: repoRoot,
+        args: ["rev-parse", "--verify", `${originSha}^{commit}`],
+      });
+      const originHead = await readGitTextForPath({
+        path: repoRoot,
+        args: ["rev-parse", "--verify", originBranchRef],
+      });
+      const branchHead = await readNullableGitTextForPath({
+        path: repoRoot,
+        args: ["rev-parse", "--verify", branchRef],
+      });
+
+      if (originHead !== expectedOriginSha || branchHead !== null) {
+        throw new Error(`${branch} moved. Refresh and try again.`);
+      }
+
+      await runGitCommandForPath({
+        path: repoRoot,
+        args: [
+          "push",
+          `--force-with-lease=${remoteBranchRef}:${expectedOriginSha}`,
+          "origin",
+          `:${remoteBranchRef}`,
+        ],
+      });
+
+      if (!pushedRepoRoots.includes(repoRoot)) {
+        pushedRepoRoots.push(repoRoot);
+      }
+
+      continue;
+    }
+
     const targetSha = await readGitTextForPath({
       path: repoRoot,
       args: ["rev-parse", "--verify", `${localSha}^{commit}`],

@@ -354,6 +354,7 @@ const readGitBranchSyncChanges = async ({
     ],
   });
   const remoteShaOfBranch: { [branch: string]: string } = {};
+  const localShaOfBranch: { [branch: string]: string } = {};
   const branchSyncChanges: GitBranchSyncChange[] = [];
   const originPrefix = "origin/";
 
@@ -395,6 +396,7 @@ const readGitBranchSyncChanges = async ({
     }
 
     const remoteSha = remoteShaOfBranch[branch];
+    localShaOfBranch[branch] = localSha;
 
     if (remoteSha === localSha) {
       continue;
@@ -405,6 +407,25 @@ const readGitBranchSyncChanges = async ({
       branch,
       localSha,
       originSha: remoteSha ?? null,
+    });
+  }
+
+  for (const branch of Object.keys(remoteShaOfBranch)) {
+    if (localShaOfBranch[branch] !== undefined) {
+      continue;
+    }
+
+    const remoteSha = remoteShaOfBranch[branch];
+
+    if (remoteSha === undefined) {
+      continue;
+    }
+
+    branchSyncChanges.push({
+      repoRoot: repoSeed.root,
+      branch,
+      localSha: null,
+      originSha: remoteSha,
     });
   }
 

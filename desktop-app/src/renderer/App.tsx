@@ -164,7 +164,8 @@ const readBranchSyncActionText = (
     case "push":
       return {
         title: "Push Branches",
-        message: "Are you sure you want to push local branches to origin?",
+        message:
+          "Are you sure you want origin branches to match local branches?",
         buttonText: "Push",
         loadingDescription: "Pushing branches",
         successMessage: "Branches pushed.",
@@ -204,9 +205,7 @@ const readActionableBranchSyncChanges = ({
 }) => {
   switch (action) {
     case "push":
-      return branchSyncChanges.filter(
-        (branchSyncChange) => branchSyncChange.localSha !== null,
-      );
+      return branchSyncChanges;
     case "revert":
       return branchSyncChanges.filter(
         (branchSyncChange) =>

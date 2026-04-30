@@ -322,7 +322,7 @@ test("reads repo graphs when a linked worktree branch is missing", async () => {
   });
 });
 
-test("does not read a missing local branch as a branch sync change", async () => {
+test("reads a missing local branch as an origin-only branch sync change", async () => {
   await withOriginRepo(async ({ repoRoot }) => {
     await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
     const oldSha = await commitRepoFile({
@@ -342,7 +342,9 @@ test("does not read a missing local branch as a branch sync change", async () =>
 
     assert.equal(warnings.length, 0);
     assert.equal(gitErrors.length, 0);
-    assert.deepEqual(repo?.branchSyncChanges, []);
+    assert.deepEqual(repo?.branchSyncChanges, [
+      { repoRoot, branch: "feature", localSha: null, originSha: oldSha },
+    ]);
   });
 });
 
@@ -1404,6 +1406,37 @@ test("pushes a local-only branch sync change to origin", async () => {
     assert.equal(
       await readSha({ cwd: repoRoot, ref: "refs/remotes/origin/feature" }),
       localSha,
+    );
+  });
+});
+
+test("pushes an origin-only branch sync change by deleting it from origin", async () => {
+  await withOriginRepo(async ({ repoRoot, originRoot }) => {
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
+    const oldSha = await commitRepoFile({
+      repoRoot,
+      filePath: "feature.txt",
+      content: "feature\n",
+      message: "feature",
+    });
+    await runGit({ cwd: repoRoot, args: ["push", "-u", "origin", "feature"] });
+    await runGit({ cwd: repoRoot, args: ["switch", "main"] });
+    await runGit({ cwd: repoRoot, args: ["branch", "-D", "feature"] });
+
+    await pushGitBranchSyncChanges([
+      { repoRoot, branch: "feature", localSha: null, originSha: oldSha },
+    ]);
+
+    assert.equal(
+      await readOptionalSha({ cwd: originRoot, ref: "refs/heads/feature" }),
+      null,
+    );
+    assert.equal(
+      await readOptionalSha({
+        cwd: repoRoot,
+        ref: "refs/remotes/origin/feature",
+      }),
+      null,
     );
   });
 });
