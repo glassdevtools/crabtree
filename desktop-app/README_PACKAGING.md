@@ -32,13 +32,19 @@ Keep the checked-in source image here:
 src/renderer/assets/default-app-icon.png
 ```
 
+The icon generation script uses the same Tauri CLI icon command as `wgpu-test-4`, so install it before packaging if it is not already available:
+
+```bash
+cargo install tauri-cli --locked
+```
+
 Regenerate icons with:
 
 ```bash
 npm run icons:mac --workspace desktop-app
 ```
 
-The script writes `packaging/macos/generated-icons/icon.icns`, `packaging/macos/generated-icons/icon.png`, `packaging/macos/generated-icons/dmg-background.png`, and `packaging/macos/generated-icons/dmg-background@2x.png`. That generated directory is ignored and should be recreated before packaging, matching the `wgpu-test-4` source-image-to-generated-icons pattern.
+The script runs `cargo tauri icon src/renderer/assets/default-app-icon.png --output packaging/macos/generated-icons`, then writes `packaging/macos/generated-icons/dmg-background.png` and `packaging/macos/generated-icons/dmg-background@2x.png`. That generated directory is ignored and should be recreated before packaging.
 
 ## Code Signing And Notarization
 
