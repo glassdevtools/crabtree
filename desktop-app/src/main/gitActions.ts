@@ -5,6 +5,7 @@ import type {
   GitCommitChangesRequest,
   GitCreateBranchRequest,
   GitDeleteBranchRequest,
+  GitDeleteTagRequest,
   GitDetachWorktreeBranchRequest,
   GitMergeBranchRequest,
   GitMergeBranchResult,
@@ -347,7 +348,49 @@ export const createGitBranch = async ({
   await runGitCommandForPath({ path, args: ["switch", "-c", branch] });
 };
 
-// Branch deletion needs an old sha because deleting a stale branch can hide commits the user did not mean to touch.
+// Branches and tags share this path so both delete actions get the same stale-ref check.
+const deleteGitRef = async ({
+  repoRoot,
+  refName,
+  gitRef,
+  oldSha,
+}: {
+  repoRoot: string;
+  refName: string;
+  gitRef: string;
+  oldSha: string;
+}) => {
+  const expectedOldSha = await readGitTextForPath({
+    path: repoRoot,
+    args: ["rev-parse", "--verify", `${oldSha}^{commit}`],
+  });
+  const refHead = await readGitTextForPath({
+    path: repoRoot,
+    args: ["rev-parse", "--verify", gitRef],
+  });
+  const refCommit = await readGitTextForPath({
+    path: repoRoot,
+    args: ["rev-parse", "--verify", `${gitRef}^{commit}`],
+  });
+
+  if (refCommit !== expectedOldSha) {
+    throw new Error(`${refName} moved. Refresh and try again.`);
+  }
+
+  await runGitCommandForPath({
+    path: repoRoot,
+    args: [
+      "update-ref",
+      "-m",
+      `MoltTree: delete ${refName}`,
+      "-d",
+      gitRef,
+      refHead,
+    ],
+  });
+};
+
+// Branch and tag deletion need an old sha because deleting a stale ref can hide commits the user did not mean to touch.
 export const deleteGitBranch = async ({
   repoRoot,
   branch,
@@ -358,44 +401,29 @@ export const deleteGitBranch = async ({
     args: ["check-ref-format", "--branch", branch],
   });
 
-  const branchRef = `refs/heads/${branch}`;
-  const expectedOldSha = await readGitTextForPath({
-    path: repoRoot,
-    args: ["rev-parse", "--verify", `${oldSha}^{commit}`],
-  });
-  const branchHead = await readGitTextForPath({
-    path: repoRoot,
-    args: ["rev-parse", "--verify", branchRef],
-  });
-
-  if (branchHead !== expectedOldSha) {
-    throw new Error(`${branch} moved. Refresh and try again.`);
-  }
-
-  const worktreePath = await readGitWorktreePathForBranch({
+  await deleteGitRef({
     repoRoot,
-    branch,
+    refName: branch,
+    gitRef: `refs/heads/${branch}`,
+    oldSha,
   });
+};
 
-  if (worktreePath !== null) {
-    throw new Error("Cannot delete a branch that is checked out.");
-  }
-
-  await ensureOldShaStaysVisibleAfterRefChange({
-    repoRoot,
-    oldSha: expectedOldSha,
-    changedRef: branchRef,
-    replacementSha: null,
-    changedLocalBranch: branch,
-    rootRefs: ["refs/heads", "refs/remotes", "refs/tags"],
-    shouldIncludeWorktreeHeads: true,
-    message:
-      "Deleting this branch would hide commits from the graph. Move or tag another branch first.",
-  });
-
+export const deleteGitTag = async ({
+  repoRoot,
+  tag,
+  oldSha,
+}: GitDeleteTagRequest) => {
   await runGitCommandForPath({
     path: repoRoot,
-    args: ["branch", "-D", branch],
+    args: ["check-ref-format", `refs/tags/${tag}`],
+  });
+
+  await deleteGitRef({
+    repoRoot,
+    refName: tag,
+    gitRef: `refs/tags/${tag}`,
+    oldSha,
   });
 };
 

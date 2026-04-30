@@ -19,6 +19,7 @@ import {
   commitAllGitChanges,
   createGitBranch,
   deleteGitBranch,
+  deleteGitTag,
   detachGitWorktreeBranch,
   mergeGitBranch,
   moveGitBranch,
@@ -702,7 +703,7 @@ test("deletes a branch when another ref keeps its tip visible", async () => {
   });
 });
 
-test("rejects deleting the only ref that keeps a commit visible", async () => {
+test("deletes a branch when it is the only ref that keeps a commit visible", async () => {
   await withRepo(async ({ repoRoot }) => {
     await commitRepoFile({
       repoRoot,
@@ -719,15 +720,33 @@ test("rejects deleting the only ref that keeps a commit visible", async () => {
     });
     await runGit({ cwd: repoRoot, args: ["switch", "main"] });
 
-    await assert.rejects(async () => {
-      await deleteGitBranch({
-        repoRoot,
-        branch: "topic",
-        oldSha: topicSha,
-      });
-    }, /hide commits/);
+    await deleteGitBranch({
+      repoRoot,
+      branch: "topic",
+      oldSha: topicSha,
+    });
 
-    assert.equal(await readSha({ cwd: repoRoot, ref: "topic" }), topicSha);
+    assert.equal(await readOptionalSha({ cwd: repoRoot, ref: "topic" }), null);
+  });
+});
+
+test("deletes a checked-out branch", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "topic"] });
+    const topicSha = await commitRepoFile({
+      repoRoot,
+      filePath: "topic.txt",
+      content: "topic\n",
+      message: "topic",
+    });
+
+    await deleteGitBranch({
+      repoRoot,
+      branch: "topic",
+      oldSha: topicSha,
+    });
+
+    assert.equal(await readOptionalSha({ cwd: repoRoot, ref: "topic" }), null);
   });
 });
 
@@ -757,6 +776,89 @@ test("rejects deleting a branch when the old sha is stale", async () => {
     }, /moved/);
 
     assert.equal(await readSha({ cwd: repoRoot, ref: "topic" }), topicSha);
+  });
+});
+
+test("deletes a lightweight tag", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    const oldSha = await commitRepoFile({
+      repoRoot,
+      filePath: "file.txt",
+      content: "base\n",
+      message: "base",
+    });
+    await runGit({ cwd: repoRoot, args: ["tag", "delete-me", oldSha] });
+
+    await deleteGitTag({
+      repoRoot,
+      tag: "delete-me",
+      oldSha,
+    });
+
+    assert.equal(
+      await readOptionalSha({ cwd: repoRoot, ref: "refs/tags/delete-me" }),
+      null,
+    );
+  });
+});
+
+test("deletes an annotated tag", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    const oldSha = await commitRepoFile({
+      repoRoot,
+      filePath: "file.txt",
+      content: "base\n",
+      message: "base",
+    });
+    await runGit({
+      cwd: repoRoot,
+      args: ["tag", "-a", "annotated-delete-me", oldSha, "-m", "annotated"],
+    });
+
+    await deleteGitTag({
+      repoRoot,
+      tag: "annotated-delete-me",
+      oldSha,
+    });
+
+    assert.equal(
+      await readOptionalSha({
+        cwd: repoRoot,
+        ref: "refs/tags/annotated-delete-me",
+      }),
+      null,
+    );
+  });
+});
+
+test("rejects deleting a tag when the old sha is stale", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    const oldSha = await commitRepoFile({
+      repoRoot,
+      filePath: "file.txt",
+      content: "base\n",
+      message: "base",
+    });
+    const newSha = await commitRepoFile({
+      repoRoot,
+      filePath: "file.txt",
+      content: "base\nnew\n",
+      message: "new",
+    });
+    await runGit({ cwd: repoRoot, args: ["tag", "delete-me", newSha] });
+
+    await assert.rejects(async () => {
+      await deleteGitTag({
+        repoRoot,
+        tag: "delete-me",
+        oldSha,
+      });
+    }, /moved/);
+
+    assert.equal(
+      await readSha({ cwd: repoRoot, ref: "refs/tags/delete-me^{commit}" }),
+      newSha,
+    );
   });
 });
 

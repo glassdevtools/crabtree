@@ -1,6 +1,6 @@
 # Git Testing Inventory
 
-This file is the short checklist for Git behavior in MoltTree. Tests should prove each action works and that unsafe actions cannot hide commits from the visible graph.
+This file is the short checklist for Git behavior in MoltTree. Tests should prove each action works and that unsafe actions either warn first or cannot hide commits from the visible graph.
 
 ## Git State We Read
 
@@ -20,6 +20,7 @@ This file is the short checklist for Git behavior in MoltTree. Tests should prov
 - Move local branch tags that pointed at the old commit after committing.
 - Create a branch at the current HEAD.
 - Delete a local branch tag.
+- Delete a normal Git tag.
 - Drag a branch tag to another commit.
 - Move a checked-out branch with `git reset --keep`.
 - Switch HEAD to a commit with detached checkout.
@@ -47,8 +48,9 @@ This file is the short checklist for Git behavior in MoltTree. Tests should prov
 - Never trust the renderer as the only safety gate; backend Git actions need their own checks.
 - Reject stale `oldSha` requests.
 - Reject checkout, merge, reset, and checked-out branch moves when the worktree is dirty.
-- Reject deleting checked-out branches.
-- Reject deleting or moving the only local branch/tag/worktree ref that keeps commits visible.
+- Warn before deleting checked-out branches.
+- Warn before deleting the only local branch/tag/worktree ref that keeps commits visible.
+- Reject moving the only local branch/tag/worktree ref that keeps commits visible.
 - Reject switching away from an unreachable detached HEAD.
 - Reject pushing remote updates or deletes that would hide commits from origin's visible branch graph.
 - Reject reset/pull actions that would hide local-only commits unless another local ref keeps them visible.

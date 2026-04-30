@@ -478,9 +478,11 @@ type BranchPointerMove = {
   willMoveCheckedOutWorktree: boolean;
 };
 
-type BranchDeleteTarget = {
-  branch: string;
+type GitRefDeleteTarget = {
+  gitRefType: "branch" | "tag";
+  name: string;
   oldSha: string;
+  warningMessage: string | null;
 };
 
 type BranchCreateTarget = {
@@ -1247,30 +1249,32 @@ const readCommitBranchTarget = ({
 const BranchTags = ({
   refs,
   localBranches,
-  currentBranch,
   defaultBranch,
   commitSha,
   commitShortSha,
   commitSubject,
   branchPointerSourcePath,
-  isBranchDeleteSafeOfBranch,
-  openBranchDeleteModal,
+  deleteWarningMessageOfBranch,
+  deleteWarningMessageOfTag,
+  openGitRefDeleteModal,
   startBranchPointerDrag,
   finishBranchPointerDrag,
 }: {
   refs: string[];
   localBranches: string[];
-  currentBranch: string | null;
   defaultBranch: string | null;
   commitSha: string;
   commitShortSha: string;
   commitSubject: string;
   branchPointerSourcePath: string | null;
-  isBranchDeleteSafeOfBranch: { [branch: string]: boolean };
-  openBranchDeleteModal: (
+  deleteWarningMessageOfBranch: { [branch: string]: string };
+  deleteWarningMessageOfTag: { [tag: string]: string };
+  openGitRefDeleteModal: (
     event: MouseEvent<HTMLButtonElement>,
-    branch: string,
+    gitRefType: "branch" | "tag",
+    name: string,
     oldSha: string,
+    warningMessage: string | null,
   ) => void;
   startBranchPointerDrag: ({
     event,
@@ -1319,11 +1323,11 @@ const BranchTags = ({
         const isTag = ref.startsWith("tag: ");
         const isOriginBranch = refName.startsWith("origin/");
         let refClassName = "commit-ref commit-ref-local";
-        const canDeleteBranch =
-          isLocalBranch &&
-          refName !== currentBranch &&
-          refName !== defaultBranch &&
-          isBranchDeleteSafeOfBranch[refName] === true;
+        const shouldShowDeleteButton =
+          isTag || (isLocalBranch && refName !== defaultBranch);
+        const deleteWarningMessage = isTag
+          ? (deleteWarningMessageOfTag[refName] ?? null)
+          : (deleteWarningMessageOfBranch[refName] ?? null);
 
         if (isOriginBranch) {
           refClassName = "commit-ref commit-ref-origin";
@@ -1338,6 +1342,7 @@ const BranchTags = ({
             className={cn(
               refClassName,
               isLocalBranch && "commit-ref-draggable",
+              shouldShowDeleteButton && "commit-ref-has-delete",
             )}
             variant="secondary"
             draggable={isLocalBranch}
@@ -1347,7 +1352,9 @@ const BranchTags = ({
               void copyTextAfterContextMenu({
                 event,
                 text: refName,
-                errorMessage: "Failed to copy branch name.",
+                errorMessage: isTag
+                  ? "Failed to copy tag name."
+                  : "Failed to copy branch name.",
               });
             }}
             onDragStart={(event) => {
@@ -1367,10 +1374,14 @@ const BranchTags = ({
             onDragEnd={finishBranchPointerDrag}
           >
             <span>{refName}</span>
-            {canDeleteBranch ? (
+            {shouldShowDeleteButton ? (
               <TitleTooltip title={`Delete ${refName}`}>
                 <Button
-                  className="commit-ref-delete"
+                  className={cn(
+                    "commit-ref-delete",
+                    deleteWarningMessage !== null &&
+                      "commit-ref-delete-warning",
+                  )}
                   variant="ghost"
                   size="icon-xs"
                   type="button"
@@ -1378,7 +1389,13 @@ const BranchTags = ({
                   onMouseDown={(event) => event.stopPropagation()}
                   onDoubleClick={(event) => event.stopPropagation()}
                   onClick={(event) =>
-                    openBranchDeleteModal(event, refName, commitSha)
+                    openGitRefDeleteModal(
+                      event,
+                      isTag ? "tag" : "branch",
+                      refName,
+                      commitSha,
+                      deleteWarningMessage,
+                    )
                   }
                 >
                   <Trash2 size={9} />
@@ -1664,12 +1681,13 @@ const CommitHistoryRow = ({
   isBranchPointerDropTarget,
   shouldOwnMainWorktreeHead,
   isBranchMergeableOfBranch,
-  isBranchDeleteSafeOfBranch,
+  deleteWarningMessageOfBranch,
+  deleteWarningMessageOfTag,
   updateBranchPointerDropTarget,
   clearBranchPointerDropTarget,
   finishBranchPointerDrop,
   openRowAfterDoubleClick,
-  openBranchDeleteModal,
+  openGitRefDeleteModal,
   openBranchCreateModal,
   openCommitMessageModal,
   openChangeSummaryModal,
@@ -1691,15 +1709,18 @@ const CommitHistoryRow = ({
   isBranchPointerDropTarget: boolean;
   shouldOwnMainWorktreeHead: boolean;
   isBranchMergeableOfBranch: { [branch: string]: boolean };
-  isBranchDeleteSafeOfBranch: { [branch: string]: boolean };
+  deleteWarningMessageOfBranch: { [branch: string]: string };
+  deleteWarningMessageOfTag: { [tag: string]: string };
   updateBranchPointerDropTarget: (event: DragEvent<HTMLDivElement>) => void;
   clearBranchPointerDropTarget: (event: DragEvent<HTMLDivElement>) => void;
   finishBranchPointerDrop: (event: DragEvent<HTMLDivElement>) => void;
   openRowAfterDoubleClick: () => void;
-  openBranchDeleteModal: (
+  openGitRefDeleteModal: (
     event: MouseEvent<HTMLButtonElement>,
-    branch: string,
+    gitRefType: "branch" | "tag",
+    name: string,
     oldSha: string,
+    warningMessage: string | null,
   ) => void;
   openBranchCreateModal: (
     event: MouseEvent<HTMLButtonElement>,
@@ -2138,7 +2159,6 @@ const CommitHistoryRow = ({
           <BranchTags
             refs={rowRefs}
             localBranches={rowLocalBranches}
-            currentBranch={rowCurrentBranch}
             defaultBranch={defaultBranch}
             commitSha={commit.sha}
             commitShortSha={commit.shortSha}
@@ -2148,8 +2168,9 @@ const CommitHistoryRow = ({
               repoRoot,
               worktrees,
             })}
-            isBranchDeleteSafeOfBranch={isBranchDeleteSafeOfBranch}
-            openBranchDeleteModal={openBranchDeleteModal}
+            deleteWarningMessageOfBranch={deleteWarningMessageOfBranch}
+            deleteWarningMessageOfTag={deleteWarningMessageOfTag}
+            openGitRefDeleteModal={openGitRefDeleteModal}
             startBranchPointerDrag={startBranchPointerDrag}
             finishBranchPointerDrag={finishBranchPointerDrag}
           />
@@ -2323,8 +2344,8 @@ const CommitHistory = ({
   const [commitMessage, setCommitMessage] = useState("");
   const [changeSummaryTarget, setChangeSummaryTarget] =
     useState<ChangeSummaryTarget | null>(null);
-  const [branchToDelete, setBranchToDelete] =
-    useState<BranchDeleteTarget | null>(null);
+  const [gitRefDeleteTarget, setGitRefDeleteTarget] =
+    useState<GitRefDeleteTarget | null>(null);
   const [branchMergeConfirmation, setBranchMergeConfirmation] =
     useState<BranchMergeConfirmation | null>(null);
   const [branchPointerMove, setBranchPointerMove] =
@@ -2410,30 +2431,26 @@ const CommitHistory = ({
 
     return nextIsBranchMergeableOfBranch;
   }, [commits, currentBranch]);
-  // Branch delete is safe only when local refs or fixed refs keep the branch tip visible.
-  const isBranchDeleteSafeOfBranch = useMemo(() => {
+  // Deletion stays available for every local branch and tag. These messages explain risky deletes in the modal.
+  const gitRefDeleteWarnings = useMemo(() => {
     const commitOfSha: { [sha: string]: GitCommit } = {};
     const branchShaOfBranch: { [branch: string]: string } = {};
-    const isBranchCheckedOutOfBranch: { [branch: string]: boolean } = {};
+    const tagShaOfTag: { [tag: string]: string } = {};
     const rootShas: {
       sha: string;
-      ignoredBranchOfBranch: { [branch: string]: boolean };
+      ignoredRefKey: string | null;
     }[] = [];
 
+    const readBranchRefKey = (branch: string) => `refs/heads/${branch}`;
+    const readTagRefKey = (tag: string) => `refs/tags/${tag}`;
     const pushRootSha = ({
       sha,
-      ignoredBranch,
+      ignoredRefKey,
     }: {
       sha: string;
-      ignoredBranch: string | null;
+      ignoredRefKey: string | null;
     }) => {
-      const ignoredBranchOfBranch: { [branch: string]: boolean } = {};
-
-      if (ignoredBranch !== null) {
-        ignoredBranchOfBranch[ignoredBranch] = true;
-      }
-
-      rootShas.push({ sha, ignoredBranchOfBranch });
+      rootShas.push({ sha, ignoredRefKey });
     };
     const pushReachableShas = ({
       startSha,
@@ -2463,45 +2480,65 @@ const CommitHistory = ({
         }
       }
     };
+    const readIsShaVisibleAfterDelete = ({
+      sha,
+      deletedRefKey,
+    }: {
+      sha: string;
+      deletedRefKey: string;
+    }) => {
+      const isReachableSha: { [sha: string]: boolean } = {};
 
-    // First collect the local branches and checked-out branches.
+      for (const root of rootShas) {
+        if (root.ignoredRefKey === deletedRefKey) {
+          continue;
+        }
+
+        pushReachableShas({
+          startSha: root.sha,
+          isReachableSha,
+        });
+      }
+
+      return isReachableSha[sha] === true;
+    };
+    const readReasonText = (reasons: string[]) => {
+      if (reasons.length === 1) {
+        return reasons[0] ?? "";
+      }
+
+      if (reasons.length === 2) {
+        return `${reasons[0]}, and ${reasons[1]}`;
+      }
+
+      const lastReason = reasons[reasons.length - 1] ?? "";
+
+      return `${reasons.slice(0, -1).join(", ")}, and ${lastReason}`;
+    };
+    const readWarningMessage = (reasons: string[]) => {
+      if (reasons.length === 0) {
+        return null;
+      }
+
+      return `We don't recommend deleting this because ${readReasonText(reasons)}.`;
+    };
+
+    // First collect the commits and local branches.
     for (const commit of commits) {
       commitOfSha[commit.sha] = commit;
 
       for (const localBranch of commit.localBranches) {
         branchShaOfBranch[localBranch] = commit.sha;
       }
-
-      for (const ref of commit.refs) {
-        if (ref.startsWith("HEAD -> ")) {
-          isBranchCheckedOutOfBranch[cleanRefName(ref)] = true;
-          continue;
-        }
-
-        if (ref !== "HEAD") {
-          continue;
-        }
-
-        for (const localBranch of commit.localBranches) {
-          isBranchCheckedOutOfBranch[localBranch] = true;
-        }
-      }
-    }
-
-    for (const worktree of worktrees) {
-      if (worktree.branch !== null) {
-        isBranchCheckedOutOfBranch[worktree.branch] = true;
-      }
-    }
-
-    if (currentBranch !== null) {
-      isBranchCheckedOutOfBranch[currentBranch] = true;
     }
 
     // Then collect the refs that would keep commits visible.
     for (const commit of commits) {
       for (const localBranch of commit.localBranches) {
-        pushRootSha({ sha: commit.sha, ignoredBranch: localBranch });
+        pushRootSha({
+          sha: commit.sha,
+          ignoredRefKey: readBranchRefKey(localBranch),
+        });
       }
 
       for (const ref of commit.refs) {
@@ -2510,7 +2547,10 @@ const CommitHistory = ({
         }
 
         if (ref.startsWith("tag: ")) {
-          pushRootSha({ sha: commit.sha, ignoredBranch: null });
+          const tag = cleanRefName(ref);
+
+          tagShaOfTag[tag] = commit.sha;
+          pushRootSha({ sha: commit.sha, ignoredRefKey: readTagRefKey(tag) });
           continue;
         }
 
@@ -2524,38 +2564,60 @@ const CommitHistory = ({
           continue;
         }
 
-        pushRootSha({ sha: commit.sha, ignoredBranch: null });
+        pushRootSha({ sha: commit.sha, ignoredRefKey: null });
       }
     }
 
-    // Finally test each branch as if the local branch were gone.
-    const nextIsBranchDeleteSafeOfBranch: { [branch: string]: boolean } = {};
+    // Finally explain each branch or tag that loses a useful Git anchor when deleted.
+    const deleteWarningMessageOfBranch: { [branch: string]: string } = {};
+    const deleteWarningMessageOfTag: { [tag: string]: string } = {};
 
     for (const branch of Object.keys(branchShaOfBranch)) {
-      if (isBranchCheckedOutOfBranch[branch] === true) {
-        nextIsBranchDeleteSafeOfBranch[branch] = false;
-        continue;
+      const reasons: string[] = [];
+
+      if (
+        !readIsShaVisibleAfterDelete({
+          sha: branchShaOfBranch[branch],
+          deletedRefKey: readBranchRefKey(branch),
+        })
+      ) {
+        reasons.push(
+          "it's the only thing pointing to this commit, so deleting it might drop it from the tree",
+        );
       }
 
-      const isReachableSha: { [sha: string]: boolean } = {};
+      const warningMessage = readWarningMessage(reasons);
 
-      for (const root of rootShas) {
-        if (root.ignoredBranchOfBranch[branch] === true) {
-          continue;
-        }
-
-        pushReachableShas({
-          startSha: root.sha,
-          isReachableSha,
-        });
+      if (warningMessage !== null) {
+        deleteWarningMessageOfBranch[branch] = warningMessage;
       }
-
-      nextIsBranchDeleteSafeOfBranch[branch] =
-        isReachableSha[branchShaOfBranch[branch]] === true;
     }
 
-    return nextIsBranchDeleteSafeOfBranch;
-  }, [commits, currentBranch, worktrees]);
+    for (const tag of Object.keys(tagShaOfTag)) {
+      const reasons = [
+        "it's a version tag, which usually shouldn't be deleted",
+      ];
+
+      if (
+        !readIsShaVisibleAfterDelete({
+          sha: tagShaOfTag[tag],
+          deletedRefKey: readTagRefKey(tag),
+        })
+      ) {
+        reasons.push(
+          "it's the only thing pointing to this commit, so deleting it might drop it from the tree",
+        );
+      }
+
+      const warningMessage = readWarningMessage(reasons);
+
+      if (warningMessage !== null) {
+        deleteWarningMessageOfTag[tag] = warningMessage;
+      }
+    }
+
+    return { deleteWarningMessageOfBranch, deleteWarningMessageOfTag };
+  }, [commits]);
   const commitOfSha = useMemo(() => {
     const nextCommitOfSha: { [sha: string]: GitCommit } = {};
 
@@ -3045,17 +3107,19 @@ const CommitHistory = ({
       },
     );
   };
-  const openBranchDeleteModal = (
+  const openGitRefDeleteModal = (
     event: MouseEvent<HTMLButtonElement>,
-    branch: string,
+    gitRefType: "branch" | "tag",
+    name: string,
     oldSha: string,
+    warningMessage: string | null,
   ) => {
     event.preventDefault();
     event.stopPropagation();
-    setBranchToDelete({ branch, oldSha });
+    setGitRefDeleteTarget({ gitRefType, name, oldSha, warningMessage });
   };
-  const closeBranchDeleteModal = () => {
-    setBranchToDelete(null);
+  const closeGitRefDeleteModal = () => {
+    setGitRefDeleteTarget(null);
   };
   const openBranchCreateModal = (
     event: MouseEvent<HTMLButtonElement>,
@@ -3178,34 +3242,47 @@ const CommitHistory = ({
       },
     );
   };
-  const deleteBranchTag = async () => {
-    if (branchToDelete === null) {
+  const deleteSelectedGitRef = async () => {
+    if (gitRefDeleteTarget === null) {
       return;
     }
 
-    const branchDeleteTarget = branchToDelete;
-    closeBranchDeleteModal();
+    const deleteTarget = gitRefDeleteTarget;
+    closeGitRefDeleteModal();
 
     await runUserGitUpdateThenRefreshDashboard(
-      "Deleting branch",
-      "Deleted branch.",
+      deleteTarget.gitRefType === "branch" ? "Deleting branch" : "Deleting tag",
+      deleteTarget.gitRefType === "branch" ? "Deleted branch." : "Deleted tag.",
       async () => {
         try {
-          await window.molttree.deleteGitBranch({
-            repoRoot,
-            branch: branchDeleteTarget.branch,
-            oldSha: branchDeleteTarget.oldSha,
-          });
-          rememberBranchTagChange({
-            repoRoot,
-            branch: branchDeleteTarget.branch,
-            oldSha: branchDeleteTarget.oldSha,
-            newSha: null,
-          });
+          switch (deleteTarget.gitRefType) {
+            case "branch":
+              await window.molttree.deleteGitBranch({
+                repoRoot,
+                branch: deleteTarget.name,
+                oldSha: deleteTarget.oldSha,
+              });
+              rememberBranchTagChange({
+                repoRoot,
+                branch: deleteTarget.name,
+                oldSha: deleteTarget.oldSha,
+                newSha: null,
+              });
+              break;
+            case "tag":
+              await window.molttree.deleteGitTag({
+                repoRoot,
+                tag: deleteTarget.name,
+                oldSha: deleteTarget.oldSha,
+              });
+              break;
+          }
         } catch (error) {
           return error instanceof Error
             ? error.message
-            : "Failed to delete branch.";
+            : deleteTarget.gitRefType === "branch"
+              ? "Failed to delete branch."
+              : "Failed to delete tag.";
         }
 
         return null;
@@ -3509,7 +3586,12 @@ const CommitHistory = ({
                   mainWorktreeHeadOwnerRowId === row.id
                 }
                 isBranchMergeableOfBranch={isBranchMergeableOfBranch}
-                isBranchDeleteSafeOfBranch={isBranchDeleteSafeOfBranch}
+                deleteWarningMessageOfBranch={
+                  gitRefDeleteWarnings.deleteWarningMessageOfBranch
+                }
+                deleteWarningMessageOfTag={
+                  gitRefDeleteWarnings.deleteWarningMessageOfTag
+                }
                 updateBranchPointerDropTarget={(event) =>
                   updateBranchPointerDropTarget({ event, row })
                 }
@@ -3518,7 +3600,7 @@ const CommitHistory = ({
                   finishBranchPointerDrop({ event, row })
                 }
                 openRowAfterDoubleClick={() => openRowAfterDoubleClick(row)}
-                openBranchDeleteModal={openBranchDeleteModal}
+                openGitRefDeleteModal={openGitRefDeleteModal}
                 openBranchCreateModal={openBranchCreateModal}
                 openCommitMessageModal={openCommitMessageModal}
                 openChangeSummaryModal={openChangeSummaryModal}
@@ -3683,31 +3765,45 @@ const CommitHistory = ({
           )}
         </Dialog>
         <AlertDialog
-          open={branchToDelete !== null}
+          open={gitRefDeleteTarget !== null}
           onOpenChange={(isOpen) => {
             if (isOpen) {
               return;
             }
 
-            closeBranchDeleteModal();
+            closeGitRefDeleteModal();
           }}
         >
-          {branchToDelete === null ? null : (
+          {gitRefDeleteTarget === null ? null : (
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Delete Branch Tag</AlertDialogTitle>
+                <AlertDialogTitle>
+                  {gitRefDeleteTarget.gitRefType === "branch"
+                    ? "Delete Branch Tag"
+                    : "Delete Tag"}
+                </AlertDialogTitle>
                 <AlertDialogDescription>
-                  Are you sure you want to delete the {branchToDelete.branch}{" "}
-                  tag?
+                  {`Are you sure you want to delete the ${gitRefDeleteTarget.name} ${
+                    gitRefDeleteTarget.gitRefType === "branch"
+                      ? "branch tag"
+                      : "tag"
+                  }?`}
                 </AlertDialogDescription>
               </AlertDialogHeader>
+              {gitRefDeleteTarget.warningMessage === null ? null : (
+                <Alert className="git-ref-delete-warning" variant="destructive">
+                  <AlertDescription>
+                    {gitRefDeleteTarget.warningMessage}
+                  </AlertDescription>
+                </Alert>
+              )}
               <AlertDialogFooter>
-                <AlertDialogCancel onClick={closeBranchDeleteModal}>
+                <AlertDialogCancel onClick={closeGitRefDeleteModal}>
                   Cancel
                 </AlertDialogCancel>
                 <AlertDialogAction
                   variant="destructive"
-                  onClick={deleteBranchTag}
+                  onClick={deleteSelectedGitRef}
                 >
                   Delete
                 </AlertDialogAction>

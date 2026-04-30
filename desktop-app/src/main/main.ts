@@ -10,6 +10,7 @@ import type {
   GitCommitChangesRequest,
   GitCreateBranchRequest,
   GitDeleteBranchRequest,
+  GitDeleteTagRequest,
   GitDetachWorktreeBranchRequest,
   GitMergeBranchRequest,
   GitMoveBranchRequest,
@@ -26,6 +27,7 @@ import {
   commitAllGitChanges,
   createGitBranch,
   deleteGitBranch,
+  deleteGitTag,
   detachGitWorktreeBranch,
   mergeGitBranch,
   moveGitBranch,
@@ -317,6 +319,31 @@ const readGitDeleteBranchRequest = (value: unknown) => {
   return gitDeleteBranchRequest;
 };
 
+const readGitDeleteTagRequest = (value: unknown) => {
+  if (!isObject(value)) {
+    throw new Error("gitDeleteTagRequest must be an object.");
+  }
+
+  if (
+    typeof value.repoRoot !== "string" ||
+    value.repoRoot.length === 0 ||
+    typeof value.tag !== "string" ||
+    value.tag.length === 0 ||
+    typeof value.oldSha !== "string" ||
+    value.oldSha.length === 0
+  ) {
+    throw new Error("gitDeleteTagRequest needs a repo root, tag, and old sha.");
+  }
+
+  const gitDeleteTagRequest: GitDeleteTagRequest = {
+    repoRoot: value.repoRoot,
+    tag: value.tag,
+    oldSha: value.oldSha,
+  };
+
+  return gitDeleteTagRequest;
+};
+
 const readGitMoveBranchRequest = (value: unknown) => {
   if (!isObject(value)) {
     throw new Error("gitMoveBranchRequest must be an object.");
@@ -602,6 +629,12 @@ ipcMain.handle("git:deleteBranch", async (_event, value: unknown) => {
   const gitDeleteBranchRequest = readGitDeleteBranchRequest(value);
 
   await deleteGitBranch(gitDeleteBranchRequest);
+});
+
+ipcMain.handle("git:deleteTag", async (_event, value: unknown) => {
+  const gitDeleteTagRequest = readGitDeleteTagRequest(value);
+
+  await deleteGitTag(gitDeleteTagRequest);
 });
 
 ipcMain.handle("git:moveBranch", async (_event, value: unknown) => {

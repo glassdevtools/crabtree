@@ -64,6 +64,12 @@ export type GitDeleteBranchRequest = {
   oldSha: string;
 };
 
+export type GitDeleteTagRequest = {
+  repoRoot: string;
+  tag: string;
+  oldSha: string;
+};
+
 export type GitMoveBranchRequest = {
   repoRoot: string;
   branch: string;
@@ -173,6 +179,7 @@ export type MoltTreeApi = {
   deleteGitBranch: (
     gitDeleteBranchRequest: GitDeleteBranchRequest,
   ) => Promise<void>;
+  deleteGitTag: (gitDeleteTagRequest: GitDeleteTagRequest) => Promise<void>;
   moveGitBranch: (gitMoveBranchRequest: GitMoveBranchRequest) => Promise<void>;
   switchGitBranch: (
     gitSwitchBranchRequest: GitSwitchBranchRequest,
