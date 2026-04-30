@@ -227,7 +227,7 @@ const HomePage = () => {
           aria-hidden="true"
           draggable={false}
         />
-        <p>&copy; 2026 Glass Devtools, Inc. - All rights reserved.</p>
+        <p>&copy; 2026 Glass Devtools, Inc.</p>
         <a href={repoUrl} aria-label="GitHub">
           <IoLogoGithub aria-hidden="true" />
         </a>
