@@ -1,96 +1,40 @@
-# MoltTree
 
 
-MoltTree is a local desktop tool for browsing Codex threads alongside their Git history and opening the right context back in Codex Desktop.
 
-## Repo Layout
+# Welcome to MoltTree!
 
-- `desktop-app/`: Electron desktop app, macOS packaging, auto-update config, and desktop tests.
-- `website/`: Next.js marketing/download website.
-- `.github/workflows/build-macos-installer.yml`: macOS installer release workflow.
+<div align="center">
+	<img
+		src="./website/src/assets/default-app-icon.png"
+	 	alt="MoltTree Icon"
+		width="300"
+	 	height="300"
+	/>
+</div>
 
-## Commands
 
-Install dependencies from the repo root:
+It's easy to spin up 100 worktrees in Codex, but merging them back together is hard. MoltTree was built to fix that.
 
-```bash
-npm ci
-```
+[MoltTree](https://molttree.app) is a desktop app that lets you view your chats, worktrees, and branches in one place. It organizes and visualizes everything, including worktrees!, so you can get a full overview. It also lets you do nice git things without opening your IDE or Codex. 
 
-Run the desktop app:
 
-```bash
-npm run dev
-```
 
-This starts the website on `http://127.0.0.1:5174/` and the desktop app together.
+## Contributing
 
-Run only the desktop app:
+Feel free to submit an [Issue](https://github.com/glassdevtools/molttree/issues) for suggestions and bugs. For safety reason I won't be accepting PRs in most cases, but I will happily accept "Prompt Requests".
 
-```bash
-npm run dev:desktop
-```
 
-Build the desktop app:
+## Download
 
-```bash
-npm run build:desktop
-```
 
-Build the macOS installer:
+You can download MoltTree on our [Releases](https://github.com/glassdevtools/molttree/releases/latest) page or [Website](https://molttree.app)!
 
-```bash
-npm run dist:mac
-```
+<div align="center">
+	<img
+		src="./website/src/assets/product-screenshot.png"
+	 	alt="MoltTree Icon"
+		width="1000"
+	 	height="1000"
+	/>
+</div>
 
-Run the website locally:
-
-```bash
-npm run dev:website
-```
-
-Build the website:
-
-```bash
-npm run build:website
-```
-
-## Desktop Features By Interface
-
-- Git graph, branches, commits, thread markers, and file change actions: `simple-git`.
-- Non-archived thread list, thread history, new threads, and sending messages: Codex app-server.
-- Simple start/resume/run flows: Codex app-server in v1; Codex SDK is only a possible future wrapper.
-- Cross-process running thread detection: Codex app-server status events plus the latest task marker in each thread rollout file.
-- Open a thread in Codex Desktop: deep link, using `codex://threads/<thread-id>`.
-- Open a new Codex thread: deep link, using `codex://new`.
-- Lookup thread id by working directory, branch, or commit: Codex app-server thread data.
-- Update stored Codex thread Git metadata: Codex app-server.
-- Checkout commits, create branches, preview merges, and merge branches: `simple-git`.
-- Draft messages before sending: our own app storage.
-
-## Interface Notes
-
-### Codex SDK
-
-- Docs: https://developers.openai.com/codex/sdk
-- Not used in v1.
-
-### Codex App Server
-
-- Docs: https://developers.openai.com/codex/app-server
-- Use for non-archived Codex thread list/read/start/resume/message/status/metadata operations.
-
-### Simple Git
-
-- Docs: https://github.com/steveukx/git-js#readme
-- Use for local Git graph reads and local Git mutations.
-
-### Deep Links
-
-- Public docs: TODO. No official Codex deep-link docs found yet.
-- Local links to verify: `codex://threads/<thread-id>` and `codex://new`.
-
-### Manual SQLite Reads
-
-- Not used in v1.
-- TODO: document the read-only tables and lookup queries if we add a debug-only reader.
