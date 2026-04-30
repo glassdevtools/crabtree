@@ -26,6 +26,7 @@ This file is the short checklist for Git behavior in MoltTree. Tests should prov
 - Switch HEAD to a commit with detached checkout.
 - Preview merging a branch into HEAD.
 - Merge a branch into HEAD.
+- Create a GitHub pull request from a pushed branch.
 - Push branch tag changes to origin.
 - Push branch deletion to origin.
 - Pull/reset local branch tags to match origin.
@@ -41,6 +42,7 @@ This file is the short checklist for Git behavior in MoltTree. Tests should prov
 - Remember pending branch tag changes until push/pull/reset.
 - Show staged and unstaged change summaries.
 - Filter the graph to commits with chats.
+- Open the GitHub pull request flow only for committed rows.
 
 ## Safety Rules To Test
 
@@ -48,6 +50,7 @@ This file is the short checklist for Git behavior in MoltTree. Tests should prov
 - Never trust the renderer as the only safety gate; backend Git actions need their own checks.
 - Reject stale `oldSha` requests.
 - Reject checkout, merge, reset, and checked-out branch moves when the worktree is dirty.
+- Reject pull requests when the selected head branch is not pushed or moved.
 - Warn before deleting checked-out branches.
 - Warn before deleting the only local branch/tag/worktree ref that keeps commits visible.
 - Reject moving the only local branch/tag/worktree ref that keeps commits visible.

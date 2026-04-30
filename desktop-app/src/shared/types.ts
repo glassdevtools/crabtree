@@ -102,6 +102,15 @@ export type GitMergeBranchRequest = {
   branch: string;
 };
 
+export type GitCreatePullRequestRequest = {
+  repoRoot: string;
+  baseBranch: string;
+  headBranch: string;
+  headSha: string;
+  title: string;
+  description: string;
+};
+
 export type GitMergePreview = {
   added: number;
   removed: number;
@@ -209,4 +218,7 @@ export type MoltTreeApi = {
   mergeGitBranch: (
     gitMergeBranchRequest: GitMergeBranchRequest,
   ) => Promise<GitMergeBranchResult>;
+  createGitPullRequest: (
+    gitCreatePullRequestRequest: GitCreatePullRequestRequest,
+  ) => Promise<string>;
 };

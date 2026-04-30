@@ -9,6 +9,7 @@ import type {
   GitCheckoutCommitRequest,
   GitCommitChangesRequest,
   GitCreateBranchRequest,
+  GitCreatePullRequestRequest,
   GitCreateRefRequest,
   GitDeleteBranchRequest,
   GitDeleteTagRequest,
@@ -27,6 +28,7 @@ import {
   checkoutGitCommit,
   commitAllGitChanges,
   createGitBranch,
+  createGitPullRequest,
   createGitRef,
   deleteGitBranch,
   deleteGitTag,
@@ -481,6 +483,41 @@ const readGitMergeBranchRequest = (value: unknown) => {
   return gitMergeBranchRequest;
 };
 
+const readGitCreatePullRequestRequest = (value: unknown) => {
+  if (!isObject(value)) {
+    throw new Error("gitCreatePullRequestRequest must be an object.");
+  }
+
+  if (
+    typeof value.repoRoot !== "string" ||
+    value.repoRoot.length === 0 ||
+    typeof value.baseBranch !== "string" ||
+    value.baseBranch.trim().length === 0 ||
+    typeof value.headBranch !== "string" ||
+    value.headBranch.trim().length === 0 ||
+    typeof value.headSha !== "string" ||
+    value.headSha.length === 0 ||
+    typeof value.title !== "string" ||
+    value.title.trim().length === 0 ||
+    typeof value.description !== "string"
+  ) {
+    throw new Error(
+      "gitCreatePullRequestRequest needs a repo root, base branch, head branch, head sha, title, and description.",
+    );
+  }
+
+  const gitCreatePullRequestRequest: GitCreatePullRequestRequest = {
+    repoRoot: value.repoRoot,
+    baseBranch: value.baseBranch.trim(),
+    headBranch: value.headBranch.trim(),
+    headSha: value.headSha,
+    title: value.title.trim(),
+    description: value.description.trim(),
+  };
+
+  return gitCreatePullRequestRequest;
+};
+
 const readPathLauncher = (value: unknown): PathLauncher => {
   if (value === "vscode" || value === "cursor" || value === "finder") {
     return value;
@@ -700,6 +737,12 @@ ipcMain.handle("git:mergeBranch", async (_event, value: unknown) => {
   const gitMergeBranchRequest = readGitMergeBranchRequest(value);
 
   return await mergeGitBranch(gitMergeBranchRequest);
+});
+
+ipcMain.handle("git:createPullRequest", async (_event, value: unknown) => {
+  const gitCreatePullRequestRequest = readGitCreatePullRequestRequest(value);
+
+  return await createGitPullRequest(gitCreatePullRequestRequest);
 });
 
 app.whenReady().then(() => {
