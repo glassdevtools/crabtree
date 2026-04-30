@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import posthog from "posthog-js";
 import {
   CLIENT_DOWNLOAD_PAGE_PATH,
   getAutoDetectedDownloadUrl,
@@ -11,10 +12,12 @@ export const ClientDownloadLink = ({
   ariaLabel,
   children,
   className,
+  location,
 }: {
   ariaLabel: string;
   children: ReactNode;
   className: string;
+  location: "nav" | "hero" | "cta";
 }) => {
   const [href, setHref] = useState(CLIENT_DOWNLOAD_PAGE_PATH);
 
@@ -43,8 +46,16 @@ export const ClientDownloadLink = ({
     };
   }, []);
 
+  const handleClick = () => {
+    posthog.capture("download_clicked", {
+      location,
+      download_url: href,
+      platform_detected: href !== CLIENT_DOWNLOAD_PAGE_PATH,
+    });
+  };
+
   return (
-    <a className={className} href={href} aria-label={ariaLabel}>
+    <a className={className} href={href} aria-label={ariaLabel} onClick={handleClick}>
       {children}
     </a>
   );

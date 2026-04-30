@@ -2,6 +2,7 @@ import Image from "next/image";
 import { FiDownload } from "react-icons/fi";
 import { IoLogoGithub } from "react-icons/io";
 import { ClientDownloadLink } from "./client-download-link";
+import { ClientGithubLink } from "./client-github-link";
 import { buttonVariants } from "@/components/ui/button";
 import defaultAppIcon from "../src/assets/default-app-icon.png";
 import productScreenshot from "../src/assets/product-screenshot.png";
@@ -96,21 +97,23 @@ const HomePage = () => {
               className: downloadButtonClassName,
             })}
             ariaLabel="Download"
+            location="nav"
           >
             Download
             <FiDownload aria-hidden="true" data-icon="inline-end" />
           </ClientDownloadLink>
-          <a
+          <ClientGithubLink
             className={buttonVariants({
               variant: "outline",
               size: "sm",
               className: githubButtonClassName,
             })}
             href={repoUrl}
+            location="nav"
           >
             GitHub
             <IoLogoGithub aria-hidden="true" data-icon="inline-end" />
-          </a>
+          </ClientGithubLink>
         </div>
       </nav>
 
@@ -130,14 +133,19 @@ const HomePage = () => {
               <ClientDownloadLink
                 className={ctaDownloadButtonClassName}
                 ariaLabel="Download"
+                location="hero"
               >
                 <span>Download</span>
                 <FiDownload aria-hidden="true" />
               </ClientDownloadLink>
-              <a className={ctaGithubButtonClassName} href={repoUrl}>
+              <ClientGithubLink
+                className={ctaGithubButtonClassName}
+                href={repoUrl}
+                location="hero"
+              >
                 <span>GitHub</span>
                 <IoLogoGithub aria-hidden="true" />
-              </a>
+              </ClientGithubLink>
             </div>
           </div>
 
@@ -207,14 +215,19 @@ const HomePage = () => {
             <ClientDownloadLink
               className={ctaDownloadButtonClassName}
               ariaLabel="Download"
+              location="cta"
             >
               <span>Download</span>
               <FiDownload aria-hidden="true" />
             </ClientDownloadLink>
-            <a className={ctaGithubButtonClassName} href={repoUrl}>
+            <ClientGithubLink
+              className={ctaGithubButtonClassName}
+              href={repoUrl}
+              location="cta"
+            >
               <span>GitHub</span>
               <IoLogoGithub aria-hidden="true" />
-            </a>
+            </ClientGithubLink>
           </div>
         </div>
       </section>
@@ -228,9 +241,9 @@ const HomePage = () => {
           draggable={false}
         />
         <p>&copy; 2026 Glass Devtools, Inc.</p>
-        <a href={repoUrl} aria-label="GitHub">
+        <ClientGithubLink href={repoUrl} ariaLabel="GitHub" location="footer">
           <IoLogoGithub aria-hidden="true" />
-        </a>
+        </ClientGithubLink>
       </footer>
     </main>
   );
