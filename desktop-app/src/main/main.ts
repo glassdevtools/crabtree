@@ -23,7 +23,11 @@ import type { AppServerClient } from "./appServerClient";
 import { readOrCreateAnalyticsInstallId } from "./analyticsStore";
 import { createAppServerClient } from "./appServerClient";
 import { convertThreadStatus } from "./codexThreads";
-import { readDashboardData } from "./dashboard";
+import {
+  readDashboardData,
+  readDashboardDataAfterGitMutation,
+} from "./dashboard";
+import { createDashboardRefreshCoordinator } from "./dashboardRefresh";
 import {
   checkoutGitCommit,
   commitAllGitChanges,
@@ -36,6 +40,7 @@ import {
   moveGitBranch,
   previewGitMerge,
   pushGitBranchSyncChanges,
+  readGitMainWorktreePathForPath,
   revertGitBranchSyncChanges,
   stageGitChanges,
   switchGitBranch,
@@ -52,8 +57,6 @@ const MAIN_WINDOW_MIN_HEIGHT = 640;
 let appServerClient: AppServerClient | null = null;
 let appServerClientPromise: Promise<AppServerClient> | null = null;
 let appServerClientVersion = 0;
-let dashboardReadPromise: ReturnType<typeof readDashboardData> | null = null;
-let shouldReadDashboardAgain = false;
 
 const startAutoUpdates = () => {
   if (!app.isPackaged) {
@@ -144,40 +147,6 @@ const createMainWindow = () => {
   mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
 };
 
-const readDashboardDataWithoutOverlap = async () => {
-  if (dashboardReadPromise !== null) {
-    shouldReadDashboardAgain = true;
-
-    return await dashboardReadPromise;
-  }
-
-  const currentDashboardReadPromise = (async () => {
-    shouldReadDashboardAgain = false;
-    let dashboardData = await readDashboardData({
-      appServerClient: await readAppServerClient(),
-    });
-
-    while (shouldReadDashboardAgain) {
-      shouldReadDashboardAgain = false;
-      dashboardData = await readDashboardData({
-        appServerClient: await readAppServerClient(),
-      });
-    }
-
-    return dashboardData;
-  })();
-
-  dashboardReadPromise = currentDashboardReadPromise;
-
-  try {
-    return await currentDashboardReadPromise;
-  } finally {
-    if (dashboardReadPromise === currentDashboardReadPromise) {
-      dashboardReadPromise = null;
-    }
-  }
-};
-
 const isObject = (value: unknown): value is { [key: string]: unknown } => {
   return typeof value === "object" && value !== null;
 };
@@ -248,6 +217,45 @@ const readAppServerClient = async () => {
     }
 
     throw error;
+  }
+};
+
+const dashboardRefreshCoordinator = createDashboardRefreshCoordinator({
+  readFullDashboardData: async () => {
+    return await readDashboardData({
+      appServerClient: await readAppServerClient(),
+    });
+  },
+  readDashboardDataAfterGitMutation,
+});
+
+const runGitMutationForRepoRoot = async <Result>({
+  repoRoot,
+  mutateGit,
+}: {
+  repoRoot: string;
+  mutateGit: () => Promise<Result>;
+}) => {
+  try {
+    return await mutateGit();
+  } finally {
+    dashboardRefreshCoordinator.markChangedRepoRoot(repoRoot);
+  }
+};
+
+const runGitMutationForRepoRoots = async <Result>({
+  repoRoots,
+  mutateGit,
+}: {
+  repoRoots: string[];
+  mutateGit: () => Promise<Result>;
+}) => {
+  try {
+    return await mutateGit();
+  } finally {
+    for (const repoRoot of repoRoots) {
+      dashboardRefreshCoordinator.markChangedRepoRoot(repoRoot);
+    }
   }
 };
 
@@ -591,7 +599,15 @@ const readGitBranchSyncChanges = (value: unknown) => {
 };
 
 ipcMain.handle("dashboard:read", async () => {
-  return await readDashboardDataWithoutOverlap();
+  return await dashboardRefreshCoordinator.readDashboardDataWithoutOverlap(
+    "full",
+  );
+});
+
+ipcMain.handle("dashboard:readAfterGitMutation", async () => {
+  return await dashboardRefreshCoordinator.readDashboardDataWithoutOverlap(
+    "afterGitMutation",
+  );
 });
 
 ipcMain.handle("analytics:readInstallId", async () => {
@@ -653,7 +669,13 @@ ipcMain.handle("git:stageChanges", async (_event, path: unknown) => {
     throw new Error("path must be a non-empty string.");
   }
 
-  await stageGitChanges(path);
+  const repoRoot = await readGitMainWorktreePathForPath({ path });
+  await runGitMutationForRepoRoot({
+    repoRoot,
+    mutateGit: async () => {
+      await stageGitChanges(path);
+    },
+  });
 });
 
 ipcMain.handle("git:unstageChanges", async (_event, path: unknown) => {
@@ -661,69 +683,137 @@ ipcMain.handle("git:unstageChanges", async (_event, path: unknown) => {
     throw new Error("path must be a non-empty string.");
   }
 
-  await unstageGitChanges(path);
+  const repoRoot = await readGitMainWorktreePathForPath({ path });
+  await runGitMutationForRepoRoot({
+    repoRoot,
+    mutateGit: async () => {
+      await unstageGitChanges(path);
+    },
+  });
 });
 
 ipcMain.handle("git:commitAllChanges", async (_event, value: unknown) => {
   const gitCommitChangesRequest = readGitCommitChangesRequest(value);
+  const repoRoot = await readGitMainWorktreePathForPath({
+    path: gitCommitChangesRequest.path,
+  });
 
-  return await commitAllGitChanges(gitCommitChangesRequest);
+  return await runGitMutationForRepoRoot({
+    repoRoot,
+    mutateGit: async () => {
+      return await commitAllGitChanges(gitCommitChangesRequest);
+    },
+  });
 });
 
 ipcMain.handle("git:createBranch", async (_event, value: unknown) => {
   const gitCreateBranchRequest = readGitCreateBranchRequest(value);
+  const repoRoot = await readGitMainWorktreePathForPath({
+    path: gitCreateBranchRequest.path,
+  });
 
-  await createGitBranch(gitCreateBranchRequest);
+  await runGitMutationForRepoRoot({
+    repoRoot,
+    mutateGit: async () => {
+      await createGitBranch(gitCreateBranchRequest);
+    },
+  });
 });
 
 ipcMain.handle("git:createRef", async (_event, value: unknown) => {
   const gitCreateRefRequest = readGitCreateRefRequest(value);
 
-  await createGitRef(gitCreateRefRequest);
+  await runGitMutationForRepoRoot({
+    repoRoot: gitCreateRefRequest.repoRoot,
+    mutateGit: async () => {
+      await createGitRef(gitCreateRefRequest);
+    },
+  });
 });
 
 ipcMain.handle("git:deleteBranch", async (_event, value: unknown) => {
   const gitDeleteBranchRequest = readGitDeleteBranchRequest(value);
 
-  await deleteGitBranch(gitDeleteBranchRequest);
+  await runGitMutationForRepoRoot({
+    repoRoot: gitDeleteBranchRequest.repoRoot,
+    mutateGit: async () => {
+      await deleteGitBranch(gitDeleteBranchRequest);
+    },
+  });
 });
 
 ipcMain.handle("git:deleteTag", async (_event, value: unknown) => {
   const gitDeleteTagRequest = readGitDeleteTagRequest(value);
 
-  await deleteGitTag(gitDeleteTagRequest);
+  await runGitMutationForRepoRoot({
+    repoRoot: gitDeleteTagRequest.repoRoot,
+    mutateGit: async () => {
+      await deleteGitTag(gitDeleteTagRequest);
+    },
+  });
 });
 
 ipcMain.handle("git:moveBranch", async (_event, value: unknown) => {
   const gitMoveBranchRequest = readGitMoveBranchRequest(value);
 
-  await moveGitBranch(gitMoveBranchRequest);
+  await runGitMutationForRepoRoot({
+    repoRoot: gitMoveBranchRequest.repoRoot,
+    mutateGit: async () => {
+      await moveGitBranch(gitMoveBranchRequest);
+    },
+  });
 });
 
 ipcMain.handle("git:switchBranch", async (_event, value: unknown) => {
   const gitSwitchBranchRequest = readGitSwitchBranchRequest(value);
 
-  await switchGitBranch(gitSwitchBranchRequest);
+  await runGitMutationForRepoRoot({
+    repoRoot: gitSwitchBranchRequest.repoRoot,
+    mutateGit: async () => {
+      await switchGitBranch(gitSwitchBranchRequest);
+    },
+  });
 });
 
 ipcMain.handle("git:checkoutCommit", async (_event, value: unknown) => {
   const gitCheckoutCommitRequest = readGitCheckoutCommitRequest(value);
 
-  await checkoutGitCommit(gitCheckoutCommitRequest);
+  await runGitMutationForRepoRoot({
+    repoRoot: gitCheckoutCommitRequest.repoRoot,
+    mutateGit: async () => {
+      await checkoutGitCommit(gitCheckoutCommitRequest);
+    },
+  });
 });
 
 ipcMain.handle("git:pushBranchSyncChanges", async (_event, value: unknown) => {
   const gitBranchSyncChanges = readGitBranchSyncChanges(value);
+  const repoRoots = gitBranchSyncChanges.map(
+    (gitBranchSyncChange) => gitBranchSyncChange.repoRoot,
+  );
 
-  await pushGitBranchSyncChanges(gitBranchSyncChanges);
+  await runGitMutationForRepoRoots({
+    repoRoots,
+    mutateGit: async () => {
+      await pushGitBranchSyncChanges(gitBranchSyncChanges);
+    },
+  });
 });
 
 ipcMain.handle(
   "git:revertBranchSyncChanges",
   async (_event, value: unknown) => {
     const gitBranchSyncChanges = readGitBranchSyncChanges(value);
+    const repoRoots = gitBranchSyncChanges.map(
+      (gitBranchSyncChange) => gitBranchSyncChange.repoRoot,
+    );
 
-    await revertGitBranchSyncChanges(gitBranchSyncChanges);
+    await runGitMutationForRepoRoots({
+      repoRoots,
+      mutateGit: async () => {
+        await revertGitBranchSyncChanges(gitBranchSyncChanges);
+      },
+    });
   },
 );
 
@@ -736,7 +826,12 @@ ipcMain.handle("git:previewMerge", async (_event, value: unknown) => {
 ipcMain.handle("git:mergeBranch", async (_event, value: unknown) => {
   const gitMergeBranchRequest = readGitMergeBranchRequest(value);
 
-  return await mergeGitBranch(gitMergeBranchRequest);
+  return await runGitMutationForRepoRoot({
+    repoRoot: gitMergeBranchRequest.repoRoot,
+    mutateGit: async () => {
+      return await mergeGitBranch(gitMergeBranchRequest);
+    },
+  });
 });
 
 ipcMain.handle("git:createPullRequest", async (_event, value: unknown) => {

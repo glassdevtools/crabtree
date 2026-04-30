@@ -26,12 +26,18 @@ import {
   moveGitBranch,
   previewGitMerge,
   pushGitBranchSyncChanges,
+  readGitMainWorktreePathForPath,
   revertGitBranchSyncChanges,
   stageGitChanges,
   switchGitBranch,
   unstageGitChanges,
 } from "../src/main/gitActions";
-import { readGitChangesOfCwd, readRepoGraphs } from "../src/main/gitData";
+import { readDashboardDataAfterGitMutation } from "../src/main/dashboard";
+import {
+  readGitChangesOfCwd,
+  readRepoGraphs,
+  readRepoGraphsForRepoRoots,
+} from "../src/main/gitData";
 import type { CodexThread } from "../src/shared/types";
 
 const execFileAsync = promisify(execFile);
@@ -636,6 +642,160 @@ test("reads main worktree changes even when every thread is in a linked worktree
     assert.equal(gitErrors.length, 0);
     assert.equal(gitChangesOfCwd[repoRoot]?.unstaged.added, 1);
     assert.equal(gitChangesOfCwd[worktreeRoot]?.unstaged.added, 1);
+  });
+});
+
+test("rereads only requested repo graphs after a git mutation", async () => {
+  await withRepo(async ({ repoRoot: repoRootOne }) => {
+    await withRepo(async ({ repoRoot: repoRootTwo }) => {
+      const oneSha = await commitRepoFile({
+        repoRoot: repoRootOne,
+        filePath: "one.txt",
+        content: "one\n",
+        message: "one",
+      });
+      await commitRepoFile({
+        repoRoot: repoRootTwo,
+        filePath: "two.txt",
+        content: "two\n",
+        message: "two",
+      });
+      const threads = [
+        createThread({ id: "one-thread", cwd: repoRootOne }),
+        createThread({ id: "two-thread", cwd: repoRootTwo }),
+      ];
+      const fullGraphResult = await readRepoGraphs({ threads });
+      const previousRepoOne = fullGraphResult.repos.find(
+        (repo) => repo.root === repoRootOne,
+      );
+      const previousRepoTwo = fullGraphResult.repos.find(
+        (repo) => repo.root === repoRootTwo,
+      );
+
+      assert.notEqual(previousRepoOne, undefined);
+      assert.notEqual(previousRepoTwo, undefined);
+
+      await createGitRef({
+        repoRoot: repoRootOne,
+        gitRefType: "tag",
+        name: "saved-tag",
+        sha: oneSha,
+      });
+
+      const nextGraphResult = await readRepoGraphsForRepoRoots({
+        threads,
+        repos: fullGraphResult.repos,
+        repoRoots: [repoRootOne],
+      });
+      const nextRepoOne = nextGraphResult.repos.find(
+        (repo) => repo.root === repoRootOne,
+      );
+      const nextRepoTwo = nextGraphResult.repos.find(
+        (repo) => repo.root === repoRootTwo,
+      );
+      const taggedCommit = nextRepoOne?.commits.find(
+        (commit) => commit.sha === oneSha,
+      );
+
+      assert.equal(nextGraphResult.warnings.length, 0);
+      assert.equal(nextGraphResult.gitErrors.length, 0);
+      assert.notEqual(nextRepoOne, previousRepoOne);
+      assert.equal(nextRepoTwo, previousRepoTwo);
+      assert.equal(taggedCommit?.refs.includes("tag: saved-tag"), true);
+    });
+  });
+});
+
+test("updates changed repo change summaries after a git mutation", async () => {
+  await withRepo(async ({ repoRoot: repoRootOne }) => {
+    await withRepo(async ({ repoRoot: repoRootTwo }) => {
+      await commitRepoFile({
+        repoRoot: repoRootOne,
+        filePath: "one.txt",
+        content: "one\n",
+        message: "one",
+      });
+      await commitRepoFile({
+        repoRoot: repoRootTwo,
+        filePath: "two.txt",
+        content: "two\n",
+        message: "two",
+      });
+      await appendRepoFile({
+        repoRoot: repoRootTwo,
+        filePath: "two.txt",
+        content: "two changed\n",
+      });
+
+      const threads = [
+        createThread({ id: "one-thread", cwd: repoRootOne }),
+        createThread({ id: "two-thread", cwd: repoRootTwo }),
+      ];
+      const repoGraphResult = await readRepoGraphs({ threads });
+      const gitChangeResult = await readGitChangesOfCwd({
+        threads,
+        repos: repoGraphResult.repos,
+      });
+      const previousDashboardData = {
+        generatedAt: "2026-04-30T00:00:00.000Z",
+        repos: repoGraphResult.repos,
+        threads,
+        gitChangesOfCwd: gitChangeResult.gitChangesOfCwd,
+        gitErrors: gitChangeResult.gitErrors,
+        warnings: repoGraphResult.warnings,
+      };
+
+      await appendRepoFile({
+        repoRoot: repoRootOne,
+        filePath: "one.txt",
+        content: "one changed\n",
+      });
+
+      const nextDashboardData = await readDashboardDataAfterGitMutation({
+        previousDashboardData,
+        repoRoots: [repoRootOne],
+      });
+
+      assert.equal(nextDashboardData.gitErrors.length, 0);
+      assert.equal(
+        nextDashboardData.gitChangesOfCwd[repoRootOne]?.unstaged.added,
+        1,
+      );
+      assert.equal(
+        nextDashboardData.gitChangesOfCwd[repoRootTwo]?.unstaged.added,
+        1,
+      );
+    });
+  });
+});
+
+test("reads the main worktree path from a linked worktree path", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    await commitRepoFile({
+      repoRoot,
+      filePath: "base.txt",
+      content: "base\n",
+      message: "base",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
+    await commitRepoFile({
+      repoRoot,
+      filePath: "feature.txt",
+      content: "feature\n",
+      message: "feature",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "main"] });
+    const worktreeRoot = `${repoRoot}-feature-worktree`;
+
+    await runGit({
+      cwd: repoRoot,
+      args: ["worktree", "add", worktreeRoot, "feature"],
+    });
+
+    assert.equal(
+      await readGitMainWorktreePathForPath({ path: worktreeRoot }),
+      repoRoot,
+    );
   });
 });
 

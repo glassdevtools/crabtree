@@ -177,6 +177,7 @@ export type DashboardData = {
 
 export type MoltTreeApi = {
   readDashboard: () => Promise<DashboardData>;
+  readDashboardAfterGitMutation: () => Promise<DashboardData>;
   readAnalyticsInstallId: () => Promise<string>;
   watchCodexThreadStatus: (
     onStatusChange: (codexThreadStatusChange: CodexThreadStatusChange) => void,

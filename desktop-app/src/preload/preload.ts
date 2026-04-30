@@ -25,6 +25,13 @@ const api: MoltTreeApi = {
 
     return dashboardData;
   },
+  readDashboardAfterGitMutation: async () => {
+    const dashboardData: DashboardData = await ipcRenderer.invoke(
+      "dashboard:readAfterGitMutation",
+    );
+
+    return dashboardData;
+  },
   readAnalyticsInstallId: async () => {
     return await ipcRenderer.invoke("analytics:readInstallId");
   },

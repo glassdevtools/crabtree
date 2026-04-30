@@ -4956,6 +4956,7 @@ const MoltTreeDesktopApp = () => {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(
     null,
   );
+  const [dashboardPaintWaitCount, setDashboardPaintWaitCount] = useState(0);
   const [selectedRepoRoot, setSelectedRepoRoot] = useState<string | null>(null);
   const [pathLauncher, setPathLauncher] = useState<PathLauncher>("vscode");
   const [isLoading, setIsLoading] = useState(true);
@@ -4983,6 +4984,7 @@ const MoltTreeDesktopApp = () => {
   const isDashboardRefreshRunningRef = useRef(false);
   const shouldRefreshDashboardAgainRef = useRef(false);
   const dashboardRefreshPromiseRef = useRef<Promise<void> | null>(null);
+  const dashboardPaintResolversRef = useRef<(() => void)[]>([]);
 
   const threadOfId = useMemo(() => {
     if (dashboardData === null) {
@@ -5018,6 +5020,20 @@ const MoltTreeDesktopApp = () => {
       setDashboardErrorMessage(null);
     }
   }, []);
+  useEffect(() => {
+    const dashboardPaintResolvers = dashboardPaintResolversRef.current;
+
+    if (dashboardPaintResolvers.length === 0) {
+      return;
+    }
+
+    dashboardPaintResolversRef.current = [];
+    window.requestAnimationFrame(() => {
+      for (const dashboardPaintResolver of dashboardPaintResolvers) {
+        dashboardPaintResolver();
+      }
+    });
+  }, [dashboardPaintWaitCount]);
   const refreshDashboard = useCallback(async () => {
     if (isDashboardRefreshRunningRef.current) {
       shouldRefreshDashboardAgainRef.current = true;
@@ -5070,9 +5086,17 @@ const MoltTreeDesktopApp = () => {
       setIsLoading(true);
 
       try {
-        const nextDashboardData = await window.molttree.readDashboard();
-        finishUserGitUpdate();
+        const nextDashboardData =
+          await window.molttree.readDashboardAfterGitMutation();
         applyDashboardData(nextDashboardData);
+        await new Promise<void>((resolve) => {
+          dashboardPaintResolversRef.current.push(resolve);
+          setDashboardPaintWaitCount(
+            (currentDashboardPaintWaitCount) =>
+              currentDashboardPaintWaitCount + 1,
+          );
+        });
+        finishUserGitUpdate();
         return true;
       } catch (error) {
         finishUserGitUpdate();

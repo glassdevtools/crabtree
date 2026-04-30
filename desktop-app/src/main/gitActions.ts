@@ -177,6 +177,21 @@ const readGitWorktreePathForBranch = async ({
   return null;
 };
 
+export const readGitMainWorktreePathForPath = async ({
+  path,
+}: {
+  path: string;
+}) => {
+  const worktrees = await readGitWorktrees({ repoRoot: path });
+  const mainWorktree = worktrees[0];
+
+  if (mainWorktree === undefined) {
+    throw new Error("Git worktree list did not include a main worktree.");
+  }
+
+  return mainWorktree.path;
+};
+
 // Visibility checks answer whether an old commit will still appear in the graph after a ref changes.
 const readIsShaReachableFromRootSha = async ({
   repoRoot,
