@@ -1208,8 +1208,8 @@ textarea,
   opacity: 1;
 }
 
-.commit-ref-has-delete:hover .commit-ref-delete-warning,
-.commit-ref-has-delete:focus-within .commit-ref-delete-warning {
+.commit-ref-has-delete:hover .commit-ref-delete-blocked,
+.commit-ref-has-delete:focus-within .commit-ref-delete-blocked {
   opacity: 0.45;
 }
 
@@ -1217,8 +1217,8 @@ textarea,
   color: #c53a13;
 }
 
-.commit-ref-has-delete:hover .commit-ref-delete-warning:hover,
-.commit-ref-has-delete:focus-within .commit-ref-delete-warning:focus-visible {
+.commit-ref-has-delete:hover .commit-ref-delete-blocked:hover,
+.commit-ref-has-delete:focus-within .commit-ref-delete-blocked:focus-visible {
   opacity: 1;
 }
 
