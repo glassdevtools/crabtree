@@ -1,28 +1,27 @@
 
 
 
-
-# Welcome to MoltTree.
+# Welcome to MoltTree!
 
 <div align="center">
 	<img
 		src="./website/src/assets/default-app-icon.png"
 	 	alt="MoltTree Icon"
-		width="150"
-	 	height="150"
+		width="300"
+	 	height="300"
 	/>
 </div>
 
 
 It's easy to spin up 100 worktrees in Codex, but merging them back together is hard. MoltTree was built to fix that.
 
-MoltTree is a desktop app that lets you view your chats, worktrees, and branches in one place. It organizes and visualizes everything, including worktrees!, so you can get a full overview. It also lets you do nice git things without opening your IDE or Codex. 
+[MoltTree](https://molttree.app) is a desktop app that lets you view your chats, worktrees, and branches in one place. It organizes and visualizes everything, including worktrees!, so you can get a full overview. It also lets you do nice git things without opening your IDE or Codex. 
 
 
 
 ## Contributing
 
-Feel free to submit an Issue for suggestions, feedback, and bugs. For safety reason I won't be accepting PRs, but I will happily accept Prompt Requests in the form of new [Issues](https://github.com/glassdevtools/molttree/issues).
+Feel free to submit an Issue for suggestions, feedback, and bugs. For safety reason I won't be accepting PRs, but I will happily accept Prompt Requests in the form of [New Issues](https://github.com/glassdevtools/molttree/issues).
 
 
 ## Preview
