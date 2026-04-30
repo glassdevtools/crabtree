@@ -1,6 +1,5 @@
 {
   "name": "molttree-repo",
-  "version": "0.1.5",
   "private": true,
   "workspaces": [
     "desktop-app",
