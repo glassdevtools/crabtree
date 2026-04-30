@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(lsof -ti:3000)",
+      "Bash(lsof -ti:3001)"
     ]
   }
 }
