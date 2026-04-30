@@ -73,7 +73,7 @@ const HomePage = () => {
       <nav className="topNav" aria-label="Primary">
         <a className="wordmark group/logo" href="/">
           <Image
-            className="transition-[filter] duration-1000 ease-out"
+            className="transition-[filter] duration-500 ease-out"
             src={defaultAppIcon}
             alt=""
             aria-hidden="true"
@@ -82,7 +82,7 @@ const HomePage = () => {
           <span className="wordmarkText">
             <span className="wordmarkTextBase">MoltTree</span>
             <span
-              className="wordmarkTextGradient transition-opacity duration-1000 ease-out"
+              className="wordmarkTextGradient transition-opacity duration-500 ease-out"
               aria-hidden="true"
             >
               MoltTree
@@ -200,10 +200,12 @@ const HomePage = () => {
       <section className="bottomCta" aria-labelledby="cta-title">
         <div className="bottomCtaInner">
           <h2 id="cta-title">
-            A smarter way to manage your{" "}
-            <span className="featureToken featureTokenWorktree">worktrees</span>
-            .
+            Save time on your{" "}
+            <span className="featureToken featureTokenBranch">branches</span>.
           </h2>
+          <p>
+            There&apos;s a better way to manage your branches and worktrees.
+          </p>
           <div className="hero__actions bottomCtaActions">
             <ClientDownloadLink
               className={ctaDownloadButtonClassName}

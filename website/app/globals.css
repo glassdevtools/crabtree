@@ -120,15 +120,25 @@ img {
   gap: 24px;
   border-bottom: 1px solid rgba(31, 35, 31, 0.06);
   padding: 8px max(24px, calc((100vw - 1120px) / 2));
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(24px) saturate(1.6);
-  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  background: transparent;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.topNav::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.68);
+  backdrop-filter: blur(32px) saturate(1.8);
+  -webkit-backdrop-filter: blur(32px) saturate(1.8);
+  content: "";
 }
 
 .wordmark {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   font-family:
     "Arial Black",
     "Avenir Next",
@@ -215,7 +225,13 @@ img {
 }
 
 .downloadButton:hover {
-  filter: brightness(1.12);
+  background: #2a332a !important;
+  border-color: #2a332a !important;
+}
+
+.downloadButton:focus-visible {
+  background: #2a332a !important;
+  border-color: #2a332a !important;
 }
 
 .githubButton {
@@ -225,7 +241,13 @@ img {
 }
 
 .githubButton:hover {
-  filter: brightness(1.04);
+  background: #f7f8f5 !important;
+  border-color: #d1dacd !important;
+}
+
+.githubButton:focus-visible {
+  background: #f7f8f5 !important;
+  border-color: #d1dacd !important;
 }
 
 /* Top nav button sizing */
@@ -282,8 +304,6 @@ img {
   width: 28px;
   height: 28px;
   flex: 0 0 auto;
-  fill: currentColor;
-  stroke: currentColor;
 }
 
 .ctaButtonDownload {
@@ -294,13 +314,15 @@ img {
 
 .ctaButtonDownload:hover,
 .ctaButtonDownload:focus-visible {
-  border-color: #202820;
-  background: #202820;
+  border-color: #2a332a;
+  background: #2a332a;
 }
 
 .ctaButtonDownload svg {
   width: 24px;
   height: 24px;
+  fill: none;
+  stroke: currentColor;
 }
 
 .ctaButtonGithub {
@@ -311,8 +333,8 @@ img {
 
 .ctaButtonGithub:hover,
 .ctaButtonGithub:focus-visible {
-  border-color: #d6ddd2;
-  background: #f1f3ef;
+  border-color: #d1dacd;
+  background: #f7f8f5;
 }
 
 /* ============================================================
@@ -391,6 +413,7 @@ h1.heroTitle {
   font-size: 1.05rem;
   font-weight: 500;
   line-height: 1.45;
+  text-wrap: balance;
 }
 
 .productPhoto {
@@ -423,6 +446,7 @@ h1.heroTitle {
   gap: 56px;
   width: min(1120px, 100%);
   margin: 0 auto;
+  padding: 40px;
 }
 
 .sectionHeader h2 {
@@ -546,7 +570,7 @@ h1.heroTitle {
    ============================================================ */
 
 .bottomCta {
-  padding: 96px 24px 120px;
+  padding: 132px 24px 156px;
   background: #ffffff;
   text-align: center;
 }
@@ -577,6 +601,16 @@ h1.heroTitle {
   font-weight: 900;
   line-height: 1.12;
   letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+.bottomCta p {
+  max-width: 520px;
+  margin: -12px 0 0;
+  color: #4b5347;
+  font-size: 1.05rem;
+  font-weight: 500;
+  line-height: 1.45;
   text-wrap: balance;
 }
 
@@ -650,7 +684,7 @@ h1.heroTitle {
    Mobile
    ============================================================ */
 
-@media (max-width: 640px) {
+@media (max-width: 760px) {
   .topNav {
     padding-right: 16px;
     padding-left: 16px;
@@ -684,6 +718,7 @@ h1.heroTitle {
   .sectionInner {
     grid-template-columns: 1fr;
     gap: 24px;
+    padding: 24px;
   }
 
   .sectionHeader h2 {
@@ -692,7 +727,7 @@ h1.heroTitle {
   }
 
   .bottomCta {
-    padding: 64px 16px 88px;
+    padding: 96px 16px 120px;
   }
 
   .bottomCtaInner {
