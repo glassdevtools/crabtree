@@ -7,7 +7,6 @@ import type {
   GitCreateBranchRequest,
   GitDeleteBranchRequest,
   GitDeleteTagRequest,
-  GitDetachWorktreeBranchRequest,
   GitMergeBranchRequest,
   GitMergeBranchResult,
   GitMergePreview,
@@ -424,7 +423,7 @@ export const deleteGitBranch = async ({
 
   if (worktreePath !== null) {
     throw new Error(
-      "This branch is checked out in a worktree. Switch or detach that worktree before deleting it.",
+      "This branch is checked out in a worktree. Delete that worktree or switch its branch first.",
     );
   }
 
@@ -630,42 +629,22 @@ export const moveGitBranch = async ({
     branch,
   });
 
-  if (worktreePath === null) {
-    await runGitCommandForPath({
-      path: repoRoot,
-      args: [
-        "update-ref",
-        "-m",
-        `MoltTree: move ${branch}`,
-        branchRef,
-        targetSha,
-        expectedOldSha,
-      ],
-    });
-    return;
-  }
-
-  const statusText = await readGitTextForPath({
-    path: worktreePath,
-    args: ["status", "--porcelain"],
-  });
-
-  if (statusText.length > 0) {
-    throw new Error("Working tree must be clean before moving this branch.");
-  }
-
-  const worktreeHead = await readGitTextForPath({
-    path: worktreePath,
-    args: ["rev-parse", "HEAD"],
-  });
-
-  if (worktreeHead !== expectedOldSha) {
-    throw new Error("Branch moved. Refresh and try again.");
+  if (worktreePath !== null) {
+    throw new Error(
+      "This branch is checked out in a worktree. Delete that worktree or switch its branch first.",
+    );
   }
 
   await runGitCommandForPath({
-    path: worktreePath,
-    args: ["reset", "--keep", targetSha],
+    path: repoRoot,
+    args: [
+      "update-ref",
+      "-m",
+      `MoltTree: move ${branch}`,
+      branchRef,
+      targetSha,
+      expectedOldSha,
+    ],
   });
 };
 
@@ -737,52 +716,6 @@ export const switchGitBranch = async ({
   }
 
   await runGitCommandForPath({ path: worktreePath, args: ["switch", branch] });
-};
-
-export const detachGitWorktreeBranch = async ({
-  repoRoot,
-  path,
-  branch,
-  sha,
-}: GitDetachWorktreeBranchRequest) => {
-  await runGitCommandForPath({
-    path: repoRoot,
-    args: ["check-ref-format", "--branch", branch],
-  });
-  const worktreePath = await readGitTextForPath({
-    path,
-    args: ["rev-parse", "--show-toplevel"],
-  });
-  const checkedOutWorktreePath = await readGitWorktreePathForBranch({
-    repoRoot,
-    branch,
-  });
-
-  if (checkedOutWorktreePath !== worktreePath) {
-    throw new Error("Branch moved. Refresh and try again.");
-  }
-
-  const expectedSha = await readGitTextForPath({
-    path: repoRoot,
-    args: ["rev-parse", "--verify", `${sha}^{commit}`],
-  });
-  const branchHead = await readGitTextForPath({
-    path: repoRoot,
-    args: ["rev-parse", "--verify", `refs/heads/${branch}`],
-  });
-  const worktreeHead = await readGitTextForPath({
-    path: worktreePath,
-    args: ["rev-parse", "HEAD"],
-  });
-
-  if (branchHead !== expectedSha || worktreeHead !== expectedSha) {
-    throw new Error("Branch moved. Refresh and try again.");
-  }
-
-  await runGitCommandForPath({
-    path: worktreePath,
-    args: ["switch", "--detach", expectedSha],
-  });
 };
 
 export const checkoutGitCommit = async ({

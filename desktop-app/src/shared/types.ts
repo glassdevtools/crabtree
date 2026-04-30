@@ -85,13 +85,6 @@ export type GitSwitchBranchRequest = {
   newSha: string;
 };
 
-export type GitDetachWorktreeBranchRequest = {
-  repoRoot: string;
-  path: string;
-  branch: string;
-  sha: string;
-};
-
 export type GitCheckoutCommitRequest = {
   repoRoot: string;
   sha: string;
@@ -190,9 +183,6 @@ export type MoltTreeApi = {
   moveGitBranch: (gitMoveBranchRequest: GitMoveBranchRequest) => Promise<void>;
   switchGitBranch: (
     gitSwitchBranchRequest: GitSwitchBranchRequest,
-  ) => Promise<void>;
-  detachGitWorktreeBranch: (
-    gitDetachWorktreeBranchRequest: GitDetachWorktreeBranchRequest,
   ) => Promise<void>;
   checkoutGitCommit: (
     gitCheckoutCommitRequest: GitCheckoutCommitRequest,

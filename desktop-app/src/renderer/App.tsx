@@ -198,6 +198,64 @@ const readBranchSyncChangeShaText = ({
   return `${oldSha?.slice(0, 7) ?? "none"} -> ${newSha?.slice(0, 7) ?? "none"}`;
 };
 
+const readGitWarningReasonText = (reasons: string[]) => {
+  if (reasons.length === 1) {
+    return reasons[0] ?? "";
+  }
+
+  if (reasons.length === 2) {
+    return `${reasons[0]}, and ${reasons[1]}`;
+  }
+
+  const lastReason = reasons[reasons.length - 1] ?? "";
+
+  return `${reasons.slice(0, -1).join(", ")}, and ${lastReason}`;
+};
+
+const readBranchPointerOperation = ({
+  checkedOutBranchPath,
+}: {
+  checkedOutBranchPath: string | null;
+}): BranchPointerOperation => {
+  if (checkedOutBranchPath !== null) {
+    return "blockedCheckedOutBranch";
+  }
+
+  return "moveBranchPointer";
+};
+
+const readBranchPointerOperationText = ({
+  operation,
+  branch,
+}: {
+  operation: BranchPointerOperation;
+  branch: string;
+}) => {
+  switch (operation) {
+    case "moveBranchPointer":
+      return {
+        title: "Move Branch Pointer",
+        message: `Move the ${branch} branch pointer?`,
+        description: null,
+        loadingDescription: "Moving branch",
+        successMessage: "Moved branch.",
+        buttonText: "Move",
+        shouldBlock: false,
+      };
+    case "blockedCheckedOutBranch":
+      return {
+        title: "Move Branch Pointer",
+        message: `Move the ${branch} branch pointer?`,
+        description:
+          "This branch is checked out in a worktree. Delete that worktree or switch its branch first.",
+        loadingDescription: "Moving branch",
+        successMessage: "Moved branch.",
+        buttonText: "Move",
+        shouldBlock: true,
+      };
+  }
+};
+
 const readActionableBranchSyncChanges = ({
   action,
   branchSyncChanges,
@@ -406,10 +464,10 @@ type BranchPointerDrag = {
   oldSubject: string;
 };
 
+type BranchPointerOperation = "moveBranchPointer" | "blockedCheckedOutBranch";
+
 type BranchPointerMove = {
   repoRoot: string;
-  sourcePath: string | null;
-  targetPath: string | null;
   branch: string;
   oldSha: string;
   oldShortSha: string;
@@ -417,7 +475,7 @@ type BranchPointerMove = {
   newSha: string;
   newShortSha: string;
   newSubject: string;
-  willMoveCheckedOutWorktree: boolean;
+  operation: BranchPointerOperation;
   warningMessage: string | null;
 };
 
@@ -2406,7 +2464,6 @@ const CommitHistory = ({
     const commitOfSha: { [sha: string]: GitCommit } = {};
     const branchShaOfBranch: { [branch: string]: string } = {};
     const tagShaOfTag: { [tag: string]: string } = {};
-    const hasWorktreeOfSha: { [sha: string]: boolean } = {};
     const checkedOutBranchOfBranch: { [branch: string]: boolean } = {};
     const rootShas: {
       sha: string;
@@ -2474,25 +2531,12 @@ const CommitHistory = ({
 
       return isReachableSha[sha] === true;
     };
-    const readReasonText = (reasons: string[]) => {
-      if (reasons.length === 1) {
-        return reasons[0] ?? "";
-      }
-
-      if (reasons.length === 2) {
-        return `${reasons[0]}, and ${reasons[1]}`;
-      }
-
-      const lastReason = reasons[reasons.length - 1] ?? "";
-
-      return `${reasons.slice(0, -1).join(", ")}, and ${lastReason}`;
-    };
     const readWarningMessage = (reasons: string[]) => {
       if (reasons.length === 0) {
         return null;
       }
 
-      return `We don't recommend deleting this because ${readReasonText(reasons)}.`;
+      return `We don't recommend deleting this because ${readGitWarningReasonText(reasons)}.`;
     };
 
     // First collect the commits and local branches.
@@ -2505,10 +2549,6 @@ const CommitHistory = ({
     }
 
     for (const worktree of worktrees) {
-      if (worktree.head !== null) {
-        hasWorktreeOfSha[worktree.head] = true;
-      }
-
       if (worktree.branch !== null) {
         checkedOutBranchOfBranch[worktree.branch] = true;
       }
@@ -2559,16 +2599,12 @@ const CommitHistory = ({
 
       if (checkedOutBranchOfBranch[branch] === true) {
         deleteWarningMessageOfBranch[branch] =
-          "This branch is checked out in a worktree. Switch or detach that worktree before deleting it.";
+          "This branch is checked out in a worktree. Delete that worktree or switch its branch first.";
         continue;
       }
 
       if (branch === defaultBranch) {
         reasons.push("it's the default branch");
-      }
-
-      if (hasWorktreeOfSha[branchShaOfBranch[branch]] === true) {
-        reasons.push("there is a worktree based on this commit");
       }
 
       if (
@@ -2661,68 +2697,62 @@ const CommitHistory = ({
     oldSha: string;
     newSha: string;
   }) => {
-    if (
-      readIsAncestorInVisibleGraph({
-        ancestorSha: oldSha,
-        descendantSha: newSha,
-      })
-    ) {
-      return null;
-    }
+    const reasons: string[] = [];
+    let isVisibleAfterMove = readIsAncestorInVisibleGraph({
+      ancestorSha: oldSha,
+      descendantSha: newSha,
+    });
 
     for (const commit of commits) {
       for (const localBranch of commit.localBranches) {
         if (
+          !isVisibleAfterMove &&
           localBranch !== branch &&
           readIsAncestorInVisibleGraph({
             ancestorSha: oldSha,
             descendantSha: commit.sha,
           })
         ) {
-          return null;
+          isVisibleAfterMove = true;
         }
       }
 
       for (const ref of commit.refs) {
         if (
+          !isVisibleAfterMove &&
           (ref === "HEAD" || ref.startsWith("tag: ")) &&
           readIsAncestorInVisibleGraph({
             ancestorSha: oldSha,
             descendantSha: commit.sha,
           })
         ) {
-          return null;
+          isVisibleAfterMove = true;
         }
       }
     }
 
-    for (const worktree of worktrees) {
-      if (
-        worktree.branch !== branch &&
-        worktree.head !== null &&
-        readIsAncestorInVisibleGraph({
-          ancestorSha: oldSha,
-          descendantSha: worktree.head,
-        })
-      ) {
-        return null;
-      }
+    if (!isVisibleAfterMove) {
+      reasons.push("it's the only thing keeping this commit in the graph");
     }
 
-    return "We don't recommend moving this because it's the only thing keeping this commit in the graph.";
+    if (reasons.length === 0) {
+      return null;
+    }
+
+    return `We don't recommend moving this because ${readGitWarningReasonText(reasons)}.`;
   };
-  const readIsBranchCheckedOut = (branch: string) => {
+  const readCheckedOutBranchPath = (branch: string) => {
     if (currentBranch === branch) {
-      return true;
+      return mainWorktreePath;
     }
 
     for (const worktree of worktrees) {
       if (worktree.branch === branch) {
-        return true;
+        return worktree.path;
       }
     }
 
-    return false;
+    return null;
   };
   const readBranchPointerTarget = ({ row }: { row: CommitGraphRow }) => {
     return {
@@ -3041,10 +3071,12 @@ const CommitHistory = ({
       return;
     }
 
+    const checkedOutBranchPath =
+      readCheckedOutBranchPath(activeBranchPointerDrag.branch) ??
+      activeBranchPointerDrag.sourcePath;
+
     setBranchPointerMove({
       repoRoot,
-      sourcePath: activeBranchPointerDrag.sourcePath,
-      targetPath: branchPointerTarget.path,
       branch: activeBranchPointerDrag.branch,
       oldSha: activeBranchPointerDrag.oldSha,
       oldShortSha: activeBranchPointerDrag.oldShortSha,
@@ -3052,9 +3084,9 @@ const CommitHistory = ({
       newSha: branchPointerTarget.sha,
       newShortSha: branchPointerTarget.shortSha,
       newSubject: branchPointerTarget.subject,
-      willMoveCheckedOutWorktree: readIsBranchCheckedOut(
-        activeBranchPointerDrag.branch,
-      ),
+      operation: readBranchPointerOperation({
+        checkedOutBranchPath,
+      }),
       warningMessage: readBranchPointerMoveWarningMessage({
         branch: activeBranchPointerDrag.branch,
         oldSha: activeBranchPointerDrag.oldSha,
@@ -3329,40 +3361,33 @@ const CommitHistory = ({
     }
 
     const request = branchPointerMove;
+    const branchPointerOperationText = readBranchPointerOperationText({
+      operation: request.operation,
+      branch: request.branch,
+    });
+
+    if (branchPointerOperationText.shouldBlock) {
+      return;
+    }
+
     closeBranchPointerMoveModal();
 
-    const isDetachingBranchFromWorktree =
-      request.sourcePath !== null &&
-      request.targetPath === null &&
-      request.oldSha === request.newSha;
-
     await runUserGitUpdateThenRefreshDashboard(
-      request.targetPath === null ? "Moving branch" : "Switching branch",
-      request.targetPath === null ? "Moved branch." : "Switched branch.",
+      branchPointerOperationText.loadingDescription,
+      branchPointerOperationText.successMessage,
       async () => {
         try {
-          if (isDetachingBranchFromWorktree && request.sourcePath !== null) {
-            await window.molttree.detachGitWorktreeBranch({
-              repoRoot: request.repoRoot,
-              path: request.sourcePath,
-              branch: request.branch,
-              sha: request.oldSha,
-            });
-          } else if (request.targetPath === null) {
-            await window.molttree.moveGitBranch({
-              repoRoot: request.repoRoot,
-              branch: request.branch,
-              oldSha: request.oldSha,
-              newSha: request.newSha,
-            });
-          } else {
-            await window.molttree.switchGitBranch({
-              repoRoot: request.repoRoot,
-              path: request.targetPath,
-              branch: request.branch,
-              oldSha: request.oldSha,
-              newSha: request.newSha,
-            });
+          switch (request.operation) {
+            case "moveBranchPointer":
+              await window.molttree.moveGitBranch({
+                repoRoot: request.repoRoot,
+                branch: request.branch,
+                oldSha: request.oldSha,
+                newSha: request.newSha,
+              });
+              break;
+            case "blockedCheckedOutBranch":
+              return branchPointerOperationText.description;
           }
         } catch (error) {
           return error instanceof Error
@@ -3404,11 +3429,13 @@ const CommitHistory = ({
     );
   };
 
-  const isBranchPointerMoveDetachingWorktree =
-    branchPointerMove !== null &&
-    branchPointerMove.sourcePath !== null &&
-    branchPointerMove.targetPath === null &&
-    branchPointerMove.oldSha === branchPointerMove.newSha;
+  const branchPointerOperationText =
+    branchPointerMove === null
+      ? null
+      : readBranchPointerOperationText({
+          operation: branchPointerMove.operation,
+          branch: branchPointerMove.branch,
+        });
 
   return (
     <>
@@ -3757,7 +3784,7 @@ const CommitHistory = ({
                 </AlertDialogDescription>
               </AlertDialogHeader>
               {gitRefDeleteTarget.warningMessage === null ? null : (
-                <Alert className="git-ref-delete-warning" variant="destructive">
+                <Alert className="git-action-warning" variant="destructive">
                   <AlertDescription>
                     {gitRefDeleteTarget.warningMessage}
                   </AlertDescription>
@@ -3845,13 +3872,11 @@ const CommitHistory = ({
           {branchPointerMove === null ? null : (
             <AlertDialogContent className="branch-pointer-move-modal sm:max-w-[560px]">
               <AlertDialogHeader>
-                <AlertDialogTitle>Move Branch Pointer</AlertDialogTitle>
+                <AlertDialogTitle>
+                  {branchPointerOperationText?.title}
+                </AlertDialogTitle>
                 <AlertDialogDescription>
-                  {isBranchPointerMoveDetachingWorktree
-                    ? `Move the ${branchPointerMove.branch} branch tag back to this commit?`
-                    : branchPointerMove.targetPath === null
-                      ? `Move the ${branchPointerMove.branch} branch pointer?`
-                      : `Switch this worktree to ${branchPointerMove.branch}?`}
+                  {branchPointerOperationText?.message}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <ul className="branch-tag-change-list">
@@ -3870,17 +3895,20 @@ const CommitHistory = ({
                   </span>
                 </li>
               </ul>
-              <AlertDialogDescription>
-                {isBranchPointerMoveDetachingWorktree
-                  ? "Git will detach that worktree and keep its changes."
-                  : branchPointerMove.targetPath !== null
-                    ? "Git will keep the existing changes if they can apply on that branch."
-                    : branchPointerMove.willMoveCheckedOutWorktree
-                      ? "This branch is checked out in a clean worktree, so Git will reset that worktree to the target commit."
-                      : "No worktree files will be changed."}
-              </AlertDialogDescription>
+              {branchPointerOperationText?.description ===
+              null ? null : branchPointerOperationText?.shouldBlock ? (
+                <Alert className="git-action-warning" variant="destructive">
+                  <AlertDescription>
+                    {branchPointerOperationText?.description}
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <AlertDialogDescription>
+                  {branchPointerOperationText?.description}
+                </AlertDialogDescription>
+              )}
               {branchPointerMove.warningMessage === null ? null : (
-                <Alert className="git-ref-delete-warning" variant="destructive">
+                <Alert className="git-action-warning" variant="destructive">
                   <AlertDescription>
                     {branchPointerMove.warningMessage}
                   </AlertDescription>
@@ -3890,8 +3918,11 @@ const CommitHistory = ({
                 <AlertDialogCancel onClick={closeBranchPointerMoveModal}>
                   Cancel
                 </AlertDialogCancel>
-                <AlertDialogAction onClick={moveBranchPointer}>
-                  Move
+                <AlertDialogAction
+                  disabled={branchPointerOperationText?.shouldBlock}
+                  onClick={moveBranchPointer}
+                >
+                  {branchPointerOperationText?.buttonText}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>

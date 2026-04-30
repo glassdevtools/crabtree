@@ -776,7 +776,7 @@ textarea,
   width: 560px;
 }
 
-.git-ref-delete-warning {
+.git-action-warning {
   border: 0;
   user-select: text;
 }

@@ -11,7 +11,6 @@ import type {
   GitCreateBranchRequest,
   GitDeleteBranchRequest,
   GitDeleteTagRequest,
-  GitDetachWorktreeBranchRequest,
   GitMergeBranchRequest,
   GitMoveBranchRequest,
   GitSwitchBranchRequest,
@@ -28,7 +27,6 @@ import {
   createGitBranch,
   deleteGitBranch,
   deleteGitTag,
-  detachGitWorktreeBranch,
   mergeGitBranch,
   moveGitBranch,
   previewGitMerge,
@@ -407,36 +405,6 @@ const readGitSwitchBranchRequest = (value: unknown) => {
   return gitSwitchBranchRequest;
 };
 
-const readGitDetachWorktreeBranchRequest = (value: unknown) => {
-  if (!isObject(value)) {
-    throw new Error("gitDetachWorktreeBranchRequest must be an object.");
-  }
-
-  if (
-    typeof value.repoRoot !== "string" ||
-    value.repoRoot.length === 0 ||
-    typeof value.path !== "string" ||
-    value.path.length === 0 ||
-    typeof value.branch !== "string" ||
-    value.branch.trim().length === 0 ||
-    typeof value.sha !== "string" ||
-    value.sha.length === 0
-  ) {
-    throw new Error(
-      "gitDetachWorktreeBranchRequest needs a repo root, path, branch, and sha.",
-    );
-  }
-
-  const gitDetachWorktreeBranchRequest: GitDetachWorktreeBranchRequest = {
-    repoRoot: value.repoRoot,
-    path: value.path,
-    branch: value.branch.trim(),
-    sha: value.sha,
-  };
-
-  return gitDetachWorktreeBranchRequest;
-};
-
 const readGitCheckoutCommitRequest = (value: unknown) => {
   if (!isObject(value)) {
     throw new Error("gitCheckoutCommitRequest must be an object.");
@@ -652,13 +620,6 @@ ipcMain.handle("git:switchBranch", async (_event, value: unknown) => {
   const gitSwitchBranchRequest = readGitSwitchBranchRequest(value);
 
   await switchGitBranch(gitSwitchBranchRequest);
-});
-
-ipcMain.handle("git:detachWorktreeBranch", async (_event, value: unknown) => {
-  const gitDetachWorktreeBranchRequest =
-    readGitDetachWorktreeBranchRequest(value);
-
-  await detachGitWorktreeBranch(gitDetachWorktreeBranchRequest);
 });
 
 ipcMain.handle("git:checkoutCommit", async (_event, value: unknown) => {
