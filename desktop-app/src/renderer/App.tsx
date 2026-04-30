@@ -1610,8 +1610,7 @@ const BranchTags = ({
                 <Button
                   className={cn(
                     "commit-ref-delete",
-                    deleteWarningMessage !== null &&
-                      "commit-ref-delete-warning",
+                    shouldBlockDelete && "commit-ref-delete-blocked",
                   )}
                   variant="ghost"
                   size="icon-xs"
@@ -3393,6 +3392,10 @@ const CommitHistory = ({
       if (worktree.branch !== null) {
         checkedOutBranchOfBranch[worktree.branch] = true;
       }
+    }
+
+    if (currentBranch !== null) {
+      checkedOutBranchOfBranch[currentBranch] = true;
     }
 
     // Then collect the refs that would keep commits visible.

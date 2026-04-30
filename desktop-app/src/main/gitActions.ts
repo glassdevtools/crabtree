@@ -190,15 +190,23 @@ const readGitBranchCheckoutPlace = async ({
   repoRoot: string;
   branch: string;
 }) => {
+  const currentBranch = await readGitTextForPath({
+    path: repoRoot,
+    args: ["branch", "--show-current"],
+  });
+
+  if (branch === currentBranch) {
+    return "head";
+  }
+
   const worktrees = await readGitWorktrees({ repoRoot });
-  const mainWorktree = worktrees[0];
 
   for (const worktree of worktrees) {
     if (worktree.branch !== branch) {
       continue;
     }
 
-    return worktree.path === mainWorktree?.path ? "head" : "worktree";
+    return "worktree";
   }
 
   return null;
