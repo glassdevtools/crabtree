@@ -216,20 +216,21 @@ const readBranchSyncActionText = (
   switch (action) {
     case "push":
       return {
-        title: "Push Branches",
+        title: "Push Branches and Tags",
         message:
-          "Are you sure you want origin branches to match local branches?",
+          "Are you sure you want origin branches and tags to match local branches and tags?",
         buttonText: "Push",
-        loadingDescription: "Pushing branches",
-        successMessage: "Branches pushed.",
+        loadingDescription: "Pushing branches and tags",
+        successMessage: "Branches and tags pushed.",
       };
     case "revert":
       return {
-        title: "Revert Branches",
-        message: "Are you sure you want local branches to match origin?",
+        title: "Revert Branches and Tags",
+        message:
+          "Are you sure you want local branches and tags to match origin?",
         buttonText: "Revert",
-        loadingDescription: "Reverting branches",
-        successMessage: "Branches reverted.",
+        loadingDescription: "Reverting branches and tags",
+        successMessage: "Branches and tags reverted.",
       };
   }
 };
@@ -318,11 +319,7 @@ const readActionableBranchSyncChanges = ({
     case "push":
       return branchSyncChanges;
     case "revert":
-      return branchSyncChanges.filter(
-        (branchSyncChange) =>
-          branchSyncChange.localSha !== null &&
-          branchSyncChange.originSha !== null,
-      );
+      return branchSyncChanges;
   }
 };
 
@@ -4970,9 +4967,13 @@ const MoltTreeDesktopApp = () => {
               <ul className="branch-tag-change-list">
                 {branchSyncChangesInConfirmation.map((branchSyncChange) => (
                   <li
-                    key={`${branchSyncChange.repoRoot}:${branchSyncChange.branch}`}
+                    key={`${branchSyncChange.repoRoot}:${branchSyncChange.gitRefType}:${branchSyncChange.name}`}
                   >
-                    <strong>{branchSyncChange.branch}</strong>
+                    <strong>
+                      {branchSyncChange.gitRefType === "tag"
+                        ? `tag: ${branchSyncChange.name}`
+                        : branchSyncChange.name}
+                    </strong>
                     <code>
                       {readBranchSyncChangeShaText({
                         action: branchSyncConfirmation.action,

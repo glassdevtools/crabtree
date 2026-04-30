@@ -375,24 +375,41 @@ const readGitBranchSyncChanges = async ({
     return [];
   }
 
-  const localBranchText = await readGitText({
-    cwd: repoSeed.root,
-    args: [
-      "for-each-ref",
-      `--format=%(refname:short)${FIELD_SEPARATOR}%(objectname)`,
-      "refs/heads",
-    ],
-  });
-  const originBranchText = await readNullableGitText({
-    cwd: repoSeed.root,
-    args: [
-      "for-each-ref",
-      `--format=%(refname:short)${FIELD_SEPARATOR}%(objectname)`,
-      "refs/remotes/origin",
-    ],
-  });
+  const [localBranchText, originBranchText, localTagText, originTagText] =
+    await Promise.all([
+      readGitText({
+        cwd: repoSeed.root,
+        args: [
+          "for-each-ref",
+          `--format=%(refname:short)${FIELD_SEPARATOR}%(objectname)`,
+          "refs/heads",
+        ],
+      }),
+      readNullableGitText({
+        cwd: repoSeed.root,
+        args: [
+          "for-each-ref",
+          `--format=%(refname:short)${FIELD_SEPARATOR}%(objectname)`,
+          "refs/remotes/origin",
+        ],
+      }),
+      readGitText({
+        cwd: repoSeed.root,
+        args: [
+          "for-each-ref",
+          `--format=%(refname:strip=2)${FIELD_SEPARATOR}%(objectname)`,
+          "refs/tags",
+        ],
+      }),
+      readNullableGitText({
+        cwd: repoSeed.root,
+        args: ["ls-remote", "--tags", "origin"],
+      }),
+    ]);
   const remoteShaOfBranch: { [branch: string]: string } = {};
   const localShaOfBranch: { [branch: string]: string } = {};
+  const remoteShaOfTag: { [tag: string]: string } = {};
+  const localShaOfTag: { [tag: string]: string } = {};
   const branchSyncChanges: GitBranchSyncChange[] = [];
   const originPrefix = "origin/";
 
@@ -442,7 +459,8 @@ const readGitBranchSyncChanges = async ({
 
     branchSyncChanges.push({
       repoRoot: repoSeed.root,
-      branch,
+      gitRefType: "branch",
+      name: branch,
       localSha,
       originSha: remoteSha ?? null,
     });
@@ -461,7 +479,78 @@ const readGitBranchSyncChanges = async ({
 
     branchSyncChanges.push({
       repoRoot: repoSeed.root,
-      branch,
+      gitRefType: "branch",
+      name: branch,
+      localSha: null,
+      originSha: remoteSha,
+    });
+  }
+
+  if (originTagText !== null) {
+    for (const line of originTagText.split("\n")) {
+      if (line.length === 0) {
+        continue;
+      }
+
+      const [remoteSha, remoteRef] = line.split("\t");
+      const tagPrefix = "refs/tags/";
+
+      if (
+        remoteSha === undefined ||
+        remoteRef === undefined ||
+        remoteSha === ZERO_SHA ||
+        !remoteRef.startsWith(tagPrefix) ||
+        remoteRef.endsWith("^{}")
+      ) {
+        continue;
+      }
+
+      remoteShaOfTag[remoteRef.slice(tagPrefix.length)] = remoteSha;
+    }
+  }
+
+  for (const line of localTagText.split("\n")) {
+    if (line.length === 0) {
+      continue;
+    }
+
+    const [tag, localSha] = line.split(FIELD_SEPARATOR);
+
+    if (tag === undefined || localSha === undefined || localSha === ZERO_SHA) {
+      continue;
+    }
+
+    const remoteSha = remoteShaOfTag[tag];
+    localShaOfTag[tag] = localSha;
+
+    if (remoteSha === localSha) {
+      continue;
+    }
+
+    branchSyncChanges.push({
+      repoRoot: repoSeed.root,
+      gitRefType: "tag",
+      name: tag,
+      localSha,
+      originSha: remoteSha ?? null,
+    });
+  }
+
+  for (const tag of Object.keys(remoteShaOfTag)) {
+    if (localShaOfTag[tag] !== undefined) {
+      continue;
+    }
+
+    const remoteSha = remoteShaOfTag[tag];
+
+    if (remoteSha === undefined) {
+      continue;
+    }
+
+    branchSyncChanges.push({
+      repoRoot: repoSeed.root,
+      gitRefType: "tag",
+      name: tag,
       localSha: null,
       originSha: remoteSha,
     });
@@ -491,7 +580,7 @@ const fetchOriginBranches = async ({ repoSeed }: { repoSeed: RepoSeed }) => {
   try {
     await runGit({
       cwd: repoSeed.root,
-      args: ["fetch", "origin", "--prune"],
+      args: ["fetch", "origin", "--prune", "--no-tags"],
     });
   } catch (error) {
     const message =

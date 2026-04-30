@@ -117,7 +117,8 @@ export type GitBranchTagChange = {
 
 export type GitBranchSyncChange = {
   repoRoot: string;
-  branch: string;
+  gitRefType: "branch" | "tag";
+  name: string;
   localSha: string | null;
   originSha: string | null;
 };

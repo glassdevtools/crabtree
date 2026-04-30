@@ -271,7 +271,13 @@ test("reads repo graphs with commits, worktrees, and branch sync changes", async
       "worktree-thread",
     ]);
     assert.deepEqual(repo?.branchSyncChanges, [
-      { repoRoot, branch: "feature", localSha: newSha, originSha: oldSha },
+      {
+        repoRoot,
+        gitRefType: "branch",
+        name: "feature",
+        localSha: newSha,
+        originSha: oldSha,
+      },
     ]);
     assert.equal(repo?.worktrees.length, 1);
     assert.equal(repo?.worktrees[0]?.path, worktreeRoot);
@@ -343,7 +349,13 @@ test("reads a missing local branch as an origin-only branch sync change", async 
     assert.equal(warnings.length, 0);
     assert.equal(gitErrors.length, 0);
     assert.deepEqual(repo?.branchSyncChanges, [
-      { repoRoot, branch: "feature", localSha: null, originSha: oldSha },
+      {
+        repoRoot,
+        gitRefType: "branch",
+        name: "feature",
+        localSha: null,
+        originSha: oldSha,
+      },
     ]);
   });
 });
@@ -366,7 +378,72 @@ test("reads a missing origin branch as a local-only branch sync change", async (
     assert.equal(warnings.length, 0);
     assert.equal(gitErrors.length, 0);
     assert.deepEqual(repo?.branchSyncChanges, [
-      { repoRoot, branch: "feature", localSha, originSha: null },
+      {
+        repoRoot,
+        gitRefType: "branch",
+        name: "feature",
+        localSha,
+        originSha: null,
+      },
+    ]);
+  });
+});
+
+test("reads a missing origin tag as a local-only tag sync change", async () => {
+  await withOriginRepo(async ({ repoRoot, mainSha }) => {
+    await runGit({ cwd: repoRoot, args: ["tag", "local-tag", mainSha] });
+    const localSha = await readSha({
+      cwd: repoRoot,
+      ref: "refs/tags/local-tag",
+    });
+
+    const { repos, warnings, gitErrors } = await readRepoGraphs({
+      threads: [createThread({ id: "root-thread", cwd: repoRoot })],
+    });
+    const repo = repos[0];
+
+    assert.equal(warnings.length, 0);
+    assert.equal(gitErrors.length, 0);
+    assert.deepEqual(repo?.branchSyncChanges, [
+      {
+        repoRoot,
+        gitRefType: "tag",
+        name: "local-tag",
+        localSha,
+        originSha: null,
+      },
+    ]);
+  });
+});
+
+test("reads a missing local tag as an origin-only tag sync change", async () => {
+  await withOriginRepo(async ({ repoRoot, mainSha }) => {
+    await runGit({ cwd: repoRoot, args: ["tag", "remote-tag", mainSha] });
+    const originSha = await readSha({
+      cwd: repoRoot,
+      ref: "refs/tags/remote-tag",
+    });
+    await runGit({
+      cwd: repoRoot,
+      args: ["push", "origin", "refs/tags/remote-tag"],
+    });
+    await runGit({ cwd: repoRoot, args: ["tag", "-d", "remote-tag"] });
+
+    const { repos, warnings, gitErrors } = await readRepoGraphs({
+      threads: [createThread({ id: "root-thread", cwd: repoRoot })],
+    });
+    const repo = repos[0];
+
+    assert.equal(warnings.length, 0);
+    assert.equal(gitErrors.length, 0);
+    assert.deepEqual(repo?.branchSyncChanges, [
+      {
+        repoRoot,
+        gitRefType: "tag",
+        name: "remote-tag",
+        localSha: null,
+        originSha,
+      },
     ]);
   });
 });
@@ -394,7 +471,13 @@ test("reads local branches as branch sync changes when origin tracking refs are 
     assert.match(warnings[0] ?? "", /Failed to fetch origin/);
     assert.equal(gitErrors.length, 0);
     assert.deepEqual(repo?.branchSyncChanges, [
-      { repoRoot, branch: "main", localSha: mainSha, originSha: null },
+      {
+        repoRoot,
+        gitRefType: "branch",
+        name: "main",
+        localSha: mainSha,
+        originSha: null,
+      },
     ]);
   });
 });
@@ -1384,7 +1467,7 @@ test("rejects merge when the working tree is dirty", async () => {
   });
 });
 
-// -------------------------- Origin branch sync changes ---------------
+// -------------------------- Origin ref sync changes ---------------
 
 test("pushes a safe branch sync update to origin", async () => {
   await withOriginRepo(async ({ repoRoot, originRoot }) => {
@@ -1404,7 +1487,13 @@ test("pushes a safe branch sync update to origin", async () => {
     });
 
     await pushGitBranchSyncChanges([
-      { repoRoot, branch: "feature", localSha: newSha, originSha: oldSha },
+      {
+        repoRoot,
+        gitRefType: "branch",
+        name: "feature",
+        localSha: newSha,
+        originSha: oldSha,
+      },
     ]);
 
     assert.equal(
@@ -1429,7 +1518,13 @@ test("pushes a local-only branch sync change to origin", async () => {
     });
 
     await pushGitBranchSyncChanges([
-      { repoRoot, branch: "feature", localSha, originSha: null },
+      {
+        repoRoot,
+        gitRefType: "branch",
+        name: "feature",
+        localSha,
+        originSha: null,
+      },
     ]);
 
     assert.equal(
@@ -1457,7 +1552,13 @@ test("pushes an origin-only branch sync change by deleting it from origin", asyn
     await runGit({ cwd: repoRoot, args: ["branch", "-D", "feature"] });
 
     await pushGitBranchSyncChanges([
-      { repoRoot, branch: "feature", localSha: null, originSha: oldSha },
+      {
+        repoRoot,
+        gitRefType: "branch",
+        name: "feature",
+        localSha: null,
+        originSha: oldSha,
+      },
     ]);
 
     assert.equal(
@@ -1469,6 +1570,61 @@ test("pushes an origin-only branch sync change by deleting it from origin", asyn
         cwd: repoRoot,
         ref: "refs/remotes/origin/feature",
       }),
+      null,
+    );
+  });
+});
+
+test("pushes a local-only tag sync change to origin", async () => {
+  await withOriginRepo(async ({ repoRoot, originRoot, mainSha }) => {
+    await runGit({ cwd: repoRoot, args: ["tag", "local-tag", mainSha] });
+    const localSha = await readSha({
+      cwd: repoRoot,
+      ref: "refs/tags/local-tag",
+    });
+
+    await pushGitBranchSyncChanges([
+      {
+        repoRoot,
+        gitRefType: "tag",
+        name: "local-tag",
+        localSha,
+        originSha: null,
+      },
+    ]);
+
+    assert.equal(
+      await readSha({ cwd: originRoot, ref: "refs/tags/local-tag" }),
+      localSha,
+    );
+  });
+});
+
+test("pushes an origin-only tag sync change by deleting it from origin", async () => {
+  await withOriginRepo(async ({ repoRoot, originRoot, mainSha }) => {
+    await runGit({ cwd: repoRoot, args: ["tag", "remote-tag", mainSha] });
+    const originSha = await readSha({
+      cwd: repoRoot,
+      ref: "refs/tags/remote-tag",
+    });
+    await runGit({
+      cwd: repoRoot,
+      args: ["push", "origin", "refs/tags/remote-tag"],
+    });
+    await runGit({ cwd: repoRoot, args: ["tag", "-d", "remote-tag"] });
+
+    await pushGitBranchSyncChanges([
+      {
+        repoRoot,
+        gitRefType: "tag",
+        name: "remote-tag",
+        localSha: null,
+        originSha,
+      },
+    ]);
+
+    assert.equal(
+      await readOptionalSha({ cwd: originRoot, ref: "refs/tags/remote-tag" }),
       null,
     );
   });
@@ -1489,7 +1645,13 @@ test("rejects pushing a branch sync update that would hide the old origin tip", 
 
     await assert.rejects(async () => {
       await pushGitBranchSyncChanges([
-        { repoRoot, branch: "feature", localSha: mainSha, originSha: oldSha },
+        {
+          repoRoot,
+          gitRefType: "branch",
+          name: "feature",
+          localSha: mainSha,
+          originSha: oldSha,
+        },
       ]);
     }, /hide commits/);
 
@@ -1520,7 +1682,13 @@ test("rejects reverting a local branch when its local tip would disappear", asyn
 
     await assert.rejects(async () => {
       await revertGitBranchSyncChanges([
-        { repoRoot, branch: "feature", localSha: newSha, originSha: oldSha },
+        {
+          repoRoot,
+          gitRefType: "branch",
+          name: "feature",
+          localSha: newSha,
+          originSha: oldSha,
+        },
       ]);
     }, /hide commits/);
 
@@ -1551,7 +1719,13 @@ test("reverts a local branch when another ref keeps the local tip visible", asyn
     await runGit({ cwd: repoRoot, args: ["switch", "main"] });
 
     await revertGitBranchSyncChanges([
-      { repoRoot, branch: "feature", localSha: newSha, originSha: oldSha },
+      {
+        repoRoot,
+        gitRefType: "branch",
+        name: "feature",
+        localSha: newSha,
+        originSha: oldSha,
+      },
     ]);
 
     assert.equal(await readSha({ cwd: repoRoot, ref: "feature" }), oldSha);
@@ -1562,7 +1736,7 @@ test("reverts a local branch when another ref keeps the local tip visible", asyn
   });
 });
 
-test("revert ignores an origin-only branch sync change", async () => {
+test("revert recreates an origin-only branch sync change locally", async () => {
   await withOriginRepo(async ({ repoRoot }) => {
     await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
     const oldSha = await commitRepoFile({
@@ -1576,12 +1750,131 @@ test("revert ignores an origin-only branch sync change", async () => {
     await runGit({ cwd: repoRoot, args: ["branch", "-D", "feature"] });
 
     await revertGitBranchSyncChanges([
-      { repoRoot, branch: "feature", localSha: null, originSha: oldSha },
+      {
+        repoRoot,
+        gitRefType: "branch",
+        name: "feature",
+        localSha: null,
+        originSha: oldSha,
+      },
+    ]);
+
+    assert.equal(await readSha({ cwd: repoRoot, ref: "feature" }), oldSha);
+  });
+});
+
+test("revert deletes a local-only branch when another ref keeps its tip visible", async () => {
+  await withOriginRepo(async ({ repoRoot, mainSha }) => {
+    await runGit({ cwd: repoRoot, args: ["branch", "local-only", mainSha] });
+
+    await revertGitBranchSyncChanges([
+      {
+        repoRoot,
+        gitRefType: "branch",
+        name: "local-only",
+        localSha: mainSha,
+        originSha: null,
+      },
     ]);
 
     assert.equal(
-      await readOptionalSha({ cwd: repoRoot, ref: "feature" }),
+      await readOptionalSha({ cwd: repoRoot, ref: "local-only" }),
       null,
+    );
+  });
+});
+
+test("revert recreates an origin-only tag sync change locally", async () => {
+  await withOriginRepo(async ({ repoRoot, mainSha }) => {
+    await runGit({ cwd: repoRoot, args: ["tag", "remote-tag", mainSha] });
+    const originSha = await readSha({
+      cwd: repoRoot,
+      ref: "refs/tags/remote-tag",
+    });
+    await runGit({
+      cwd: repoRoot,
+      args: ["push", "origin", "refs/tags/remote-tag"],
+    });
+    await runGit({ cwd: repoRoot, args: ["tag", "-d", "remote-tag"] });
+
+    await revertGitBranchSyncChanges([
+      {
+        repoRoot,
+        gitRefType: "tag",
+        name: "remote-tag",
+        localSha: null,
+        originSha,
+      },
+    ]);
+
+    assert.equal(
+      await readSha({ cwd: repoRoot, ref: "refs/tags/remote-tag" }),
+      originSha,
+    );
+  });
+});
+
+test("revert deletes a local-only tag when another ref keeps its tip visible", async () => {
+  await withOriginRepo(async ({ repoRoot, mainSha }) => {
+    await runGit({ cwd: repoRoot, args: ["tag", "local-tag", mainSha] });
+    const localSha = await readSha({
+      cwd: repoRoot,
+      ref: "refs/tags/local-tag",
+    });
+
+    await revertGitBranchSyncChanges([
+      {
+        repoRoot,
+        gitRefType: "tag",
+        name: "local-tag",
+        localSha,
+        originSha: null,
+      },
+    ]);
+
+    assert.equal(
+      await readOptionalSha({ cwd: repoRoot, ref: "refs/tags/local-tag" }),
+      null,
+    );
+  });
+});
+
+test("revert resets a changed local tag to origin", async () => {
+  await withOriginRepo(async ({ repoRoot, mainSha }) => {
+    await runGit({ cwd: repoRoot, args: ["tag", "shared-tag", mainSha] });
+    const originSha = await readSha({
+      cwd: repoRoot,
+      ref: "refs/tags/shared-tag",
+    });
+    await runGit({
+      cwd: repoRoot,
+      args: ["push", "origin", "refs/tags/shared-tag"],
+    });
+    const localSha = await commitRepoFile({
+      repoRoot,
+      filePath: "local-tag-target.txt",
+      content: "local tag target\n",
+      message: "local tag target",
+    });
+    await runGit({
+      cwd: repoRoot,
+      args: ["tag", "-f", "shared-tag", localSha],
+    });
+    await runGit({ cwd: repoRoot, args: ["tag", "keep-local-tag", localSha] });
+
+    await revertGitBranchSyncChanges([
+      {
+        repoRoot,
+        gitRefType: "tag",
+        name: "shared-tag",
+        localSha,
+        originSha,
+      },
+    ]);
+
+    assert.equal(
+      await readSha({ cwd: repoRoot, ref: "refs/tags/shared-tag" }),
+      originSha,
     );
   });
 });

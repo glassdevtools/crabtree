@@ -521,8 +521,10 @@ const readGitBranchSyncChanges = (value: unknown) => {
     if (
       typeof changeValue.repoRoot !== "string" ||
       changeValue.repoRoot.length === 0 ||
-      typeof changeValue.branch !== "string" ||
-      changeValue.branch.length === 0 ||
+      (changeValue.gitRefType !== "branch" &&
+        changeValue.gitRefType !== "tag") ||
+      typeof changeValue.name !== "string" ||
+      changeValue.name.length === 0 ||
       (changeValue.localSha !== null &&
         (typeof changeValue.localSha !== "string" ||
           changeValue.localSha.length === 0 ||
@@ -534,13 +536,14 @@ const readGitBranchSyncChanges = (value: unknown) => {
       (changeValue.localSha === null && changeValue.originSha === null)
     ) {
       throw new Error(
-        "Branch sync changes need a repo root, branch, local sha, and origin sha.",
+        "Ref sync changes need a repo root, ref type, name, local sha, and origin sha.",
       );
     }
 
     gitBranchSyncChanges.push({
       repoRoot: changeValue.repoRoot,
-      branch: changeValue.branch,
+      gitRefType: changeValue.gitRefType,
+      name: changeValue.name,
       localSha: changeValue.localSha,
       originSha: changeValue.originSha,
     });

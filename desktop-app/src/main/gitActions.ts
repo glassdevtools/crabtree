@@ -862,7 +862,36 @@ export const checkoutGitCommit = async ({
   });
 };
 
-// -------------------------- Origin branch sync actions ---------------
+// -------------------------- Origin ref sync actions ---------------
+
+const readRemoteTagSha = async ({
+  repoRoot,
+  tag,
+}: {
+  repoRoot: string;
+  tag: string;
+}) => {
+  const remoteTagText = await readNullableGitTextForPath({
+    path: repoRoot,
+    args: ["ls-remote", "--tags", "origin", `refs/tags/${tag}`],
+  });
+
+  if (remoteTagText === null) {
+    return null;
+  }
+
+  for (const line of remoteTagText.split("\n")) {
+    const [remoteSha, remoteRef] = line.split("\t");
+
+    if (remoteSha === undefined || remoteRef !== `refs/tags/${tag}`) {
+      continue;
+    }
+
+    return remoteSha;
+  }
+
+  return null;
+};
 
 export const pushGitBranchSyncChanges = async (
   gitBranchSyncChanges: GitBranchSyncChange[],
@@ -877,14 +906,15 @@ export const pushGitBranchSyncChanges = async (
 
     await runGitCommandForPath({
       path: repoRoot,
-      args: ["fetch", "origin", "--prune"],
+      args: ["fetch", "origin", "--prune", "--no-tags"],
     });
     fetchedRepoRoots.push(repoRoot);
   }
 
   for (const {
     repoRoot,
-    branch,
+    gitRefType,
+    name,
     localSha,
     originSha,
   } of gitBranchSyncChanges) {
@@ -892,14 +922,72 @@ export const pushGitBranchSyncChanges = async (
       continue;
     }
 
+    if (gitRefType === "tag") {
+      await runGitCommandForPath({
+        path: repoRoot,
+        args: ["check-ref-format", `refs/tags/${name}`],
+      });
+
+      const tagRef = `refs/tags/${name}`;
+      const remoteTagSha = await readRemoteTagSha({ repoRoot, tag: name });
+
+      if (localSha === null) {
+        if (originSha === null) {
+          continue;
+        }
+
+        const localTagSha = await readNullableGitTextForPath({
+          path: repoRoot,
+          args: ["rev-parse", "--verify", tagRef],
+        });
+
+        if (remoteTagSha !== originSha || localTagSha !== null) {
+          throw new Error(`${name} moved. Refresh and try again.`);
+        }
+
+        await runGitCommandForPath({
+          path: repoRoot,
+          args: [
+            "push",
+            `--force-with-lease=${tagRef}:${originSha}`,
+            "origin",
+            `:${tagRef}`,
+          ],
+        });
+
+        continue;
+      }
+
+      const tagHead = await readGitTextForPath({
+        path: repoRoot,
+        args: ["rev-parse", "--verify", tagRef],
+      });
+
+      if (tagHead !== localSha || remoteTagSha !== originSha) {
+        throw new Error(`${name} moved. Refresh and try again.`);
+      }
+
+      await runGitCommandForPath({
+        path: repoRoot,
+        args: [
+          "push",
+          `--force-with-lease=${tagRef}:${originSha ?? ""}`,
+          "origin",
+          `${tagRef}:${tagRef}`,
+        ],
+      });
+
+      continue;
+    }
+
     await runGitCommandForPath({
       path: repoRoot,
-      args: ["check-ref-format", "--branch", branch],
+      args: ["check-ref-format", "--branch", name],
     });
 
-    const branchRef = `refs/heads/${branch}`;
-    const originBranchRef = `refs/remotes/origin/${branch}`;
-    const remoteBranchRef = `refs/heads/${branch}`;
+    const branchRef = `refs/heads/${name}`;
+    const originBranchRef = `refs/remotes/origin/${name}`;
+    const remoteBranchRef = `refs/heads/${name}`;
 
     if (localSha === null) {
       if (originSha === null) {
@@ -920,7 +1008,7 @@ export const pushGitBranchSyncChanges = async (
       });
 
       if (originHead !== expectedOriginSha || branchHead !== null) {
-        throw new Error(`${branch} moved. Refresh and try again.`);
+        throw new Error(`${name} moved. Refresh and try again.`);
       }
 
       await runGitCommandForPath({
@@ -950,7 +1038,7 @@ export const pushGitBranchSyncChanges = async (
     });
 
     if (branchHead !== targetSha) {
-      throw new Error(`${branch} moved. Refresh and try again.`);
+      throw new Error(`${name} moved. Refresh and try again.`);
     }
 
     if (originSha !== null) {
@@ -964,7 +1052,7 @@ export const pushGitBranchSyncChanges = async (
       });
 
       if (originHead !== expectedOriginSha) {
-        throw new Error(`${branch} moved. Refresh and try again.`);
+        throw new Error(`${name} moved. Refresh and try again.`);
       }
 
       await ensureOldShaStaysVisibleAfterRefChange({
@@ -985,7 +1073,7 @@ export const pushGitBranchSyncChanges = async (
       });
 
       if (originHead !== null) {
-        throw new Error(`${branch} moved. Refresh and try again.`);
+        throw new Error(`${name} moved. Refresh and try again.`);
       }
     }
 
@@ -1007,7 +1095,7 @@ export const pushGitBranchSyncChanges = async (
   for (const repoRoot of pushedRepoRoots) {
     await runGitCommandForPath({
       path: repoRoot,
-      args: ["fetch", "origin", "--prune"],
+      args: ["fetch", "origin", "--prune", "--no-tags"],
     });
   }
 };
@@ -1024,65 +1112,170 @@ export const revertGitBranchSyncChanges = async (
 
     await runGitCommandForPath({
       path: repoRoot,
-      args: ["fetch", "origin", "--prune"],
+      args: ["fetch", "origin", "--prune", "--no-tags"],
     });
     fetchedRepoRoots.push(repoRoot);
   }
 
   for (const {
     repoRoot,
-    branch,
+    gitRefType,
+    name,
     localSha,
     originSha,
   } of gitBranchSyncChanges) {
-    if (
-      localSha === null ||
-      originSha === null ||
-      localSha === ZERO_SHA ||
-      originSha === ZERO_SHA
-    ) {
+    if (localSha === ZERO_SHA || originSha === ZERO_SHA) {
+      continue;
+    }
+
+    if (gitRefType === "tag") {
+      await runGitCommandForPath({
+        path: repoRoot,
+        args: ["check-ref-format", `refs/tags/${name}`],
+      });
+
+      const tagRef = `refs/tags/${name}`;
+      const remoteTagSha = await readRemoteTagSha({ repoRoot, tag: name });
+      const currentLocalSha = await readNullableGitTextForPath({
+        path: repoRoot,
+        args: ["rev-parse", "--verify", tagRef],
+      });
+
+      if (currentLocalSha !== localSha || remoteTagSha !== originSha) {
+        throw new Error(`${name} moved. Refresh and try again.`);
+      }
+
+      if (originSha === null) {
+        if (localSha === null) {
+          continue;
+        }
+
+        await ensureOldShaStaysVisibleAfterRefChange({
+          repoRoot,
+          oldSha: localSha,
+          changedRef: tagRef,
+          replacementSha: null,
+          changedLocalBranch: null,
+          rootRefs: ["refs/heads", "refs/remotes", "refs/tags"],
+          shouldIncludeWorktreeHeads: true,
+          message:
+            "Deleting this tag would hide commits from the graph. Move or tag another branch first.",
+        });
+
+        await runGitCommandForPath({
+          path: repoRoot,
+          args: [
+            "update-ref",
+            "-m",
+            `MoltTree: delete ${name}`,
+            "-d",
+            tagRef,
+            localSha,
+          ],
+        });
+        continue;
+      }
+
+      if (localSha !== null) {
+        await ensureOldShaStaysVisibleAfterRefChange({
+          repoRoot,
+          oldSha: localSha,
+          changedRef: tagRef,
+          replacementSha: originSha,
+          changedLocalBranch: null,
+          rootRefs: ["refs/heads", "refs/remotes", "refs/tags"],
+          shouldIncludeWorktreeHeads: true,
+          message:
+            "Resetting this tag would hide commits from the graph. Move or tag another branch first.",
+        });
+      }
+
+      await runGitCommandForPath({
+        path: repoRoot,
+        args: ["fetch", "origin", `+refs/tags/${name}:refs/tags/${name}`],
+      });
       continue;
     }
 
     await runGitCommandForPath({
       path: repoRoot,
-      args: ["check-ref-format", "--branch", branch],
+      args: ["check-ref-format", "--branch", name],
     });
 
-    const branchRef = `refs/heads/${branch}`;
+    const branchRef = `refs/heads/${name}`;
+    const currentLocalSha = await readNullableGitTextForPath({
+      path: repoRoot,
+      args: ["rev-parse", "--verify", branchRef],
+    });
+
+    if (currentLocalSha !== localSha) {
+      throw new Error(`${name} moved. Refresh and try again.`);
+    }
+
+    if (originSha === null) {
+      if (localSha === null) {
+        continue;
+      }
+
+      const originHead = await readNullableGitTextForPath({
+        path: repoRoot,
+        args: ["rev-parse", "--verify", `refs/remotes/origin/${name}`],
+      });
+
+      if (originHead !== null) {
+        throw new Error(`${name} moved. Refresh and try again.`);
+      }
+
+      await ensureOldShaStaysVisibleAfterRefChange({
+        repoRoot,
+        oldSha: localSha,
+        changedRef: branchRef,
+        replacementSha: null,
+        changedLocalBranch: name,
+        rootRefs: ["refs/heads", "refs/remotes", "refs/tags"],
+        shouldIncludeWorktreeHeads: true,
+        message:
+          "Deleting this branch would hide commits from the graph. Move or tag another branch first.",
+      });
+
+      await deleteGitBranch({ repoRoot, branch: name, oldSha: localSha });
+      continue;
+    }
+
     const remoteSha = await readGitTextForPath({
       path: repoRoot,
       args: ["rev-parse", "--verify", `${originSha}^{commit}`],
     });
     const remoteHead = await readGitTextForPath({
       path: repoRoot,
-      args: ["rev-parse", "--verify", `refs/remotes/origin/${branch}`],
+      args: ["rev-parse", "--verify", `refs/remotes/origin/${name}`],
     });
-    let currentLocalSha: string | null = null;
 
     if (remoteHead !== remoteSha) {
-      throw new Error(`${branch} moved. Refresh and try again.`);
+      throw new Error(`${name} moved. Refresh and try again.`);
     }
 
-    try {
-      currentLocalSha = await readGitTextForPath({
+    if (localSha === null) {
+      await runGitCommandForPath({
         path: repoRoot,
-        args: ["rev-parse", "--verify", branchRef],
+        args: [
+          "update-ref",
+          "-m",
+          `MoltTree: create ${name}`,
+          branchRef,
+          remoteSha,
+          ZERO_SHA,
+        ],
       });
-    } catch {
-      currentLocalSha = null;
-    }
-
-    if (currentLocalSha !== localSha) {
-      throw new Error(`${branch} moved. Refresh and try again.`);
+      continue;
     }
 
     await ensureOldShaStaysVisibleAfterRefChange({
       repoRoot,
-      oldSha: currentLocalSha,
+      oldSha: localSha,
       changedRef: branchRef,
       replacementSha: remoteSha,
-      changedLocalBranch: branch,
+      changedLocalBranch: name,
       rootRefs: ["refs/heads", "refs/remotes", "refs/tags"],
       shouldIncludeWorktreeHeads: true,
       message:
@@ -1091,7 +1284,7 @@ export const revertGitBranchSyncChanges = async (
 
     const worktreePath = await readGitWorktreePathForBranch({
       repoRoot,
-      branch,
+      branch: name,
     });
 
     if (worktreePath === null) {
@@ -1100,10 +1293,10 @@ export const revertGitBranchSyncChanges = async (
         args: [
           "update-ref",
           "-m",
-          `MoltTree: reset ${branch}`,
+          `MoltTree: reset ${name}`,
           branchRef,
           remoteSha,
-          currentLocalSha,
+          localSha,
         ],
       });
       continue;
@@ -1115,7 +1308,7 @@ export const revertGitBranchSyncChanges = async (
     });
 
     if (statusText.length > 0) {
-      throw new Error(`Working tree must be clean before resetting ${branch}.`);
+      throw new Error(`Working tree must be clean before resetting ${name}.`);
     }
 
     const worktreeHead = await readGitTextForPath({
@@ -1123,8 +1316,8 @@ export const revertGitBranchSyncChanges = async (
       args: ["rev-parse", "HEAD"],
     });
 
-    if (worktreeHead !== currentLocalSha) {
-      throw new Error(`${branch} moved. Refresh and try again.`);
+    if (worktreeHead !== localSha) {
+      throw new Error(`${name} moved. Refresh and try again.`);
     }
 
     await runGitCommandForPath({
