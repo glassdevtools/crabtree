@@ -110,7 +110,7 @@ img {
 
 .topNav {
   position: fixed;
-  z-index: 10;
+  z-index: 50;
   top: 0;
   left: 0;
   right: 0;
@@ -120,10 +120,21 @@ img {
   gap: 24px;
   border-bottom: 1px solid rgba(31, 35, 31, 0.1);
   padding: 8px max(24px, calc((100vw - 1120px) / 2));
-  background: rgba(255, 255, 255, 0.78);
-  backdrop-filter: blur(48px) saturate(1.9) contrast(0.92);
-  -webkit-backdrop-filter: blur(48px) saturate(1.9) contrast(0.92);
+  background-color: rgba(255, 255, 255, 0.55);
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+  backdrop-filter: blur(20px) saturate(1.8);
+  isolation: isolate;
+  will-change: backdrop-filter;
+  transform: translateZ(0);
   box-shadow: 0 8px 24px rgba(16, 20, 16, 0.06);
+}
+
+@supports not (
+  (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+) {
+  .topNav {
+    background-color: rgba(255, 255, 255, 0.92);
+  }
 }
 
 .wordmark {
@@ -361,7 +372,7 @@ h1.heroTitle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 14px;
+  gap: 16px;
   max-width: 880px;
   margin: 0 auto 12px;
   color: #101410;
@@ -374,7 +385,7 @@ h1.heroTitle {
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
-  font-size: clamp(2rem, 4.5vw, 3.1rem);
+  font-size: clamp(2.35rem, 5.4vw, 4rem);
   font-weight: 900;
   line-height: 1.1;
   letter-spacing: -0.015em;
@@ -384,8 +395,8 @@ h1.heroTitle {
 .heroTitleIcon {
   display: inline-flex;
   flex: 0 0 auto;
-  width: 54px;
-  height: 54px;
+  width: 72px;
+  height: 72px;
 }
 
 .heroTitleIcon img {
@@ -561,7 +572,7 @@ h1.heroTitle {
    ============================================================ */
 
 .bottomCta {
-  padding: 132px 24px 156px;
+  padding: 140px 24px 200px;
   background: #ffffff;
   text-align: center;
 }
