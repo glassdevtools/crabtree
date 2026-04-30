@@ -341,38 +341,6 @@ textarea,
   color: inherit;
 }
 
-/* Promise toast results should replace the loading icon without a second animation. */
-[data-sonner-toaster]
-  [data-sonner-toast][data-promise="true"][data-type="success"]
-  [data-icon]
-  > svg,
-[data-sonner-toaster]
-  [data-sonner-toast][data-promise="true"][data-type="error"]
-  [data-icon]
-  > svg {
-  opacity: 1;
-  transform: none;
-  animation: none;
-}
-
-[data-sonner-toaster]
-  [data-sonner-toast][data-promise="true"][data-type="success"]
-  .sonner-loading-wrapper[data-visible="false"],
-[data-sonner-toaster]
-  [data-sonner-toast][data-promise="true"][data-type="error"]
-  .sonner-loading-wrapper[data-visible="false"],
-[data-sonner-toaster]
-  [data-sonner-toast][data-promise="true"][data-type="success"]
-  .sonner-loader[data-visible="false"],
-[data-sonner-toaster]
-  [data-sonner-toast][data-promise="true"][data-type="error"]
-  .sonner-loader[data-visible="false"] {
-  opacity: 0;
-  transform: none;
-  animation: none;
-  transition: none;
-}
-
 [data-sonner-toast][data-type="error"] [data-title],
 [data-sonner-toast][data-type="error"] [data-description] {
   cursor: text;

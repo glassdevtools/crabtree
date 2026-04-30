@@ -118,7 +118,7 @@ const DASHBOARD_REFRESH_INTERVAL_MS = 1000;
 const TOAST_POSITION = "bottom-center";
 // TODO: AI-PICKED-VALUE: Errors should stay readable longer than normal toasts without getting stuck forever.
 const ERROR_TOAST_DURATION_MS = 12000;
-const USER_GIT_UPDATE_TOAST_ID = "user-git-update";
+const USER_GIT_UPDATE_TOAST_ID_PREFIX = "user-git-update";
 const RARE_LOADING_IMAGE_PROBABILITY = 0.1;
 const RARE_LOADING_IMAGE_URLS = [
   logoLoaderImageUrl,
@@ -538,10 +538,18 @@ type GitRefDeleteTarget = {
   shouldBlockDelete: boolean;
 };
 
-type BranchCreateTarget = {
-  path: string;
-  title: string;
-};
+type BranchCreateTarget =
+  | {
+      type: "path";
+      path: string;
+      title: string;
+    }
+  | {
+      type: "commit";
+      repoRoot: string;
+      sha: string;
+      title: string;
+    };
 
 type GitRefCreateMenuTarget = {
   x: number;
@@ -602,6 +610,7 @@ type CommitGraphRow = {
   lane: number;
   color: string;
   rowIndex: number;
+  childCount: number;
 };
 
 type CommitGraphItem = {
@@ -783,6 +792,7 @@ const createCommitGraph = ({
   const graphItems: CommitGraphItem[] = [];
   const commitOfSha: { [sha: string]: GitCommit } = {};
   const firstParentChildCountOfSha: { [sha: string]: number } = {};
+  const childCountOfSha: { [sha: string]: number } = {};
   const colorIndexOfSha: { [sha: string]: number } = {};
   const lanes: CommitGraphLane[] = [];
   const rows: CommitGraphRow[] = [];
@@ -797,6 +807,10 @@ const createCommitGraph = ({
     if (firstParent !== undefined) {
       firstParentChildCountOfSha[firstParent] =
         (firstParentChildCountOfSha[firstParent] ?? 0) + 1;
+    }
+
+    for (const parent of commit.parents) {
+      childCountOfSha[parent] = (childCountOfSha[parent] ?? 0) + 1;
     }
   }
 
@@ -1035,6 +1049,7 @@ const createCommitGraph = ({
         lane: threadGroupLane,
         color: COMMIT_GRAPH_CWD_CHANGE_COLOR,
         rowIndex,
+        childCount: childCountOfSha[graphItem.sha] ?? 0,
       });
       addPassthroughSegmentsForThreadGroupRow({
         rowIndex,
@@ -1067,6 +1082,7 @@ const createCommitGraph = ({
       lane,
       color: readCommitGraphColor(commitLane.colorIndex),
       rowIndex,
+      childCount: childCountOfSha[graphItem.sha] ?? 0,
     });
     colorIndexOfSha[graphItem.sha] = commitLane.colorIndex;
     laneCount = Math.max(laneCount, lanes.length, lane + 1);
@@ -1763,6 +1779,7 @@ const CommitHistoryRow = ({
   isBranchPointerDropTarget,
   shouldOwnMainWorktreeHead,
   isBranchMergeableOfBranch,
+  isCommitMergeableOfSha,
   deleteWarningMessageOfBranch,
   deleteWarningMessageOfTag,
   shouldBlockDeleteOfBranch,
@@ -1792,6 +1809,7 @@ const CommitHistoryRow = ({
   isBranchPointerDropTarget: boolean;
   shouldOwnMainWorktreeHead: boolean;
   isBranchMergeableOfBranch: { [branch: string]: boolean };
+  isCommitMergeableOfSha: { [sha: string]: boolean };
   deleteWarningMessageOfBranch: { [branch: string]: string };
   deleteWarningMessageOfTag: { [tag: string]: string };
   shouldBlockDeleteOfBranch: { [branch: string]: boolean };
@@ -2097,12 +2115,13 @@ const CommitHistoryRow = ({
     shouldShowActionChangeCount &&
     actionCommitBranchTarget !== null;
   const shouldShowBranchCreateActions = rowLocalBranches.length === 0;
-  const actionBranchCreateTarget =
+  const actionBranchCreateTarget: BranchCreateTarget | null =
     actionThreadGroup !== null &&
     shouldShowBranchCreateActions &&
     actionThreadGroup.cwd.length > 0 &&
     shouldShowActionChangeCount
       ? {
+          type: "path",
           path: actionThreadGroup.cwd,
           title: actionThreadGroup.cwd,
         }
@@ -2115,6 +2134,22 @@ const CommitHistoryRow = ({
             localBranch !== currentBranch &&
             isBranchMergeableOfBranch[localBranch] === true,
         ) ?? null);
+  const shouldShowCreateBranchToMerge =
+    currentBranch !== null &&
+    row.isCommitRow &&
+    !isHeadRow &&
+    row.childCount === 0 &&
+    rowLocalBranches.length === 0 &&
+    isCommitMergeableOfSha[commit.sha] === true;
+  const createBranchToMergeTarget: BranchCreateTarget | null =
+    shouldShowCreateBranchToMerge
+      ? {
+          type: "commit",
+          repoRoot,
+          sha: commit.sha,
+          title: commit.subject,
+        }
+      : null;
   let mergeDisabledReason: string | null = null;
   let rowClassName = "commit-history-row";
 
@@ -2127,7 +2162,10 @@ const CommitHistoryRow = ({
     actionThreadGroup !== null && shouldShowActionChangeCount;
   const shouldShowGraphActions =
     shouldShowGraphThreadActions ||
-    (row.isCommitRow && (mergeBranch !== null || isHeadRow));
+    (row.isCommitRow &&
+      (mergeBranch !== null ||
+        createBranchToMergeTarget !== null ||
+        isHeadRow));
   const commitDateText = formatCommitDate(commit.date);
   let branchTagsCellClassName = "commit-branch-tags-cell";
 
@@ -2222,7 +2260,26 @@ const CommitHistoryRow = ({
                 )}
               </div>
             ) : null}
-            {mergeBranch === null ? null : (
+            {mergeBranch === null && createBranchToMergeTarget !== null ? (
+              <TitleTooltip title="Add branch tag here">
+                <Button
+                  className="commit-branch-create-action"
+                  variant="ghost"
+                  size="icon-xs"
+                  type="button"
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onDoubleClick={(event) => event.stopPropagation()}
+                  onClick={(event) =>
+                    openBranchCreateModal(event, createBranchToMergeTarget)
+                  }
+                >
+                  <LuGitBranchPlus
+                    size={COMMIT_GRAPH_ACTION_ICON_SIZE}
+                    strokeWidth={COMMIT_GRAPH_ACTION_ICON_STROKE_WIDTH}
+                  />
+                </Button>
+              </TitleTooltip>
+            ) : mergeBranch === null ? null : (
               <TitleTooltip
                 title={
                   mergeDisabledReason === null
@@ -2824,11 +2881,12 @@ const CommitHistory = ({
     headChangeSummary !== undefined &&
     totalHeadChangeSummary.added === 0 &&
     totalHeadChangeSummary.removed === 0;
-  const isBranchMergeableOfBranch = useMemo(() => {
+  const mergeability = useMemo(() => {
     const commitOfSha: { [sha: string]: GitCommit } = {};
     const branchShaOfBranch: { [branch: string]: string } = {};
     const isShaReachableFromHead: { [sha: string]: boolean } = {};
     const nextIsBranchMergeableOfBranch: { [branch: string]: boolean } = {};
+    const nextIsCommitMergeableOfSha: { [sha: string]: boolean } = {};
     let headSha: string | null = null;
 
     for (const commit of commits) {
@@ -2844,7 +2902,10 @@ const CommitHistory = ({
     }
 
     if (headSha === null) {
-      return nextIsBranchMergeableOfBranch;
+      return {
+        isBranchMergeableOfBranch: nextIsBranchMergeableOfBranch,
+        isCommitMergeableOfSha: nextIsCommitMergeableOfSha,
+      };
     }
 
     const shasToRead = [headSha];
@@ -2879,8 +2940,17 @@ const CommitHistory = ({
         isShaReachableFromHead[branchShaOfBranch[branch]] !== true;
     }
 
-    return nextIsBranchMergeableOfBranch;
+    for (const commit of commits) {
+      nextIsCommitMergeableOfSha[commit.sha] =
+        isShaReachableFromHead[commit.sha] !== true;
+    }
+
+    return {
+      isBranchMergeableOfBranch: nextIsBranchMergeableOfBranch,
+      isCommitMergeableOfSha: nextIsCommitMergeableOfSha,
+    };
   }, [commits, currentBranch]);
+  const { isBranchMergeableOfBranch, isCommitMergeableOfSha } = mergeability;
   // Deletion stays available for every local branch and tag. These messages explain risky deletes in the modal.
   const gitRefDeleteWarnings = useMemo(() => {
     const commitOfSha: { [sha: string]: GitCommit } = {};
@@ -3649,10 +3719,22 @@ const CommitHistory = ({
       "Created branch.",
       async () => {
         try {
-          await window.molttree.createGitBranch({
-            path: branchCreateTarget.path,
-            branch,
-          });
+          switch (branchCreateTarget.type) {
+            case "path":
+              await window.molttree.createGitBranch({
+                path: branchCreateTarget.path,
+                branch,
+              });
+              break;
+            case "commit":
+              await window.molttree.createGitRef({
+                repoRoot: branchCreateTarget.repoRoot,
+                gitRefType: "branch",
+                name: branch,
+                sha: branchCreateTarget.sha,
+              });
+              break;
+          }
           closeBranchCreateModal();
         } catch (error) {
           return error instanceof Error
@@ -4095,6 +4177,7 @@ const CommitHistory = ({
                   mainWorktreeHeadOwnerRowId === row.id
                 }
                 isBranchMergeableOfBranch={isBranchMergeableOfBranch}
+                isCommitMergeableOfSha={isCommitMergeableOfSha}
                 deleteWarningMessageOfBranch={
                   gitRefDeleteWarnings.deleteWarningMessageOfBranch
                 }
@@ -4414,8 +4497,6 @@ const MoltTreeDesktopApp = () => {
   const [branchSyncConfirmation, setBranchSyncConfirmation] =
     useState<BranchSyncConfirmation | null>(null);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
-  const [userGitUpdateCount, setUserGitUpdateCount] = useState(0);
-  const [userGitUpdateDescription, setUserGitUpdateDescription] = useState("");
   const [initialLoadingImageUrl] = useState(() => {
     const randomLoadingImageValue = Math.random();
     const rareLoadingImageIndex = Math.floor(
@@ -4427,6 +4508,7 @@ const MoltTreeDesktopApp = () => {
       : defaultAppIconUrl;
   });
   const userGitUpdateCountRef = useRef(0);
+  const nextUserGitUpdateToastIdRef = useRef(0);
   const isDashboardRefreshRunningRef = useRef(false);
   const shouldRefreshDashboardAgainRef = useRef(false);
   const dashboardRefreshPromiseRef = useRef<Promise<void> | null>(null);
@@ -4593,24 +4675,31 @@ const MoltTreeDesktopApp = () => {
       updateGit: (finishUserGitUpdate: () => void) => Promise<void>,
     ) => {
       let didFinishUserGitUpdate = false;
+      const toastId = `${USER_GIT_UPDATE_TOAST_ID_PREFIX}:${nextUserGitUpdateToastIdRef.current}`;
+      nextUserGitUpdateToastIdRef.current += 1;
       const finishUserGitUpdate = () => {
         if (didFinishUserGitUpdate) {
           return;
         }
 
         didFinishUserGitUpdate = true;
-        const nextUserGitUpdateCount = userGitUpdateCountRef.current - 1;
+        const nextUserGitUpdateCount = Math.max(
+          0,
+          userGitUpdateCountRef.current - 1,
+        );
         userGitUpdateCountRef.current = nextUserGitUpdateCount;
-        setUserGitUpdateCount(nextUserGitUpdateCount);
-
-        if (nextUserGitUpdateCount === 0) {
-          setUserGitUpdateDescription("");
-        }
+        toast.dismiss(toastId);
       };
 
-      setUserGitUpdateDescription(userGitUpdateDescription);
       userGitUpdateCountRef.current += 1;
-      setUserGitUpdateCount(userGitUpdateCountRef.current);
+      toast.loading("Updating", {
+        closeButton: false,
+        description: `${userGitUpdateDescription}...`,
+        dismissible: false,
+        duration: Infinity,
+        id: toastId,
+        position: TOAST_POSITION,
+      });
 
       try {
         await updateGit(finishUserGitUpdate);
@@ -4674,22 +4763,6 @@ const MoltTreeDesktopApp = () => {
       position: TOAST_POSITION,
     });
   }, [dashboardErrorMessage]);
-
-  useEffect(() => {
-    if (userGitUpdateCount === 0) {
-      toast.dismiss(USER_GIT_UPDATE_TOAST_ID);
-      return;
-    }
-
-    toast.loading("Updating", {
-      closeButton: false,
-      description: `${userGitUpdateDescription}...`,
-      dismissible: false,
-      duration: Infinity,
-      id: USER_GIT_UPDATE_TOAST_ID,
-      position: TOAST_POSITION,
-    });
-  }, [userGitUpdateCount, userGitUpdateDescription]);
 
   const readVisibleBranchSyncChangesForRepo = (repoRoot: string) => {
     const repo =
