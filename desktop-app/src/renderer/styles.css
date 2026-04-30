@@ -767,15 +767,6 @@ textarea,
   width: min(360px, calc(100vw - 32px));
 }
 
-/* TODO: AI-PICKED-VALUE: The modal width leaves room for branch names and hash changes while matching the existing modal style. */
-.branch-tag-change-modal {
-  width: 520px;
-}
-
-.branch-pointer-move-modal {
-  width: 560px;
-}
-
 .git-action-warning {
   border: 0;
   user-select: text;
@@ -923,7 +914,12 @@ textarea,
 }
 
 .branch-tag-change-list .branch-pointer-change-row {
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: 5ch minmax(0, 1fr);
+}
+
+.branch-tag-change-list .branch-pointer-change-row > strong {
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .branch-pointer-change-commit {

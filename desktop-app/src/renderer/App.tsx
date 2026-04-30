@@ -31,6 +31,7 @@ import type {
   MouseEvent,
   PointerEvent,
   ReactElement,
+  ReactNode,
 } from "react";
 import type { ResizeCallbackData } from "react-resizable";
 import type {
@@ -45,16 +46,6 @@ import type {
   RepoGraph,
 } from "../shared/types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -91,6 +82,8 @@ import { cn } from "@/lib/utils";
 import cursorAppIconUrl from "./assets/cursor-app-icon.png";
 import defaultAppIconUrl from "./assets/default-app-icon.png";
 import finderAppIconUrl from "./assets/finder-app-icon.png";
+import loading2ImageUrl from "./assets/loading-2.png";
+import loading3ImageUrl from "./assets/loading-3.png";
 import logoLoaderImageUrl from "./assets/logo-loader.png";
 import {
   readDisplayedThreadGroups,
@@ -123,8 +116,15 @@ const COMMIT_HISTORY_HEADER_HEIGHT = 22;
 // TODO: AI-PICKED-VALUE: Refreshing every second keeps branch/worktree state current while the refresh queue prevents overlapping Git reads.
 const DASHBOARD_REFRESH_INTERVAL_MS = 1000;
 const TOAST_POSITION = "bottom-center";
+// TODO: AI-PICKED-VALUE: Errors should stay readable longer than normal toasts without getting stuck forever.
+const ERROR_TOAST_DURATION_MS = 12000;
 const USER_GIT_UPDATE_TOAST_ID = "user-git-update";
-const LOADING_LOGO_LOADER_PROBABILITY = 0.1;
+const RARE_LOADING_IMAGE_PROBABILITY = 0.1;
+const RARE_LOADING_IMAGE_URLS = [
+  logoLoaderImageUrl,
+  loading2ImageUrl,
+  loading3ImageUrl,
+];
 const GITHUB_REPOSITORY_URL = packageInfo.repository.url.replace(/\.git$/, "");
 const MERGE_BRANCH_BUTTON_TITLE = "Merge this into HEAD";
 const COMMIT_GRAPH_ACTION_ICON_SIZE = 10;
@@ -160,6 +160,29 @@ const readTotalGitChangeSummary = (changeSummary: GitChangeSummary) => {
 
 const readCreatedGitRefName = (gitRefName: string) => {
   return gitRefName.trim().replace(/[^A-Za-z0-9._/-]+/g, "-");
+};
+
+const readUserFacingErrorMessage = (message: string) => {
+  return message
+    .replace(/^Error invoking remote method '[^']+':\s*/, "")
+    .replace(/^Error:\s*/, "");
+};
+
+const readCaughtUserFacingErrorMessage = ({
+  error,
+  fallbackMessage,
+}: {
+  error: unknown;
+  fallbackMessage: string;
+}) => {
+  const message = error instanceof Error ? error.message : fallbackMessage;
+  const userFacingMessage = readUserFacingErrorMessage(message);
+
+  if (userFacingMessage !== message) {
+    console.error(message);
+  }
+
+  return userFacingMessage;
 };
 
 const readGitRefCreateText = (gitRefType: "branch" | "tag") => {
@@ -413,7 +436,10 @@ const copyTextAfterContextMenu = async ({
       position: TOAST_POSITION,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : errorMessage;
+    const message = readCaughtUserFacingErrorMessage({
+      error,
+      fallbackMessage: errorMessage,
+    });
     toast.error("Error", {
       description: message,
       position: TOAST_POSITION,
@@ -2362,6 +2388,68 @@ const CommitHistoryColumnResizeHandle = ({
   );
 };
 
+const ConfirmationDialog = ({
+  isOpen,
+  closeConfirmationDialog,
+  title,
+  description,
+  children,
+  confirmButtonText,
+  confirmButtonVariant,
+  isConfirmDisabled,
+  confirmButtonAction,
+}: {
+  isOpen: boolean;
+  closeConfirmationDialog: () => void;
+  title: ReactNode;
+  description: ReactNode;
+  children: ReactNode | undefined;
+  confirmButtonText: ReactNode;
+  confirmButtonVariant: "default" | "destructive";
+  isConfirmDisabled: boolean;
+  confirmButtonAction: () => void;
+}) => {
+  return (
+    <Dialog
+      open={isOpen}
+      onOpenChange={(isOpen) => {
+        if (isOpen) {
+          return;
+        }
+
+        closeConfirmationDialog();
+      }}
+    >
+      {isOpen ? (
+        <DialogContent className="sm:max-w-sm" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+            <DialogDescription>{description}</DialogDescription>
+          </DialogHeader>
+          {children}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={closeConfirmationDialog}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant={confirmButtonVariant}
+              disabled={isConfirmDisabled}
+              onClick={confirmButtonAction}
+            >
+              {confirmButtonText}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      ) : null}
+    </Dialog>
+  );
+};
+
 const BranchCreateDialog = ({
   branchCreateTarget,
   createBranch,
@@ -2538,6 +2626,88 @@ const GitRefCreateDialog = ({
   );
 };
 
+const CommitMessageDialog = ({
+  commitMessageTarget,
+  createCommit,
+  closeCommitMessageModal,
+}: {
+  commitMessageTarget: CommitMessageTarget | null;
+  createCommit: ({
+    commitMessageTarget,
+    message,
+  }: {
+    commitMessageTarget: CommitMessageTarget;
+    message: string;
+  }) => Promise<void>;
+  closeCommitMessageModal: () => void;
+}) => {
+  const [commitMessage, setCommitMessage] = useState("");
+  const createdCommitMessage = commitMessage.trim();
+
+  useEffect(() => {
+    if (commitMessageTarget !== null) {
+      setCommitMessage("");
+    }
+  }, [commitMessageTarget]);
+
+  const submitCommitMessage = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (commitMessageTarget === null) {
+      return;
+    }
+
+    await createCommit({
+      commitMessageTarget,
+      message: createdCommitMessage,
+    });
+  };
+
+  return (
+    <Dialog
+      open={commitMessageTarget !== null}
+      onOpenChange={(isOpen) => {
+        if (isOpen) {
+          return;
+        }
+
+        closeCommitMessageModal();
+      }}
+    >
+      {commitMessageTarget === null ? null : (
+        <DialogContent className="sm:max-w-sm">
+          <form className="grid gap-4" onSubmit={submitCommitMessage}>
+            <DialogHeader>
+              <DialogTitle>Commit</DialogTitle>
+              <DialogDescription>Enter a commit message.</DialogDescription>
+            </DialogHeader>
+            <Input
+              autoFocus
+              value={commitMessage}
+              onChange={(event) => setCommitMessage(event.target.value)}
+            />
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={closeCommitMessageModal}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={createdCommitMessage.length === 0}
+              >
+                Commit
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      )}
+    </Dialog>
+  );
+};
+
 const CommitHistory = ({
   commits,
   worktrees,
@@ -2591,7 +2761,6 @@ const CommitHistory = ({
     useState<GitRefCreateTarget | null>(null);
   const [commitMessageTarget, setCommitMessageTarget] =
     useState<CommitMessageTarget | null>(null);
-  const [commitMessage, setCommitMessage] = useState("");
   const [changeSummaryTarget, setChangeSummaryTarget] =
     useState<ChangeSummaryTarget | null>(null);
   const [gitRefDeleteTarget, setGitRefDeleteTarget] =
@@ -3252,6 +3421,11 @@ const CommitHistory = ({
       return;
     }
 
+    if (!row.isCommitRow) {
+      setBranchPointerDropTargetRowId(null);
+      return;
+    }
+
     const branchPointerTarget = readBranchPointerTarget({ row });
     const isSameBranchPointerPlace =
       activeBranchPointerDrag.oldSha === branchPointerTarget.sha &&
@@ -3291,7 +3465,7 @@ const CommitHistory = ({
     event.preventDefault();
     const activeBranchPointerDrag = branchPointerDragRef.current;
 
-    if (activeBranchPointerDrag === null) {
+    if (activeBranchPointerDrag === null || !row.isCommitRow) {
       finishBranchPointerDrag();
       return;
     }
@@ -3428,11 +3602,9 @@ const CommitHistory = ({
     event.preventDefault();
     event.stopPropagation();
     setCommitMessageTarget(commitMessageTarget);
-    setCommitMessage("");
   };
   const closeCommitMessageModal = () => {
     setCommitMessageTarget(null);
-    setCommitMessage("");
   };
   const openChangeSummaryModal = (
     event: MouseEvent<HTMLButtonElement>,
@@ -3510,31 +3682,29 @@ const CommitHistory = ({
       },
     );
   };
-  const submitCommitMessage = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    if (commitMessageTarget === null) {
-      return;
-    }
-
-    const request = commitMessageTarget;
-
+  const createCommit = async ({
+    commitMessageTarget,
+    message,
+  }: {
+    commitMessageTarget: CommitMessageTarget;
+    message: string;
+  }) => {
     await runUserGitUpdateThenRefreshDashboard(
       "Committing changes",
       "Committed changes.",
       async () => {
         try {
           const newSha = await window.molttree.commitAllGitChanges({
-            path: request.path,
-            message: commitMessage.trim(),
+            path: commitMessageTarget.path,
+            message,
           });
 
-          if (request.branchTarget !== null) {
+          if (commitMessageTarget.branchTarget !== null) {
             try {
               await window.molttree.moveGitBranch({
                 repoRoot,
-                branch: request.branchTarget.branch,
-                oldSha: request.branchTarget.oldSha,
+                branch: commitMessageTarget.branchTarget.branch,
+                oldSha: commitMessageTarget.branchTarget.oldSha,
                 newSha,
               });
             } catch {
@@ -3755,7 +3925,7 @@ const CommitHistory = ({
             disabled={!gitRefCreateMenuTarget.isEnabled}
             onClick={() => openGitRefCreateModal("branch")}
           >
-            <LuGitBranchPlus size={10} />
+            <LuGitBranchPlus size={10} strokeWidth={1.75} />
             <span>Add branch</span>
           </Button>
           <Button
@@ -3766,7 +3936,7 @@ const CommitHistory = ({
             disabled={!gitRefCreateMenuTarget.isEnabled}
             onClick={() => openGitRefCreateModal("tag")}
           >
-            <Tag size={10} />
+            <Tag size={10} strokeWidth={1.75} />
             <span>Add tag</span>
           </Button>
         </div>
@@ -3949,47 +4119,11 @@ const CommitHistory = ({
           createGitRef={createGitRef}
           closeGitRefCreateModal={closeGitRefCreateModal}
         />
-        <Dialog
-          open={commitMessageTarget !== null}
-          onOpenChange={(isOpen) => {
-            if (isOpen) {
-              return;
-            }
-
-            closeCommitMessageModal();
-          }}
-        >
-          {commitMessageTarget === null ? null : (
-            <DialogContent className="sm:max-w-sm">
-              <form className="grid gap-4" onSubmit={submitCommitMessage}>
-                <DialogHeader>
-                  <DialogTitle>Commit</DialogTitle>
-                  <DialogDescription>Enter a commit message.</DialogDescription>
-                </DialogHeader>
-                <Input
-                  autoFocus
-                  value={commitMessage}
-                  onChange={(event) => setCommitMessage(event.target.value)}
-                />
-                <DialogFooter>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={closeCommitMessageModal}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={commitMessage.trim().length === 0}
-                  >
-                    Commit
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          )}
-        </Dialog>
+        <CommitMessageDialog
+          commitMessageTarget={commitMessageTarget}
+          createCommit={createCommit}
+          closeCommitMessageModal={closeCommitMessageModal}
+        />
         <Dialog
           open={changeSummaryTarget !== null}
           onOpenChange={(isOpen) => {
@@ -4052,128 +4186,89 @@ const CommitHistory = ({
             </DialogContent>
           )}
         </Dialog>
-        <AlertDialog
-          open={gitRefDeleteTarget !== null}
-          onOpenChange={(isOpen) => {
-            if (isOpen) {
-              return;
-            }
-
-            closeGitRefDeleteModal();
-          }}
+        <ConfirmationDialog
+          isOpen={gitRefDeleteTarget !== null}
+          closeConfirmationDialog={closeGitRefDeleteModal}
+          title={
+            gitRefDeleteTarget === null
+              ? ""
+              : gitRefDeleteTarget.gitRefType === "branch"
+                ? "Delete Branch Tag"
+                : "Delete Tag"
+          }
+          description={
+            gitRefDeleteTarget === null
+              ? ""
+              : `Are you sure you want to delete the ${gitRefDeleteTarget.name} ${
+                  gitRefDeleteTarget.gitRefType === "branch"
+                    ? "branch tag"
+                    : "tag"
+                }?`
+          }
+          confirmButtonText="Delete"
+          confirmButtonVariant="destructive"
+          isConfirmDisabled={gitRefDeleteTarget?.shouldBlockDelete === true}
+          confirmButtonAction={deleteSelectedGitRef}
         >
-          {gitRefDeleteTarget === null ? null : (
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>
-                  {gitRefDeleteTarget.gitRefType === "branch"
-                    ? "Delete Branch Tag"
-                    : "Delete Tag"}
-                </AlertDialogTitle>
-                <AlertDialogDescription>
-                  {`Are you sure you want to delete the ${gitRefDeleteTarget.name} ${
-                    gitRefDeleteTarget.gitRefType === "branch"
-                      ? "branch tag"
-                      : "tag"
-                  }?`}
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              {gitRefDeleteTarget.warningMessage === null ? null : (
-                <Alert className="git-action-warning" variant="destructive">
-                  <AlertDescription>
-                    {gitRefDeleteTarget.warningMessage}
-                  </AlertDescription>
-                </Alert>
-              )}
-              <AlertDialogFooter>
-                <AlertDialogCancel onClick={closeGitRefDeleteModal}>
-                  Cancel
-                </AlertDialogCancel>
-                <AlertDialogAction
-                  variant="destructive"
-                  disabled={gitRefDeleteTarget.shouldBlockDelete}
-                  onClick={deleteSelectedGitRef}
-                >
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
+          {gitRefDeleteTarget === null ||
+          gitRefDeleteTarget.warningMessage === null ? undefined : (
+            <Alert className="git-action-warning" variant="destructive">
+              <AlertDescription>
+                {gitRefDeleteTarget.warningMessage}
+              </AlertDescription>
+            </Alert>
           )}
-        </AlertDialog>
-        <Dialog
-          open={branchMergeConfirmation !== null}
-          onOpenChange={(isOpen) => {
-            if (isOpen) {
-              return;
-            }
-
-            closeBranchMergeConfirmationModal();
-          }}
+        </ConfirmationDialog>
+        <ConfirmationDialog
+          isOpen={branchMergeConfirmation !== null}
+          closeConfirmationDialog={closeBranchMergeConfirmationModal}
+          title="Merge Branch"
+          description={
+            branchMergeConfirmation === null
+              ? ""
+              : `Merge ${branchMergeConfirmation.branch} into HEAD?`
+          }
+          confirmButtonText="Merge"
+          confirmButtonVariant="default"
+          isConfirmDisabled={false}
+          confirmButtonAction={confirmBranchMerge}
         >
-          {branchMergeConfirmation === null ? null : (
-            <DialogContent className="sm:max-w-sm">
-              <DialogHeader>
-                <DialogTitle>Merge Branch</DialogTitle>
-                <DialogDescription>
-                  Merge {branchMergeConfirmation.branch} into HEAD?
-                </DialogDescription>
-              </DialogHeader>
-              <div className="branch-merge-preview-message">
-                <span className="commit-thread-change-added">
-                  +{branchMergeConfirmation.preview.added}
-                </span>
-                <span className="commit-thread-change-removed">
-                  -{branchMergeConfirmation.preview.removed}
-                </span>
-                <span>
-                  with{" "}
-                  <strong
-                    className={
-                      branchMergeConfirmation.preview.conflictCount === 0
-                        ? "branch-merge-conflict-count branch-merge-conflict-count-empty"
-                        : "branch-merge-conflict-count"
-                    }
-                  >
-                    {branchMergeConfirmation.preview.conflictCount} conflicts
-                  </strong>
-                  .
-                </span>
-              </div>
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={closeBranchMergeConfirmationModal}
+          {branchMergeConfirmation === null ? undefined : (
+            <div className="branch-merge-preview-message">
+              <span className="commit-thread-change-added">
+                +{branchMergeConfirmation.preview.added}
+              </span>
+              <span className="commit-thread-change-removed">
+                -{branchMergeConfirmation.preview.removed}
+              </span>
+              <span>
+                with{" "}
+                <strong
+                  className={
+                    branchMergeConfirmation.preview.conflictCount === 0
+                      ? "branch-merge-conflict-count branch-merge-conflict-count-empty"
+                      : "branch-merge-conflict-count"
+                  }
                 >
-                  Cancel
-                </Button>
-                <Button type="button" onClick={confirmBranchMerge}>
-                  Merge
-                </Button>
-              </DialogFooter>
-            </DialogContent>
+                  {branchMergeConfirmation.preview.conflictCount} conflicts
+                </strong>
+                .
+              </span>
+            </div>
           )}
-        </Dialog>
-        <AlertDialog
-          open={branchPointerMove !== null}
-          onOpenChange={(isOpen) => {
-            if (isOpen) {
-              return;
-            }
-
-            closeBranchPointerMoveModal();
-          }}
+        </ConfirmationDialog>
+        <ConfirmationDialog
+          isOpen={branchPointerMove !== null}
+          closeConfirmationDialog={closeBranchPointerMoveModal}
+          title={branchPointerOperationText?.title ?? ""}
+          description={branchPointerOperationText?.message ?? ""}
+          confirmButtonText={branchPointerOperationText?.buttonText ?? ""}
+          confirmButtonVariant="default"
+          isConfirmDisabled={branchPointerOperationText?.shouldBlock === true}
+          confirmButtonAction={moveBranchPointer}
         >
-          {branchPointerMove === null ? null : (
-            <AlertDialogContent className="branch-pointer-move-modal sm:max-w-[560px]">
-              <AlertDialogHeader>
-                <AlertDialogTitle>
-                  {branchPointerOperationText?.title}
-                </AlertDialogTitle>
-                <AlertDialogDescription>
-                  {branchPointerOperationText?.message}
-                </AlertDialogDescription>
-              </AlertDialogHeader>
+          {branchPointerMove === null ? undefined : (
+            <>
               <ul className="branch-tag-change-list">
                 <li className="branch-pointer-change-row">
                   <strong>From</strong>
@@ -4202,9 +4297,9 @@ const CommitHistory = ({
                   </AlertDescription>
                 </Alert>
               ) : (
-                <AlertDialogDescription>
+                <DialogDescription>
                   {branchPointerOperationText?.description}
-                </AlertDialogDescription>
+                </DialogDescription>
               )}
               {branchPointerMove.warningMessage === null ? null : (
                 <Alert className="git-action-warning" variant="destructive">
@@ -4213,20 +4308,9 @@ const CommitHistory = ({
                   </AlertDescription>
                 </Alert>
               )}
-              <AlertDialogFooter>
-                <AlertDialogCancel onClick={closeBranchPointerMoveModal}>
-                  Cancel
-                </AlertDialogCancel>
-                <AlertDialogAction
-                  disabled={branchPointerOperationText?.shouldBlock}
-                  onClick={moveBranchPointer}
-                >
-                  {branchPointerOperationText?.buttonText}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
+            </>
           )}
-        </AlertDialog>
+        </ConfirmationDialog>
       </Card>
     </>
   );
@@ -4316,8 +4400,13 @@ const MoltTreeDesktopApp = () => {
   const [userGitUpdateCount, setUserGitUpdateCount] = useState(0);
   const [userGitUpdateDescription, setUserGitUpdateDescription] = useState("");
   const [initialLoadingImageUrl] = useState(() => {
-    return Math.random() < LOADING_LOGO_LOADER_PROBABILITY
-      ? logoLoaderImageUrl
+    const randomLoadingImageValue = Math.random();
+    const rareLoadingImageIndex = Math.floor(
+      randomLoadingImageValue / RARE_LOADING_IMAGE_PROBABILITY,
+    );
+
+    return rareLoadingImageIndex < RARE_LOADING_IMAGE_URLS.length
+      ? RARE_LOADING_IMAGE_URLS[rareLoadingImageIndex]
       : defaultAppIconUrl;
   });
   const userGitUpdateCountRef = useRef(0);
@@ -4389,10 +4478,10 @@ const MoltTreeDesktopApp = () => {
               continue;
             }
 
-            const message =
-              error instanceof Error
-                ? error.message
-                : "Failed to read dashboard data.";
+            const message = readCaughtUserFacingErrorMessage({
+              error,
+              fallbackMessage: "Failed to read dashboard data.",
+            });
             setDashboardErrorMessage(message);
           }
         } while (shouldRefreshDashboardAgainRef.current);
@@ -4417,10 +4506,10 @@ const MoltTreeDesktopApp = () => {
         return true;
       } catch (error) {
         finishUserGitUpdate();
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Failed to read dashboard data.";
+        const message = readCaughtUserFacingErrorMessage({
+          error,
+          fallbackMessage: "Failed to read dashboard data.",
+        });
         setDashboardErrorMessage(message);
         return false;
       } finally {
@@ -4468,9 +4557,15 @@ const MoltTreeDesktopApp = () => {
     });
   }, []);
   const showErrorMessage = useCallback((message: string) => {
+    const userFacingMessage = readUserFacingErrorMessage(message);
+
+    if (userFacingMessage !== message) {
+      console.error(message);
+    }
+
     toast.error("Error", {
-      description: message,
-      duration: Infinity,
+      description: userFacingMessage,
+      duration: ERROR_TOAST_DURATION_MS,
       position: TOAST_POSITION,
     });
   }, []);
@@ -4558,7 +4653,7 @@ const MoltTreeDesktopApp = () => {
 
     toast.error("Dashboard error", {
       description: dashboardErrorMessage,
-      duration: Infinity,
+      duration: ERROR_TOAST_DURATION_MS,
       position: TOAST_POSITION,
     });
   }, [dashboardErrorMessage]);
@@ -4840,26 +4935,18 @@ const MoltTreeDesktopApp = () => {
   return (
     <TooltipProvider>
       <main className="app-shell">
-        <AlertDialog
-          open={branchSyncConfirmation !== null}
-          onOpenChange={(isOpen) => {
-            if (isOpen) {
-              return;
-            }
-
-            closeBranchSyncModal();
-          }}
+        <ConfirmationDialog
+          isOpen={branchSyncConfirmation !== null}
+          closeConfirmationDialog={closeBranchSyncModal}
+          title={branchSyncActionText?.title ?? ""}
+          description={branchSyncActionText?.message ?? ""}
+          confirmButtonText={branchSyncActionText?.buttonText ?? ""}
+          confirmButtonVariant="default"
+          isConfirmDisabled={false}
+          confirmButtonAction={confirmBranchSyncChanges}
         >
-          {branchSyncConfirmation === null ? null : (
-            <AlertDialogContent className="branch-tag-change-modal sm:max-w-[520px]">
-              <AlertDialogHeader>
-                <AlertDialogTitle>
-                  {branchSyncActionText?.title}
-                </AlertDialogTitle>
-                <AlertDialogDescription>
-                  {branchSyncActionText?.message}
-                </AlertDialogDescription>
-              </AlertDialogHeader>
+          {branchSyncConfirmation === null ? undefined : (
+            <>
               <ul className="branch-tag-change-list">
                 {branchSyncChangesInConfirmation.map((branchSyncChange) => (
                   <li
@@ -4875,17 +4962,9 @@ const MoltTreeDesktopApp = () => {
                   </li>
                 ))}
               </ul>
-              <AlertDialogFooter>
-                <AlertDialogCancel onClick={closeBranchSyncModal}>
-                  Cancel
-                </AlertDialogCancel>
-                <AlertDialogAction onClick={confirmBranchSyncChanges}>
-                  {branchSyncActionText?.buttonText}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
+            </>
           )}
-        </AlertDialog>
+        </ConfirmationDialog>
         <Dialog open={isAboutModalOpen} onOpenChange={setIsAboutModalOpen}>
           <DialogContent aria-describedby={undefined} className="about-modal">
             <DialogHeader>

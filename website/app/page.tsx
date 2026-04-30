@@ -33,7 +33,7 @@ const featureItems = [
   {
     title: "Git power tools",
     descriptionLines: [
-      "Commit, branch, merge, push, and pull. No IDE needed. Access power tools like one-click merges without leaving the app or opening your IDE, and moving branch tags by simply dragging.",
+      "Commit, branch, merge, push, and pull. No IDE needed. Access power tools like one-click merges, and moving branch tags by simply dragging.",
     ],
   },
   {
