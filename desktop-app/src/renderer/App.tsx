@@ -104,6 +104,8 @@ const COMMIT_GRAPH_ROW_HEIGHT = 20;
 const COMMIT_GRAPH_LANE_WIDTH = 14;
 const COMMIT_GRAPH_PADDING_LEFT = 16;
 const COMMIT_GRAPH_MIN_WIDTH = 96;
+const COMMIT_GRAPH_INITIAL_EXTRA_WIDTH = 60;
+const COMMIT_GRAPH_MAX_INITIAL_WIDTH = 600;
 const COMMIT_GRAPH_DOT_RADIUS = 4;
 // TODO: AI-PICKED-VALUE: This slightly larger outer dot makes the HEAD commit distinct without adding another icon.
 const COMMIT_GRAPH_HEAD_DOT_RADIUS = 4.75;
@@ -339,7 +341,7 @@ const readRepoFolderName = (repo: RepoGraph) => {
 
 // TODO: AI-PICKED-VALUE: These column widths match the current table layout closely enough while making drag resizing concrete.
 const COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS = {
-  graph: 140,
+  graph: COMMIT_GRAPH_MIN_WIDTH,
   branchTags: 408,
   codeLocations: 160,
   actors: 480,
@@ -2298,6 +2300,7 @@ const CommitHistory = ({
   const [columnWidths, setColumnWidths] = useState<CommitHistoryColumnWidths>(
     COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS,
   );
+  const [didResizeGraphColumn, setDidResizeGraphColumn] = useState(false);
   const [shouldShowChatOnly, setShouldShowChatOnly] = useState(false);
   const branchPointerDragRef = useRef<BranchPointerDrag | null>(null);
   const [branchCreateTarget, setBranchCreateTarget] =
@@ -2811,9 +2814,19 @@ const CommitHistory = ({
   const graphMinimumWidth = readCommitGraphWidth({
     laneCount: visibleGraphWithHeadDot.laneCount,
   });
+  const graphInitialWidth = Math.max(
+    graphMinimumWidth,
+    Math.min(
+      graphMinimumWidth + COMMIT_GRAPH_INITIAL_EXTRA_WIDTH,
+      COMMIT_GRAPH_MAX_INITIAL_WIDTH,
+    ),
+  );
   const visibleColumnWidths: CommitHistoryColumnWidths = {
     ...columnWidths,
-    graph: Math.max(columnWidths.graph, graphMinimumWidth),
+    graph: Math.max(
+      columnWidths.graph,
+      didResizeGraphColumn ? graphMinimumWidth : graphInitialWidth,
+    ),
   };
   const graphWidth = visibleColumnWidths.graph;
   const gridTemplateColumns =
@@ -2922,6 +2935,7 @@ const CommitHistory = ({
         graph: nextGraphWidth,
       };
     });
+    setDidResizeGraphColumn(true);
   };
   const startBranchPointerDrag = ({
     event,
