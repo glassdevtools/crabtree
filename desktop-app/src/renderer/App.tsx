@@ -35,6 +35,7 @@ import type {
 } from "react";
 import type { ResizeCallbackData } from "react-resizable";
 import type {
+  AppUpdateStatus,
   CodexThread,
   DashboardData,
   GitBranchSyncChange,
@@ -259,6 +260,34 @@ const readBranchSyncChangeShaText = ({
     action === "push" ? branchSyncChange.localSha : branchSyncChange.originSha;
 
   return `${oldSha?.slice(0, 7) ?? "none"} -> ${newSha?.slice(0, 7) ?? "none"}`;
+};
+
+const readAppUpdateButtonText = (appUpdateStatus: AppUpdateStatus) => {
+  switch (appUpdateStatus.type) {
+    case "ready":
+      return "Update";
+    case "checking":
+      return "Checking...";
+    case "downloading":
+      return "Downloading...";
+    case "unavailable":
+    case "idle":
+    case "error":
+      return "Check for updates";
+  }
+};
+
+const readIsAppUpdateButtonDisabled = (appUpdateStatus: AppUpdateStatus) => {
+  switch (appUpdateStatus.type) {
+    case "unavailable":
+    case "checking":
+    case "downloading":
+      return true;
+    case "idle":
+    case "ready":
+    case "error":
+      return false;
+  }
 };
 
 const readGitWarningReasonText = (reasons: string[]) => {
@@ -4974,6 +5003,9 @@ const MoltTreeDesktopApp = () => {
   const [isPrivateMode, setIsPrivateMode] = useState(
     readIsAnalyticsPrivateMode,
   );
+  const [appUpdateStatus, setAppUpdateStatus] = useState<AppUpdateStatus>({
+    type: "unavailable",
+  });
   const [initialLoadingImageUrl] = useState(() => {
     const randomLoadingImageValue = Math.random();
     const rareLoadingImageIndex = Math.floor(
@@ -5148,6 +5180,27 @@ const MoltTreeDesktopApp = () => {
         };
       });
     });
+  }, []);
+  useEffect(() => {
+    let didCancel = false;
+    const stopWatchingAppUpdateStatus =
+      window.molttree.watchAppUpdateStatus(setAppUpdateStatus);
+
+    void window.molttree
+      .readAppUpdateStatus()
+      .then((nextAppUpdateStatus) => {
+        if (!didCancel) {
+          setAppUpdateStatus(nextAppUpdateStatus);
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to read app update status.", error);
+      });
+
+    return () => {
+      didCancel = true;
+      stopWatchingAppUpdateStatus();
+    };
   }, []);
   const showSuccessMessage = useCallback((message: string) => {
     toast.success(message, {
@@ -5444,6 +5497,39 @@ const MoltTreeDesktopApp = () => {
     setAnalyticsPrivateMode(nextIsPrivateMode);
     setIsPrivateMode(nextIsPrivateMode);
   };
+  const runAppUpdateAction = async () => {
+    try {
+      if (appUpdateStatus.type === "ready") {
+        await window.molttree.quitAndInstallAppUpdate();
+        return;
+      }
+
+      const nextAppUpdateStatus = await window.molttree.checkForAppUpdate();
+      setAppUpdateStatus(nextAppUpdateStatus);
+
+      switch (nextAppUpdateStatus.type) {
+        case "idle":
+          showSuccessMessage("MoltTree is up to date.");
+          return;
+        case "ready":
+          showSuccessMessage("Update ready.");
+          return;
+        case "error":
+          showErrorMessage(nextAppUpdateStatus.message);
+          return;
+        case "unavailable":
+        case "checking":
+        case "downloading":
+          return;
+      }
+    } catch (error) {
+      const message = readCaughtUserFacingErrorMessage({
+        error,
+        fallbackMessage: "Failed to update MoltTree.",
+      });
+      showErrorMessage(message);
+    }
+  };
   const selectedRepoBranchSyncChanges =
     selectedRepo === null
       ? []
@@ -5613,6 +5699,30 @@ const MoltTreeDesktopApp = () => {
             <DialogHeader>
               <DialogTitle>Settings</DialogTitle>
             </DialogHeader>
+            <dl className="settings-modal-fields">
+              <div className="settings-modal-field">
+                <dt>Version:</dt>
+                <dd>v{packageInfo.version}</dd>
+              </div>
+              <div className="settings-modal-field">
+                <dt>Updates:</dt>
+                <dd>
+                  <Button
+                    disabled={readIsAppUpdateButtonDisabled(appUpdateStatus)}
+                    onClick={() => {
+                      void runAppUpdateAction();
+                    }}
+                    size="sm"
+                    type="button"
+                    variant={
+                      appUpdateStatus.type === "ready" ? "default" : "outline"
+                    }
+                  >
+                    {readAppUpdateButtonText(appUpdateStatus)}
+                  </Button>
+                </dd>
+              </div>
+            </dl>
             <div className="settings-modal-fields">
               <div className="private-mode-setting">
                 <Checkbox
@@ -5623,17 +5733,13 @@ const MoltTreeDesktopApp = () => {
                 <div className="private-mode-setting-text">
                   <Label htmlFor="private-mode">Private mode</Label>
                   <p>
-                    Send completely anonymous metrics that help us improve the
-                    app?
+                    Disable completely anonymous metrics that help us improve
+                    the app?
                   </p>
                 </div>
               </div>
             </div>
             <dl className="settings-modal-fields">
-              <div className="settings-modal-field">
-                <dt>Version:</dt>
-                <dd>v{packageInfo.version}</dd>
-              </div>
               <div className="settings-modal-field">
                 <dt>GitHub:</dt>
                 <dd>

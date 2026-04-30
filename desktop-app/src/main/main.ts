@@ -1,6 +1,5 @@
 import { app, BrowserWindow, clipboard, ipcMain, shell } from "electron";
 import electronUpdater from "electron-updater";
-import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type {
@@ -21,6 +20,7 @@ import type {
 } from "../shared/types";
 import type { AppServerClient } from "./appServerClient";
 import { readOrCreateAnalyticsInstallId } from "./analyticsStore";
+import { createAppUpdateController } from "./appUpdates";
 import { createAppServerClient } from "./appServerClient";
 import { convertThreadStatus } from "./codexThreads";
 import {
@@ -57,24 +57,8 @@ const MAIN_WINDOW_MIN_HEIGHT = 640;
 let appServerClient: AppServerClient | null = null;
 let appServerClientPromise: Promise<AppServerClient> | null = null;
 let appServerClientVersion = 0;
-
-const startAutoUpdates = () => {
-  if (!app.isPackaged) {
-    return;
-  }
-
-  const appUpdateConfigPath = join(process.resourcesPath, "app-update.yml");
-  if (!existsSync(appUpdateConfigPath)) {
-    return;
-  }
-
-  // Packaged release builds get their update feed from Electron Builder's app-update.yml.
-  const { autoUpdater } = electronUpdater;
-  autoUpdater.on("error", (error) => {
-    console.error("Failed to update MoltTree.", error);
-  });
-  autoUpdater.checkForUpdatesAndNotify();
-};
+const { autoUpdater } = electronUpdater;
+const appUpdateController = createAppUpdateController({ app, autoUpdater });
 
 const readExternalUrl = (value: unknown) => {
   if (typeof value !== "string" || value.length === 0) {
@@ -616,6 +600,18 @@ ipcMain.handle("analytics:readInstallId", async () => {
   });
 });
 
+ipcMain.handle("appUpdate:readStatus", () => {
+  return appUpdateController.readStatus();
+});
+
+ipcMain.handle("appUpdate:check", async () => {
+  return await appUpdateController.checkForAppUpdate();
+});
+
+ipcMain.handle("appUpdate:quitAndInstall", () => {
+  appUpdateController.quitAndInstall();
+});
+
 ipcMain.handle("codex:openThread", async (_event, threadId: unknown) => {
   if (typeof threadId !== "string" || threadId.length === 0) {
     throw new Error("threadId must be a non-empty string.");
@@ -842,7 +838,7 @@ ipcMain.handle("git:createPullRequest", async (_event, value: unknown) => {
 
 app.whenReady().then(() => {
   createMainWindow();
-  startAutoUpdates();
+  appUpdateController.start();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -855,6 +851,7 @@ app.on("before-quit", () => {
   const currentAppServerClient = appServerClient;
   appServerClient = null;
   appServerClientPromise = null;
+  appUpdateController.stop();
 
   if (currentAppServerClient !== null) {
     currentAppServerClient.close();

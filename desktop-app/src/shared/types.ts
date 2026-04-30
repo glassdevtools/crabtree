@@ -175,10 +175,24 @@ export type DashboardData = {
   warnings: string[];
 };
 
+export type AppUpdateStatus =
+  | { type: "unavailable" }
+  | { type: "idle" }
+  | { type: "checking" }
+  | { type: "downloading"; version: string }
+  | { type: "ready"; version: string }
+  | { type: "error"; message: string };
+
 export type MoltTreeApi = {
   readDashboard: () => Promise<DashboardData>;
   readDashboardAfterGitMutation: () => Promise<DashboardData>;
   readAnalyticsInstallId: () => Promise<string>;
+  readAppUpdateStatus: () => Promise<AppUpdateStatus>;
+  watchAppUpdateStatus: (
+    onStatusChange: (appUpdateStatus: AppUpdateStatus) => void,
+  ) => () => void;
+  checkForAppUpdate: () => Promise<AppUpdateStatus>;
+  quitAndInstallAppUpdate: () => Promise<void>;
   watchCodexThreadStatus: (
     onStatusChange: (codexThreadStatusChange: CodexThreadStatusChange) => void,
   ) => () => void;

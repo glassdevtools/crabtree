@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { IpcRendererEvent } from "electron";
 import type {
+  AppUpdateStatus,
   CodexThreadStatusChange,
   DashboardData,
   GitBranchSyncChange,
@@ -34,6 +35,29 @@ const api: MoltTreeApi = {
   },
   readAnalyticsInstallId: async () => {
     return await ipcRenderer.invoke("analytics:readInstallId");
+  },
+  readAppUpdateStatus: async () => {
+    return await ipcRenderer.invoke("appUpdate:readStatus");
+  },
+  watchAppUpdateStatus: (onStatusChange) => {
+    const listener = (
+      _event: IpcRendererEvent,
+      appUpdateStatus: AppUpdateStatus,
+    ) => {
+      onStatusChange(appUpdateStatus);
+    };
+
+    ipcRenderer.on("appUpdate:statusChanged", listener);
+
+    return () => {
+      ipcRenderer.removeListener("appUpdate:statusChanged", listener);
+    };
+  },
+  checkForAppUpdate: async () => {
+    return await ipcRenderer.invoke("appUpdate:check");
+  },
+  quitAndInstallAppUpdate: async () => {
+    await ipcRenderer.invoke("appUpdate:quitAndInstall");
   },
   watchCodexThreadStatus: (onStatusChange) => {
     const listener = (
