@@ -115,6 +115,13 @@ export type GitBranchTagChange = {
   newSha: string | null;
 };
 
+export type GitBranchSyncChange = {
+  repoRoot: string;
+  branch: string;
+  localSha: string | null;
+  originSha: string | null;
+};
+
 export type GitMergeBranchResult = GitBranchTagChange;
 
 export type PathLauncher = "vscode" | "cursor" | "finder";
@@ -143,7 +150,7 @@ export type RepoGraph = {
   originUrl: string | null;
   currentBranch: string | null;
   defaultBranch: string | null;
-  branchTagChanges: GitBranchTagChange[];
+  branchSyncChanges: GitBranchSyncChange[];
   worktrees: GitWorktree[];
   commits: GitCommit[];
   threadIds: string[];
@@ -190,11 +197,11 @@ export type MoltTreeApi = {
   checkoutGitCommit: (
     gitCheckoutCommitRequest: GitCheckoutCommitRequest,
   ) => Promise<void>;
-  pushGitBranchTagChanges: (
-    gitBranchTagChanges: GitBranchTagChange[],
+  pushGitBranchSyncChanges: (
+    gitBranchSyncChanges: GitBranchSyncChange[],
   ) => Promise<void>;
-  resetGitBranchTagChanges: (
-    gitBranchTagChanges: GitBranchTagChange[],
+  revertGitBranchSyncChanges: (
+    gitBranchSyncChanges: GitBranchSyncChange[],
   ) => Promise<void>;
   previewGitMerge: (
     gitMergeBranchRequest: GitMergeBranchRequest,

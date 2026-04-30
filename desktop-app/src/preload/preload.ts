@@ -3,7 +3,7 @@ import type { IpcRendererEvent } from "electron";
 import type {
   CodexThreadStatusChange,
   DashboardData,
-  GitBranchTagChange,
+  GitBranchSyncChange,
   GitCheckoutCommitRequest,
   GitCommitChangesRequest,
   GitCreateBranchRequest,
@@ -95,15 +95,18 @@ const api: MoltTreeApi = {
   ) => {
     await ipcRenderer.invoke("git:checkoutCommit", gitCheckoutCommitRequest);
   },
-  pushGitBranchTagChanges: async (
-    gitBranchTagChanges: GitBranchTagChange[],
+  pushGitBranchSyncChanges: async (
+    gitBranchSyncChanges: GitBranchSyncChange[],
   ) => {
-    await ipcRenderer.invoke("git:pushBranchTagChanges", gitBranchTagChanges);
+    await ipcRenderer.invoke("git:pushBranchSyncChanges", gitBranchSyncChanges);
   },
-  resetGitBranchTagChanges: async (
-    gitBranchTagChanges: GitBranchTagChange[],
+  revertGitBranchSyncChanges: async (
+    gitBranchSyncChanges: GitBranchSyncChange[],
   ) => {
-    await ipcRenderer.invoke("git:resetBranchTagChanges", gitBranchTagChanges);
+    await ipcRenderer.invoke(
+      "git:revertBranchSyncChanges",
+      gitBranchSyncChanges,
+    );
   },
   previewGitMerge: async (gitMergeBranchRequest: GitMergeBranchRequest) => {
     return await ipcRenderer.invoke("git:previewMerge", gitMergeBranchRequest);

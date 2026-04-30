@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type {
   CodexThreadStatusChange,
-  GitBranchTagChange,
+  GitBranchSyncChange,
   GitCheckoutCommitRequest,
   GitCommitChangesRequest,
   GitCreateBranchRequest,
@@ -32,8 +32,8 @@ import {
   mergeGitBranch,
   moveGitBranch,
   previewGitMerge,
-  pushGitBranchTagChanges,
-  resetGitBranchTagChanges,
+  pushGitBranchSyncChanges,
+  revertGitBranchSyncChanges,
   stageGitChanges,
   switchGitBranch,
   unstageGitChanges,
@@ -506,16 +506,16 @@ const readOpenPathRequest = (value: unknown) => {
   return openPathRequest;
 };
 
-const readGitBranchTagChanges = (value: unknown) => {
+const readGitBranchSyncChanges = (value: unknown) => {
   if (!Array.isArray(value)) {
-    throw new Error("gitBranchTagChanges must be an array.");
+    throw new Error("gitBranchSyncChanges must be an array.");
   }
 
-  const gitBranchTagChanges: GitBranchTagChange[] = [];
+  const gitBranchSyncChanges: GitBranchSyncChange[] = [];
 
   for (const changeValue of value) {
     if (!isObject(changeValue)) {
-      throw new Error("Each branch tag change must be an object.");
+      throw new Error("Each branch sync change must be an object.");
     }
 
     if (
@@ -523,26 +523,28 @@ const readGitBranchTagChanges = (value: unknown) => {
       changeValue.repoRoot.length === 0 ||
       typeof changeValue.branch !== "string" ||
       changeValue.branch.length === 0 ||
-      typeof changeValue.oldSha !== "string" ||
-      changeValue.oldSha.length === 0 ||
-      (changeValue.newSha !== null &&
-        (typeof changeValue.newSha !== "string" ||
-          changeValue.newSha.length === 0))
+      (changeValue.localSha !== null &&
+        (typeof changeValue.localSha !== "string" ||
+          changeValue.localSha.length === 0)) ||
+      (changeValue.originSha !== null &&
+        (typeof changeValue.originSha !== "string" ||
+          changeValue.originSha.length === 0)) ||
+      (changeValue.localSha === null && changeValue.originSha === null)
     ) {
       throw new Error(
-        "Branch tag changes need a repo root, branch, old sha, and new sha.",
+        "Branch sync changes need a repo root, branch, local sha, and origin sha.",
       );
     }
 
-    gitBranchTagChanges.push({
+    gitBranchSyncChanges.push({
       repoRoot: changeValue.repoRoot,
       branch: changeValue.branch,
-      oldSha: changeValue.oldSha,
-      newSha: changeValue.newSha,
+      localSha: changeValue.localSha,
+      originSha: changeValue.originSha,
     });
   }
 
-  return gitBranchTagChanges;
+  return gitBranchSyncChanges;
 };
 
 ipcMain.handle("dashboard:read", async () => {
@@ -662,17 +664,20 @@ ipcMain.handle("git:checkoutCommit", async (_event, value: unknown) => {
   await checkoutGitCommit(gitCheckoutCommitRequest);
 });
 
-ipcMain.handle("git:pushBranchTagChanges", async (_event, value: unknown) => {
-  const gitBranchTagChanges = readGitBranchTagChanges(value);
+ipcMain.handle("git:pushBranchSyncChanges", async (_event, value: unknown) => {
+  const gitBranchSyncChanges = readGitBranchSyncChanges(value);
 
-  await pushGitBranchTagChanges(gitBranchTagChanges);
+  await pushGitBranchSyncChanges(gitBranchSyncChanges);
 });
 
-ipcMain.handle("git:resetBranchTagChanges", async (_event, value: unknown) => {
-  const gitBranchTagChanges = readGitBranchTagChanges(value);
+ipcMain.handle(
+  "git:revertBranchSyncChanges",
+  async (_event, value: unknown) => {
+    const gitBranchSyncChanges = readGitBranchSyncChanges(value);
 
-  await resetGitBranchTagChanges(gitBranchTagChanges);
-});
+    await revertGitBranchSyncChanges(gitBranchSyncChanges);
+  },
+);
 
 ipcMain.handle("git:previewMerge", async (_event, value: unknown) => {
   const gitMergeBranchRequest = readGitMergeBranchRequest(value);

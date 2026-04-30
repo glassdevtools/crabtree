@@ -1,5 +1,4 @@
 import {
-  CircleArrowDown,
   CircleArrowLeft,
   CircleArrowUp,
   Info,
@@ -36,7 +35,7 @@ import type { ResizeCallbackData } from "react-resizable";
 import type {
   CodexThread,
   DashboardData,
-  GitBranchTagChange,
+  GitBranchSyncChange,
   GitChangeSummary,
   GitCommit,
   GitMergePreview,
@@ -158,120 +157,60 @@ const readCreatedBranchName = (branchName: string) => {
   return branchName.trim().replace(/[^A-Za-z0-9._/-]+/g, "-");
 };
 
-const readBranchTagChangesForRepo = ({
-  branchTagChanges,
-  repoBranchTagChanges,
-  repoRoot,
-}: {
-  branchTagChanges: GitBranchTagChange[];
-  repoBranchTagChanges: GitBranchTagChange[];
-  repoRoot: string;
-}) => {
-  const branchTagChangeOfBranch: { [branch: string]: GitBranchTagChange } = {};
-
-  for (const repoBranchTagChange of repoBranchTagChanges) {
-    branchTagChangeOfBranch[repoBranchTagChange.branch] = repoBranchTagChange;
-  }
-
-  for (const branchTagChange of branchTagChanges) {
-    if (branchTagChange.repoRoot !== repoRoot) {
-      continue;
-    }
-
-    const repoBranchTagChange = branchTagChangeOfBranch[branchTagChange.branch];
-    const oldSha = repoBranchTagChange?.oldSha ?? branchTagChange.oldSha;
-
-    if (oldSha === branchTagChange.newSha) {
-      delete branchTagChangeOfBranch[branchTagChange.branch];
-      continue;
-    }
-
-    branchTagChangeOfBranch[branchTagChange.branch] = {
-      ...branchTagChange,
-      oldSha,
-    };
-  }
-
-  return Object.values(branchTagChangeOfBranch);
-};
-
-const syncBranchTagChangesWithDashboardData = ({
-  branchTagChanges,
-  dashboardData,
-}: {
-  branchTagChanges: GitBranchTagChange[];
-  dashboardData: DashboardData;
-}) => {
-  const branchTagChangeOfBranchOfRepo: {
-    [repoRoot: string]: { [branch: string]: GitBranchTagChange };
-  } = {};
-  const nextBranchTagChanges: GitBranchTagChange[] = [];
-
-  // Dashboard branch changes are the source of truth; this state only keeps user actions alive while a Git refresh is still catching up.
-  for (const repo of dashboardData.repos) {
-    const branchTagChangeOfBranch: {
-      [branch: string]: GitBranchTagChange;
-    } = {};
-    branchTagChangeOfBranchOfRepo[repo.root] = branchTagChangeOfBranch;
-
-    for (const branchTagChange of repo.branchTagChanges) {
-      branchTagChangeOfBranch[branchTagChange.branch] = branchTagChange;
-    }
-  }
-
-  for (const branchTagChange of branchTagChanges) {
-    const branchTagChangeOfBranch =
-      branchTagChangeOfBranchOfRepo[branchTagChange.repoRoot];
-
-    if (branchTagChangeOfBranch === undefined) {
-      continue;
-    }
-
-    const repoBranchTagChange = branchTagChangeOfBranch[branchTagChange.branch];
-
-    if (repoBranchTagChange === undefined) {
-      continue;
-    }
-
-    if (repoBranchTagChange.newSha === branchTagChange.oldSha) {
-      nextBranchTagChanges.push(branchTagChange);
-    }
-  }
-
-  return nextBranchTagChanges;
-};
-
-const readBranchTagChangeActionText = (
-  action: BranchTagChangeAction,
-): BranchTagChangeActionText => {
+const readBranchSyncActionText = (
+  action: BranchSyncAction,
+): BranchSyncActionText => {
   switch (action) {
     case "push":
       return {
-        title: "Push Branch Tag Changes",
-        message:
-          "Are you sure you want to push branch tag changes for this repo?",
+        title: "Push Branches",
+        message: "Are you sure you want to push local branches to origin?",
         buttonText: "Push",
-        loadingDescription: "Pushing branch tags",
-        successMessage: "Branch tag changes pushed.",
+        loadingDescription: "Pushing branches",
+        successMessage: "Branches pushed.",
       };
-    case "pull":
+    case "revert":
       return {
-        title: "Pull Branch Tag Changes",
-        message:
-          "Are you sure you want to pull branch tag changes from origin for this repo?",
-        buttonText: "Pull",
-        loadingDescription: "Pulling branch tags",
-        successMessage: "Branch tag changes pulled.",
-      };
-    case "reset":
-      return {
-        title: "Revert Branch Tag Changes",
-        message:
-          "Are you sure you want to revert branch tag changes for this repo to match origin?",
+        title: "Revert Branches",
+        message: "Are you sure you want local branches to match origin?",
         buttonText: "Revert",
-        loadingDescription: "Reverting branch tags",
-        successMessage: "Branch tag changes reverted.",
+        loadingDescription: "Reverting branches",
+        successMessage: "Branches reverted.",
       };
+  }
+};
+
+const readBranchSyncChangeShaText = ({
+  action,
+  branchSyncChange,
+}: {
+  action: BranchSyncAction;
+  branchSyncChange: GitBranchSyncChange;
+}) => {
+  const oldSha =
+    action === "push" ? branchSyncChange.originSha : branchSyncChange.localSha;
+  const newSha =
+    action === "push" ? branchSyncChange.localSha : branchSyncChange.originSha;
+
+  return `${oldSha?.slice(0, 7) ?? "none"} -> ${newSha?.slice(0, 7) ?? "none"}`;
+};
+
+const readActionableBranchSyncChanges = ({
+  action,
+  branchSyncChanges,
+}: {
+  action: BranchSyncAction;
+  branchSyncChanges: GitBranchSyncChange[];
+}) => {
+  switch (action) {
+    case "push":
+      return branchSyncChanges.filter(
+        (branchSyncChange) => branchSyncChange.localSha !== null,
+      );
+    case "revert":
+      return branchSyncChanges.filter(
+        (branchSyncChange) => branchSyncChange.originSha !== null,
+      );
   }
 };
 
@@ -513,9 +452,9 @@ type BranchMergeConfirmation = {
   preview: GitMergePreview;
 };
 
-type BranchTagChangeAction = "push" | "pull" | "reset";
+type BranchSyncAction = "push" | "revert";
 
-type BranchTagChangeActionText = {
+type BranchSyncActionText = {
   title: string;
   message: string;
   buttonText: string;
@@ -523,8 +462,8 @@ type BranchTagChangeActionText = {
   successMessage: string;
 };
 
-type BranchTagChangeConfirmation = {
-  action: BranchTagChangeAction;
+type BranchSyncConfirmation = {
+  action: BranchSyncAction;
   repoRoot: string;
 };
 
@@ -2330,7 +2269,6 @@ const CommitHistory = ({
   runUserGitUpdate,
   showSuccessMessage,
   showErrorMessage,
-  rememberBranchTagChange,
 }: {
   commits: GitCommit[];
   worktrees: GitWorktree[];
@@ -2351,7 +2289,6 @@ const CommitHistory = ({
   ) => Promise<void>;
   showSuccessMessage: (message: string) => void;
   showErrorMessage: (message: string) => void;
-  rememberBranchTagChange: (branchTagChange: GitBranchTagChange) => void;
 }) => {
   const commitHistoryRef = useRef<HTMLDivElement | null>(null);
   const commitHistoryHeaderScrollRef = useRef<HTMLDivElement | null>(null);
@@ -3225,12 +3162,6 @@ const CommitHistory = ({
                 oldSha: request.branchTarget.oldSha,
                 newSha,
               });
-              rememberBranchTagChange({
-                repoRoot,
-                branch: request.branchTarget.branch,
-                oldSha: request.branchTarget.oldSha,
-                newSha,
-              });
             } catch {
               // The commit already succeeded, so a stale branch tag should not turn it into an error.
             }
@@ -3266,12 +3197,6 @@ const CommitHistory = ({
                 repoRoot,
                 branch: deleteTarget.name,
                 oldSha: deleteTarget.oldSha,
-              });
-              rememberBranchTagChange({
-                repoRoot,
-                branch: deleteTarget.name,
-                oldSha: deleteTarget.oldSha,
-                newSha: null,
               });
               break;
             case "tag":
@@ -3337,11 +3262,10 @@ const CommitHistory = ({
       "Merged branch.",
       async () => {
         try {
-          const branchTagChange = await window.molttree.mergeGitBranch({
+          await window.molttree.mergeGitBranch({
             repoRoot,
             branch: request.branch,
           });
-          rememberBranchTagChange(branchTagChange);
         } catch (error) {
           return error instanceof Error
             ? error.message
@@ -3388,15 +3312,6 @@ const CommitHistory = ({
             await window.molttree.switchGitBranch({
               repoRoot: request.repoRoot,
               path: request.targetPath,
-              branch: request.branch,
-              oldSha: request.oldSha,
-              newSha: request.newSha,
-            });
-          }
-
-          if (request.oldSha !== request.newSha) {
-            rememberBranchTagChange({
-              repoRoot: request.repoRoot,
               branch: request.branch,
               oldSha: request.oldSha,
               newSha: request.newSha,
@@ -3950,7 +3865,6 @@ const RepoSection = ({
   runUserGitUpdate,
   showSuccessMessage,
   showErrorMessage,
-  rememberBranchTagChange,
 }: {
   repo: RepoGraph;
   threadOfId: { [id: string]: CodexThread };
@@ -3967,7 +3881,6 @@ const RepoSection = ({
   ) => Promise<void>;
   showSuccessMessage: (message: string) => void;
   showErrorMessage: (message: string) => void;
-  rememberBranchTagChange: (branchTagChange: GitBranchTagChange) => void;
 }) => {
   return (
     <section className="repo-section">
@@ -3991,7 +3904,6 @@ const RepoSection = ({
           runUserGitUpdate={runUserGitUpdate}
           showSuccessMessage={showSuccessMessage}
           showErrorMessage={showErrorMessage}
-          rememberBranchTagChange={rememberBranchTagChange}
         />
       </div>
     </section>
@@ -4020,11 +3932,8 @@ const MoltTreeDesktopApp = () => {
   const [dashboardErrorMessage, setDashboardErrorMessage] = useState<
     string | null
   >(null);
-  const [branchTagChanges, setBranchTagChanges] = useState<
-    GitBranchTagChange[]
-  >([]);
-  const [branchTagChangeConfirmation, setBranchTagChangeConfirmation] =
-    useState<BranchTagChangeConfirmation | null>(null);
+  const [branchSyncConfirmation, setBranchSyncConfirmation] =
+    useState<BranchSyncConfirmation | null>(null);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [userGitUpdateCount, setUserGitUpdateCount] = useState(0);
   const [userGitUpdateDescription, setUserGitUpdateDescription] = useState("");
@@ -4060,12 +3969,6 @@ const MoltTreeDesktopApp = () => {
 
   const applyDashboardData = useCallback((nextDashboardData: DashboardData) => {
     setDashboardData(nextDashboardData);
-    setBranchTagChanges((currentBranchTagChanges) =>
-      syncBranchTagChangesWithDashboardData({
-        branchTagChanges: currentBranchTagChanges,
-        dashboardData: nextDashboardData,
-      }),
-    );
 
     if (nextDashboardData.gitErrors.length > 0) {
       setDashboardErrorMessage(nextDashboardData.gitErrors.join("\n"));
@@ -4222,44 +4125,6 @@ const MoltTreeDesktopApp = () => {
     },
     [],
   );
-  const rememberBranchTagChange = useCallback(
-    (nextBranchTagChange: GitBranchTagChange) => {
-      setBranchTagChanges((currentBranchTagChanges) => {
-        const nextBranchTagChanges: GitBranchTagChange[] = [];
-        let didReplaceBranchTagChange = false;
-
-        for (const branchTagChange of currentBranchTagChanges) {
-          if (
-            branchTagChange.repoRoot !== nextBranchTagChange.repoRoot ||
-            branchTagChange.branch !== nextBranchTagChange.branch
-          ) {
-            nextBranchTagChanges.push(branchTagChange);
-            continue;
-          }
-
-          didReplaceBranchTagChange = true;
-
-          if (branchTagChange.oldSha !== nextBranchTagChange.newSha) {
-            nextBranchTagChanges.push({
-              ...nextBranchTagChange,
-              oldSha: branchTagChange.oldSha,
-            });
-          }
-        }
-
-        if (
-          !didReplaceBranchTagChange &&
-          nextBranchTagChange.oldSha !== nextBranchTagChange.newSha
-        ) {
-          nextBranchTagChanges.push(nextBranchTagChange);
-        }
-
-        return nextBranchTagChanges;
-      });
-    },
-    [],
-  );
-
   useEffect(() => {
     void refreshDashboard();
 
@@ -4331,55 +4196,52 @@ const MoltTreeDesktopApp = () => {
     });
   }, [userGitUpdateCount, userGitUpdateDescription]);
 
-  const readVisibleBranchTagChangesForRepo = (repoRoot: string) => {
+  const readVisibleBranchSyncChangesForRepo = (repoRoot: string) => {
     const repo =
       dashboardData === null
         ? undefined
         : dashboardData.repos.find(
             (dashboardRepo) => dashboardRepo.root === repoRoot,
           );
-    const repoBranchTagChanges =
-      repo === undefined ? [] : repo.branchTagChanges;
 
-    return readBranchTagChangesForRepo({
-      branchTagChanges,
-      repoBranchTagChanges,
-      repoRoot,
+    return repo === undefined ? [] : repo.branchSyncChanges;
+  };
+  const openBranchSyncModal = (action: BranchSyncAction, repoRoot: string) => {
+    const repoBranchSyncChanges = readActionableBranchSyncChanges({
+      action,
+      branchSyncChanges: readVisibleBranchSyncChangesForRepo(repoRoot),
     });
-  };
-  const openBranchTagChangeModal = (
-    action: BranchTagChangeAction,
-    repoRoot: string,
-  ) => {
-    const repoBranchTagChanges = readVisibleBranchTagChangesForRepo(repoRoot);
 
-    if (repoBranchTagChanges.length === 0) {
+    if (repoBranchSyncChanges.length === 0) {
       return;
     }
 
-    setBranchTagChangeConfirmation({ action, repoRoot });
+    setBranchSyncConfirmation({ action, repoRoot });
   };
-  const closeBranchTagChangeModal = () => {
-    setBranchTagChangeConfirmation(null);
+  const closeBranchSyncModal = () => {
+    setBranchSyncConfirmation(null);
   };
-  const confirmBranchTagChanges = async () => {
-    if (branchTagChangeConfirmation === null) {
+  const confirmBranchSyncChanges = async () => {
+    if (branchSyncConfirmation === null) {
       return;
     }
 
-    const { action, repoRoot } = branchTagChangeConfirmation;
-    const branchTagChangeActionText = readBranchTagChangeActionText(action);
-    const changes = readVisibleBranchTagChangesForRepo(repoRoot);
+    const { action, repoRoot } = branchSyncConfirmation;
+    const branchSyncActionText = readBranchSyncActionText(action);
+    const changes = readActionableBranchSyncChanges({
+      action,
+      branchSyncChanges: readVisibleBranchSyncChangesForRepo(repoRoot),
+    });
 
     if (changes.length === 0) {
-      closeBranchTagChangeModal();
+      closeBranchSyncModal();
       return;
     }
 
-    closeBranchTagChangeModal();
+    closeBranchSyncModal();
 
     await runUserGitUpdate(
-      branchTagChangeActionText.loadingDescription,
+      branchSyncActionText.loadingDescription,
       async (finishUserGitUpdate) => {
         let gitSuccessMessage: string | null = null;
         let gitErrorMessage: string | null = null;
@@ -4387,27 +4249,19 @@ const MoltTreeDesktopApp = () => {
         try {
           switch (action) {
             case "push":
-              await window.molttree.pushGitBranchTagChanges(changes);
+              await window.molttree.pushGitBranchSyncChanges(changes);
               break;
-            case "pull":
-              await window.molttree.resetGitBranchTagChanges(changes);
-              break;
-            case "reset":
-              await window.molttree.resetGitBranchTagChanges(changes);
+            case "revert":
+              await window.molttree.revertGitBranchSyncChanges(changes);
               break;
           }
 
-          setBranchTagChanges((currentBranchTagChanges) =>
-            currentBranchTagChanges.filter(
-              (branchTagChange) => branchTagChange.repoRoot !== repoRoot,
-            ),
-          );
-          gitSuccessMessage = branchTagChangeActionText.successMessage;
+          gitSuccessMessage = branchSyncActionText.successMessage;
         } catch (error) {
           gitErrorMessage =
             error instanceof Error
               ? error.message
-              : "Failed to apply branch tag changes.";
+              : "Failed to apply branch sync changes.";
         }
 
         const didRefreshDashboard =
@@ -4424,16 +4278,19 @@ const MoltTreeDesktopApp = () => {
       },
     );
   };
-  const branchTagChangesInConfirmation =
-    branchTagChangeConfirmation === null
+  const branchSyncChangesInConfirmation =
+    branchSyncConfirmation === null
       ? []
-      : readVisibleBranchTagChangesForRepo(
-          branchTagChangeConfirmation.repoRoot,
-        );
-  const branchTagChangeActionText =
-    branchTagChangeConfirmation === null
+      : readActionableBranchSyncChanges({
+          action: branchSyncConfirmation.action,
+          branchSyncChanges: readVisibleBranchSyncChangesForRepo(
+            branchSyncConfirmation.repoRoot,
+          ),
+        });
+  const branchSyncActionText =
+    branchSyncConfirmation === null
       ? null
-      : readBranchTagChangeActionText(branchTagChangeConfirmation.action);
+      : readBranchSyncActionText(branchSyncConfirmation.action);
 
   if (dashboardData === null) {
     return (
@@ -4486,10 +4343,21 @@ const MoltTreeDesktopApp = () => {
       setPathLauncher(nextPathLauncher);
     }
   };
-  const selectedRepoBranchTagChanges =
+  const selectedRepoBranchSyncChanges =
     selectedRepo === null
       ? []
-      : readVisibleBranchTagChangesForRepo(selectedRepo.root);
+      : readVisibleBranchSyncChangesForRepo(selectedRepo.root);
+  const selectedRepoPushableBranchSyncChanges = readActionableBranchSyncChanges(
+    {
+      action: "push",
+      branchSyncChanges: selectedRepoBranchSyncChanges,
+    },
+  );
+  const selectedRepoRevertableBranchSyncChanges =
+    readActionableBranchSyncChanges({
+      action: "revert",
+      branchSyncChanges: selectedRepoBranchSyncChanges,
+    });
   const repoHeaderControls = (
     <>
       {dashboardData.repos.length === 0 ? null : (
@@ -4546,10 +4414,8 @@ const MoltTreeDesktopApp = () => {
                 className="repo-action-control"
                 type="button"
                 aria-label="Revert branches"
-                onClick={() =>
-                  openBranchTagChangeModal("reset", selectedRepo.root)
-                }
-                disabled={selectedRepoBranchTagChanges.length === 0}
+                onClick={() => openBranchSyncModal("revert", selectedRepo.root)}
+                disabled={selectedRepoRevertableBranchSyncChanges.length === 0}
               >
                 <CircleArrowLeft
                   aria-hidden="true"
@@ -4561,27 +4427,9 @@ const MoltTreeDesktopApp = () => {
               <button
                 className="repo-action-control"
                 type="button"
-                aria-label="Pull branches"
-                onClick={() =>
-                  openBranchTagChangeModal("pull", selectedRepo.root)
-                }
-                disabled={selectedRepoBranchTagChanges.length === 0}
-              >
-                <CircleArrowDown
-                  aria-hidden="true"
-                  size={18}
-                  strokeWidth={1.75}
-                />
-                <span>Pull</span>
-              </button>
-              <button
-                className="repo-action-control"
-                type="button"
                 aria-label="Push branches"
-                onClick={() =>
-                  openBranchTagChangeModal("push", selectedRepo.root)
-                }
-                disabled={selectedRepoBranchTagChanges.length === 0}
+                onClick={() => openBranchSyncModal("push", selectedRepo.root)}
+                disabled={selectedRepoPushableBranchSyncChanges.length === 0}
               >
                 <CircleArrowUp
                   aria-hidden="true"
@@ -4610,45 +4458,46 @@ const MoltTreeDesktopApp = () => {
     <TooltipProvider>
       <main className="app-shell">
         <AlertDialog
-          open={branchTagChangeConfirmation !== null}
+          open={branchSyncConfirmation !== null}
           onOpenChange={(isOpen) => {
             if (isOpen) {
               return;
             }
 
-            closeBranchTagChangeModal();
+            closeBranchSyncModal();
           }}
         >
-          {branchTagChangeConfirmation === null ? null : (
+          {branchSyncConfirmation === null ? null : (
             <AlertDialogContent className="branch-tag-change-modal sm:max-w-[520px]">
               <AlertDialogHeader>
                 <AlertDialogTitle>
-                  {branchTagChangeActionText?.title}
+                  {branchSyncActionText?.title}
                 </AlertDialogTitle>
                 <AlertDialogDescription>
-                  {branchTagChangeActionText?.message}
+                  {branchSyncActionText?.message}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <ul className="branch-tag-change-list">
-                {branchTagChangesInConfirmation.map((branchTagChange) => (
+                {branchSyncChangesInConfirmation.map((branchSyncChange) => (
                   <li
-                    key={`${branchTagChange.repoRoot}:${branchTagChange.branch}`}
+                    key={`${branchSyncChange.repoRoot}:${branchSyncChange.branch}`}
                   >
-                    <strong>{branchTagChange.branch}</strong>
+                    <strong>{branchSyncChange.branch}</strong>
                     <code>
-                      {branchTagChange.newSha === null
-                        ? `${branchTagChange.oldSha.slice(0, 7)} -> deleted`
-                        : `${branchTagChange.oldSha.slice(0, 7)} -> ${branchTagChange.newSha.slice(0, 7)}`}
+                      {readBranchSyncChangeShaText({
+                        action: branchSyncConfirmation.action,
+                        branchSyncChange,
+                      })}
                     </code>
                   </li>
                 ))}
               </ul>
               <AlertDialogFooter>
-                <AlertDialogCancel onClick={closeBranchTagChangeModal}>
+                <AlertDialogCancel onClick={closeBranchSyncModal}>
                   Cancel
                 </AlertDialogCancel>
-                <AlertDialogAction onClick={confirmBranchTagChanges}>
-                  {branchTagChangeActionText?.buttonText}
+                <AlertDialogAction onClick={confirmBranchSyncChanges}>
+                  {branchSyncActionText?.buttonText}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -4712,7 +4561,6 @@ const MoltTreeDesktopApp = () => {
                 runUserGitUpdate={runUserGitUpdate}
                 showSuccessMessage={showSuccessMessage}
                 showErrorMessage={showErrorMessage}
-                rememberBranchTagChange={rememberBranchTagChange}
               />
             )}
             {dashboardData.repos.length === 0 && !isLoading && (
