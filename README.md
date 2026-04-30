@@ -15,7 +15,7 @@
 
 It's easy to spin up 100 worktrees in Codex, but merging them back together is hard. MoltTree was built to fix that.
 
-[MoltTree](https://molttree.app) is a desktop app that lets you view your Codex chats, worktrees, and branches in one place. It organizes and visualizes everything (including worktrees!) so you can get a full overview. It also lets you do nice git things without opening your IDE or Codex. 
+[MoltTree](https://molttree.app) is a desktop app that lets you view your Codex chats, worktrees, and branches in one place. It organizes and visualizes everything (including worktrees!) so you can get a full overview of your chats and branches. It also lets you do nice Git things without opening your IDE or Codex. 
 
 
 
@@ -28,7 +28,7 @@ Feel free to submit an [Issue](https://github.com/glassdevtools/molttree/issues)
 ## Download
 
 
-You can download MoltTree on our [Website](https://molttree.app)!
+Download MoltTree on our [Website](https://molttree.app).
 
 <div align="center">
 	<img
