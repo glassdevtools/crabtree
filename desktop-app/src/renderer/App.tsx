@@ -5743,11 +5743,11 @@ const MoltTreeDesktopApp = () => {
             </DialogHeader>
             <dl className="settings-modal-fields">
               <div className="settings-modal-field">
-                <dt>Version:</dt>
+                <dt>Version</dt>
                 <dd>v{packageInfo.version}</dd>
               </div>
               <div className="settings-modal-field">
-                <dt>Updates:</dt>
+                <dt>Updates</dt>
                 <dd>
                   <Button
                     disabled={readIsAppUpdateButtonDisabled(appUpdateStatus)}
@@ -5783,7 +5783,7 @@ const MoltTreeDesktopApp = () => {
             </div>
             <dl className="settings-modal-fields">
               <div className="settings-modal-field">
-                <dt>GitHub:</dt>
+                <dt>GitHub</dt>
                 <dd>
                   <a
                     className="settings-modal-link"

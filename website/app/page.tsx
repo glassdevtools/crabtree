@@ -46,6 +46,10 @@ const featureItems = [
 ];
 const questionItems = [
   <>
+    Which <span className="featureToken featureTokenChat">chats</span> were
+    merged yet?
+  </>,
+  <>
     Where are all my{" "}
     <span className="featureToken featureTokenWorktree">worktrees</span>?
   </>,
@@ -60,10 +64,6 @@ const questionItems = [
   <>
     Which <span className="featureToken featureTokenWorktree">worktrees</span>{" "}
     have changes?
-  </>,
-  <>
-    Which <span className="featureToken featureTokenChat">chats</span> were
-    merged yet?
   </>,
   "And more...",
 ];
