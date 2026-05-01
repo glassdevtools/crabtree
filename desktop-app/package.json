@@ -1,6 +1,6 @@
 {
   "name": "molttree",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "private": true,
   "description": "Easily merge your Codex worktrees.",
   "author": "Glass Devtools, Inc.",
