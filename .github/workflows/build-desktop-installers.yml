@@ -7,7 +7,7 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   read-package-release-status:
@@ -133,44 +133,8 @@ jobs:
           echo "Use either APPLE_API_KEY + APPLE_API_ISSUER + APPLE_API_KEY_P8_BASE64, or APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD + APPLE_TEAM_ID." >&2
           exit 1
 
-      - name: Create release tag
-        if: needs.read-package-release-status.outputs.should_create_tag == 'true'
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag "$RELEASE_TAG" "$GITHUB_SHA"
-          git push origin "refs/tags/${RELEASE_TAG}"
-        env:
-          RELEASE_TAG: ${{ needs.read-package-release-status.outputs.tag }}
-
-      - name: Build and publish signed release
-        run: npm run dist:mac --workspace desktop-app -- --publish always
-        env:
-          GH_TOKEN: ${{ github.token }}
-
-      - name: Publish static download aliases
-        shell: bash
-        run: |
-          shopt -s nullglob
-
-          static_assets=()
-          for dmg_path in desktop-app/dist/MoltTree-*-universal.dmg; do
-            static_asset_path="desktop-app/dist/MoltTree.dmg"
-            cp "$dmg_path" "$static_asset_path"
-            static_assets+=("$static_asset_path")
-            break
-          done
-
-          if [[ ${#static_assets[@]} -eq 0 ]]; then
-            echo "No static download aliases were created."
-            exit 0
-          fi
-
-          gh release upload "$RELEASE_TAG" "${static_assets[@]}" --clobber
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ needs.read-package-release-status.outputs.tag }}
+      - name: Build signed installer
+        run: npm run dist:mac --workspace desktop-app -- --publish never
 
       - name: Upload macOS installer
         uses: actions/upload-artifact@v4
@@ -186,13 +150,11 @@ jobs:
 
   build-windows-installer:
     name: Build Windows installer
-    needs:
-      - read-package-release-status
-      - build-macos-installer
+    needs: read-package-release-status
     if: needs.read-package-release-status.outputs.should_publish == 'true'
     runs-on: windows-latest
     permissions:
-      contents: write
+      contents: read
       id-token: write
     env:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -241,33 +203,8 @@ jobs:
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Build and publish Windows release
-        run: npm run dist:win --workspace desktop-app -- --publish always
-        env:
-          GH_TOKEN: ${{ github.token }}
-
-      - name: Publish Windows static download alias
-        shell: bash
-        run: |
-          shopt -s nullglob
-
-          static_assets=()
-          for installer_path in desktop-app/dist/MoltTree-*-x64.exe; do
-            static_asset_path="desktop-app/dist/MoltTree.exe"
-            cp "$installer_path" "$static_asset_path"
-            static_assets+=("$static_asset_path")
-            break
-          done
-
-          if [[ ${#static_assets[@]} -eq 0 ]]; then
-            echo "No Windows static download alias was created."
-            exit 0
-          fi
-
-          gh release upload "$RELEASE_TAG" "${static_assets[@]}" --clobber
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ needs.read-package-release-status.outputs.tag }}
+      - name: Build signed installer
+        run: npm run dist:win --workspace desktop-app -- --publish never
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
@@ -279,3 +216,78 @@ jobs:
             desktop-app/dist/latest*.yml
           if-no-files-found: error
           retention-days: 14
+
+  publish-release:
+    name: Publish release
+    needs:
+      - read-package-release-status
+      - build-macos-installer
+      - build-windows-installer
+    if: needs.read-package-release-status.outputs.should_publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Create release tag
+        if: needs.read-package-release-status.outputs.should_create_tag == 'true'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "$RELEASE_TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/${RELEASE_TAG}"
+        env:
+          RELEASE_TAG: ${{ needs.read-package-release-status.outputs.tag }}
+
+      - name: Download installer artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Publish release assets
+        shell: bash
+        run: |
+          shopt -s globstar nullglob
+
+          release_assets=()
+          for asset_path in \
+            release-artifacts/**/MoltTree-*.dmg \
+            release-artifacts/**/MoltTree-*.zip \
+            release-artifacts/**/*.blockmap \
+            release-artifacts/**/latest*.yml \
+            release-artifacts/**/MoltTree-*.exe
+          do
+            release_assets+=("$asset_path")
+          done
+
+          for dmg_path in release-artifacts/**/MoltTree-*-universal.dmg; do
+            static_asset_path="release-artifacts/MoltTree.dmg"
+            cp "$dmg_path" "$static_asset_path"
+            release_assets+=("$static_asset_path")
+            break
+          done
+
+          for installer_path in release-artifacts/**/MoltTree-*-x64.exe; do
+            static_asset_path="release-artifacts/MoltTree.exe"
+            cp "$installer_path" "$static_asset_path"
+            release_assets+=("$static_asset_path")
+            break
+          done
+
+          if [[ ${#release_assets[@]} -eq 0 ]]; then
+            echo "No release assets were found." >&2
+            exit 1
+          fi
+
+          gh release create "$RELEASE_TAG" "${release_assets[@]}" \
+            --verify-tag \
+            --target "$GITHUB_SHA" \
+            --title "$RELEASE_TAG" \
+            --notes "MoltTree ${PACKAGE_VERSION}"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE_VERSION: ${{ needs.read-package-release-status.outputs.package_version }}
+          RELEASE_TAG: ${{ needs.read-package-release-status.outputs.tag }}

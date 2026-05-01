@@ -128,9 +128,9 @@ The macOS release assets must include `latest-mac.yml`, the `.dmg`, the `.zip`, 
 
 `../.github/workflows/build-desktop-installers.yml` builds the macOS and Windows installers on pushes to `main` and manual dispatch.
 
-The workflow reads `desktop-app/package.json` and uses `v<version>` as the release tag. If that GitHub Release already exists, the workflow only uploads the generated `desktop-app/dist/MoltTree-*.dmg`, `desktop-app/dist/MoltTree-*.zip`, `desktop-app/dist/MoltTree-*.exe`, and blockmaps as GitHub Actions artifacts. If the Apple signing secrets are missing, the macOS job builds an unsigned artifact for CI testing. If all Apple signing secrets are present, it signs and notarizes the macOS app before uploading it.
+The workflow reads `desktop-app/package.json` and uses `v<version>` as the release tag. If that GitHub Release already exists, the installer builds are skipped. Otherwise, macOS and Windows installers build in parallel, upload GitHub Actions artifacts, and a final release job waits for both builds before publishing the GitHub Release.
 
-If the matching GitHub Release does not exist yet, the workflow requires Apple signing secrets, creates the `v<version>` tag on the current commit when needed, then publishes the signed and notarized macOS release assets and the Windows installer to `glassdevtools/molttree` GitHub Releases. It also uploads `MoltTree.dmg` and `MoltTree.exe` aliases for website downloads. If the tag already exists on a different commit, the workflow fails so that a package version cannot silently point at two different builds.
+If the matching GitHub Release does not exist yet, the workflow requires Apple signing secrets and Windows signing secrets, creates the `v<version>` tag on the current commit when needed, then publishes the signed and notarized macOS release assets and the Windows installer to `glassdevtools/molttree` GitHub Releases. It also uploads `MoltTree.dmg` and `MoltTree.exe` aliases for website downloads. If the tag already exists on a different commit, the workflow fails so that a package version cannot silently point at two different builds.
 
 GitHub release uploads use the built-in `${{ github.token }}` as `GH_TOKEN`; no repository secret is needed for that token.
 
@@ -148,6 +148,12 @@ macOS signing requires the certificate secrets plus one notarization mode.
 | `APPLE_TEAM_ID`               | macOS Apple ID mode | Apple Developer team id.                                                                                                  |
 
 Windows signing requires all Azure Artifact Signing secrets.
+
+The Azure federated identity credential used by `azure/login` must match this workflow's GitHub OIDC token:
+
+- Issuer: `https://token.actions.githubusercontent.com`
+- Audience: `api://AzureADTokenExchange`
+- Subject: `repo:glassdevtools/molttree:ref:refs/heads/main`
 
 | Secret                      | Required | Value                                                                       |
 | --------------------------- | -------- | --------------------------------------------------------------------------- |
