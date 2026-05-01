@@ -68,6 +68,7 @@ jobs:
   build-macos-installer:
     name: Build macOS installer
     needs: read-package-release-status
+    if: needs.read-package-release-status.outputs.should_publish == 'true'
     runs-on: macos-14
     env:
       CSC_LINK: ${{ secrets.APPLE_CERTIFICATE }}
@@ -122,7 +123,7 @@ jobs:
           fi
 
       - name: Require signing for release
-        if: needs.read-package-release-status.outputs.should_publish == 'true' && steps.signing.outputs.mode != 'signed'
+        if: steps.signing.outputs.mode != 'signed'
         shell: bash
         run: |
           echo "Publishing a release requires APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, and notarization credentials." >&2
@@ -130,7 +131,7 @@ jobs:
           exit 1
 
       - name: Create release tag
-        if: needs.read-package-release-status.outputs.should_publish == 'true' && needs.read-package-release-status.outputs.should_create_tag == 'true' && steps.signing.outputs.mode == 'signed'
+        if: needs.read-package-release-status.outputs.should_create_tag == 'true'
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
@@ -141,13 +142,11 @@ jobs:
           RELEASE_TAG: ${{ needs.read-package-release-status.outputs.tag }}
 
       - name: Build and publish signed release
-        if: needs.read-package-release-status.outputs.should_publish == 'true' && steps.signing.outputs.mode == 'signed'
         run: npm run dist:mac --workspace desktop-app -- --publish always
         env:
           GH_TOKEN: ${{ github.token }}
 
       - name: Publish static download aliases
-        if: needs.read-package-release-status.outputs.should_publish == 'true' && steps.signing.outputs.mode == 'signed'
         shell: bash
         run: |
           shopt -s nullglob
@@ -170,14 +169,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.read-package-release-status.outputs.tag }}
 
-      - name: Build signed installer
-        if: needs.read-package-release-status.outputs.should_publish != 'true' && steps.signing.outputs.mode == 'signed'
-        run: npm run dist:mac --workspace desktop-app -- --publish never
-
-      - name: Build unsigned installer
-        if: needs.read-package-release-status.outputs.should_publish != 'true' && steps.signing.outputs.mode == 'unsigned'
-        run: npm run dist:mac --workspace desktop-app -- --publish never -c.mac.identity=null -c.mac.notarize=false
-
       - name: Upload macOS installer
         uses: actions/upload-artifact@v4
         with:
@@ -195,6 +186,7 @@ jobs:
     needs:
       - read-package-release-status
       - build-macos-installer
+    if: needs.read-package-release-status.outputs.should_publish == 'true'
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -211,13 +203,11 @@ jobs:
         run: npm ci
 
       - name: Build and publish Windows release
-        if: needs.read-package-release-status.outputs.should_publish == 'true'
         run: npm run dist:win --workspace desktop-app -- --publish always
         env:
           GH_TOKEN: ${{ github.token }}
 
       - name: Publish Windows static download alias
-        if: needs.read-package-release-status.outputs.should_publish == 'true'
         shell: bash
         run: |
           shopt -s nullglob
@@ -239,10 +229,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.read-package-release-status.outputs.tag }}
-
-      - name: Build Windows installer
-        if: needs.read-package-release-status.outputs.should_publish != 'true'
-        run: npm run dist:win --workspace desktop-app -- --publish never
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
