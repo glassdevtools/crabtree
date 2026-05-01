@@ -134,9 +134,7 @@ const HomePage = () => {
               </span>
               <span>MoltTree</span>
             </h1>
-            <p className="heroSubtext">
-              Your Codex chats, worktrees, and branches, all in one place.
-            </p>
+            <p className="heroSubtext">Save time on your Codex worktrees.</p>
             <div className="hero__actions">
               <ClientDownloadLink
                 className={ctaDownloadButtonClassName}

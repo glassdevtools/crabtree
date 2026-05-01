@@ -74,7 +74,7 @@ export const createSocialImage = async () => {
             letterSpacing: 0,
           }}
         >
-          See every chat, branch, and worktree.
+          Manage every chat, branch, and worktree.
         </div>
         <div
           style={{
