@@ -1,4 +1,4 @@
-name: Build macOS Installer
+name: Build Desktop Installers
 
 on:
   workflow_dispatch:
@@ -10,18 +10,14 @@ permissions:
   contents: write
 
 jobs:
-  build-macos-installer:
-    name: Build macOS installer
-    runs-on: macos-14
-    env:
-      CSC_LINK: ${{ secrets.APPLE_CERTIFICATE }}
-      CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      APPLE_API_KEY_ID_FROM_SECRET: ${{ secrets.APPLE_API_KEY }}
-      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-      APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+  read-package-release-status:
+    name: Read package release status
+    runs-on: ubuntu-latest
+    outputs:
+      package_version: ${{ steps.release.outputs.package_version }}
+      should_create_tag: ${{ steps.release.outputs.should_create_tag }}
+      should_publish: ${{ steps.release.outputs.should_publish }}
+      tag: ${{ steps.release.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -30,11 +26,6 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
 
       - name: Read package release status
         id: release
@@ -74,6 +65,33 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+  build-macos-installer:
+    name: Build macOS installer
+    needs: read-package-release-status
+    runs-on: macos-14
+    env:
+      CSC_LINK: ${{ secrets.APPLE_CERTIFICATE }}
+      CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_API_KEY_ID_FROM_SECRET: ${{ secrets.APPLE_API_KEY }}
+      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Prepare App Store Connect key
         id: signing
         shell: bash
@@ -104,7 +122,7 @@ jobs:
           fi
 
       - name: Require signing for release
-        if: steps.release.outputs.should_publish == 'true' && steps.signing.outputs.mode != 'signed'
+        if: needs.read-package-release-status.outputs.should_publish == 'true' && steps.signing.outputs.mode != 'signed'
         shell: bash
         run: |
           echo "Publishing a release requires APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, and notarization credentials." >&2
@@ -112,7 +130,7 @@ jobs:
           exit 1
 
       - name: Create release tag
-        if: steps.release.outputs.should_publish == 'true' && steps.release.outputs.should_create_tag == 'true' && steps.signing.outputs.mode == 'signed'
+        if: needs.read-package-release-status.outputs.should_publish == 'true' && needs.read-package-release-status.outputs.should_create_tag == 'true' && steps.signing.outputs.mode == 'signed'
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
@@ -120,28 +138,26 @@ jobs:
           git tag "$RELEASE_TAG" "$GITHUB_SHA"
           git push origin "refs/tags/${RELEASE_TAG}"
         env:
-          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_TAG: ${{ needs.read-package-release-status.outputs.tag }}
 
       - name: Build and publish signed release
-        if: steps.release.outputs.should_publish == 'true' && steps.signing.outputs.mode == 'signed'
+        if: needs.read-package-release-status.outputs.should_publish == 'true' && steps.signing.outputs.mode == 'signed'
         run: npm run dist:mac --workspace desktop-app -- --publish always
         env:
           GH_TOKEN: ${{ github.token }}
 
       - name: Publish static download aliases
-        if: steps.release.outputs.should_publish == 'true' && steps.signing.outputs.mode == 'signed'
+        if: needs.read-package-release-status.outputs.should_publish == 'true' && steps.signing.outputs.mode == 'signed'
         shell: bash
         run: |
           shopt -s nullglob
 
           static_assets=()
-          for arch in arm64 x64; do
-            for dmg_path in desktop-app/dist/MoltTree-*-"${arch}".dmg; do
-              static_asset_path="desktop-app/dist/MoltTree_${arch}.dmg"
-              cp "$dmg_path" "$static_asset_path"
-              static_assets+=("$static_asset_path")
-              break
-            done
+          for dmg_path in desktop-app/dist/MoltTree-*-universal.dmg; do
+            static_asset_path="desktop-app/dist/MoltTree.dmg"
+            cp "$dmg_path" "$static_asset_path"
+            static_assets+=("$static_asset_path")
+            break
           done
 
           if [[ ${#static_assets[@]} -eq 0 ]]; then
@@ -152,24 +168,89 @@ jobs:
           gh release upload "$RELEASE_TAG" "${static_assets[@]}" --clobber
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_TAG: ${{ needs.read-package-release-status.outputs.tag }}
 
       - name: Build signed installer
-        if: steps.release.outputs.should_publish != 'true' && steps.signing.outputs.mode == 'signed'
+        if: needs.read-package-release-status.outputs.should_publish != 'true' && steps.signing.outputs.mode == 'signed'
         run: npm run dist:mac --workspace desktop-app -- --publish never
 
       - name: Build unsigned installer
-        if: steps.release.outputs.should_publish != 'true' && steps.signing.outputs.mode == 'unsigned'
+        if: needs.read-package-release-status.outputs.should_publish != 'true' && steps.signing.outputs.mode == 'unsigned'
         run: npm run dist:mac --workspace desktop-app -- --publish never -c.mac.identity=null -c.mac.notarize=false
 
       - name: Upload macOS installer
         uses: actions/upload-artifact@v4
         with:
-          name: molttree-macos-${{ runner.arch }}
+          name: molttree-macos-universal
           path: |
             desktop-app/dist/MoltTree-*.dmg
             desktop-app/dist/MoltTree-*.zip
             desktop-app/dist/*.blockmap
+            desktop-app/dist/latest*.yml
+          if-no-files-found: error
+          retention-days: 14
+
+  build-windows-installer:
+    name: Build Windows installer
+    needs:
+      - read-package-release-status
+      - build-macos-installer
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and publish Windows release
+        if: needs.read-package-release-status.outputs.should_publish == 'true'
+        run: npm run dist:win --workspace desktop-app -- --publish always
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Publish Windows static download alias
+        if: needs.read-package-release-status.outputs.should_publish == 'true'
+        shell: bash
+        run: |
+          shopt -s nullglob
+
+          static_assets=()
+          for installer_path in desktop-app/dist/MoltTree-*-x64.exe; do
+            static_asset_path="desktop-app/dist/MoltTree.exe"
+            cp "$installer_path" "$static_asset_path"
+            static_assets+=("$static_asset_path")
+            break
+          done
+
+          if [[ ${#static_assets[@]} -eq 0 ]]; then
+            echo "No Windows static download alias was created."
+            exit 0
+          fi
+
+          gh release upload "$RELEASE_TAG" "${static_assets[@]}" --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.read-package-release-status.outputs.tag }}
+
+      - name: Build Windows installer
+        if: needs.read-package-release-status.outputs.should_publish != 'true'
+        run: npm run dist:win --workspace desktop-app -- --publish never
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: molttree-windows-x64
+          path: |
+            desktop-app/dist/MoltTree-*.exe
+            desktop-app/dist/MoltTree-*.exe.blockmap
             desktop-app/dist/latest*.yml
           if-no-files-found: error
           retention-days: 14

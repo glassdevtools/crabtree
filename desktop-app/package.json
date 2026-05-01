@@ -14,6 +14,7 @@
     "build": "npm run typecheck && electron-vite build",
     "icons:mac": "scripts/generate_macos_icons.sh",
     "dist:mac": "scripts/package_macos.sh",
+    "dist:win": "npm run build && electron-builder --config electron-builder.config.cjs --win",
     "typecheck": "tsc --noEmit",
     "test": "npm run typecheck && tsc -p tsconfig.test.json && node --test .test-out/tests/*.test.js",
     "format": "prettier --write ."

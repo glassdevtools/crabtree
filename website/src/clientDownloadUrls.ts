@@ -3,7 +3,6 @@ export const CLIENT_DOWNLOAD_PAGE_PATH =
 
 type DetectedOS = {
   platform: "macos" | "windows";
-  architecture: "arm64" | "x64";
 };
 
 type ClientDownload = DetectedOS & {
@@ -14,25 +13,24 @@ type ClientDownload = DetectedOS & {
 type NavigatorWithUserAgentData = Navigator & {
   userAgentData?: {
     platform: string;
-    getHighEntropyValues?: (hints: string[]) => Promise<{
-      architecture?: string;
-      bitness?: string;
-      platform?: string;
-    }>;
+    getHighEntropyValues?: (hints: string[]) => Promise<{ platform?: string }>;
   };
 };
 
 const clientDownloads: ClientDownload[] = [
   {
     platform: "macos",
-    architecture: "arm64",
-    fileName: "MoltTree_arm64.dmg",
-    href: "https://github.com/glassdevtools/molttree/releases/latest/download/MoltTree_arm64.dmg",
+    fileName: "MoltTree.dmg",
+    href: "https://github.com/glassdevtools/molttree/releases/latest/download/MoltTree.dmg",
+  },
+  {
+    platform: "windows",
+    fileName: "MoltTree.exe",
+    href: "https://github.com/glassdevtools/molttree/releases/latest/download/MoltTree.exe",
   },
 ];
 
-// This mirrors the desktop download detection from wgpu-test-4. A platform only
-// gets a direct URL after CI publishes the static release asset for that target.
+// A platform only gets a direct URL after CI publishes the static release asset for that target.
 export const getAutoDetectedDownloadUrl = async (): Promise<string | null> => {
   if (typeof window === "undefined") {
     return null;
@@ -50,13 +48,9 @@ export const getAutoDetectedDownloadUrl = async (): Promise<string | null> => {
 
 const getDownloadUrlForOS = ({
   platform,
-  architecture,
 }: DetectedOS): ClientDownload | null => {
   for (const clientDownload of clientDownloads) {
-    if (
-      clientDownload.platform === platform &&
-      clientDownload.architecture === architecture
-    ) {
+    if (clientDownload.platform === platform) {
       return clientDownload;
     }
   }
@@ -71,17 +65,9 @@ const detectOSFromClientHints = async (
     return null;
   }
 
-  let highEntropyValues: {
-    architecture?: string;
-    bitness?: string;
-    platform?: string;
-  };
+  let highEntropyValues: { platform?: string };
   try {
-    highEntropyValues = await userAgentData.getHighEntropyValues([
-      "architecture",
-      "bitness",
-      "platform",
-    ]);
+    highEntropyValues = await userAgentData.getHighEntropyValues(["platform"]);
   } catch {
     return null;
   }
@@ -89,26 +75,7 @@ const detectOSFromClientHints = async (
   const platformText =
     `${highEntropyValues.platform ?? userAgentData.platform}`.toLowerCase();
   const platform = detectPlatform(platformText);
-  if (platform === null) {
-    return null;
-  }
-
-  const normalizedArchitecture = (
-    highEntropyValues.architecture ?? ""
-  ).toLowerCase();
-  if (normalizedArchitecture === "arm" && highEntropyValues.bitness === "64") {
-    return {
-      platform,
-      architecture: "arm64",
-    };
-  }
-  if (normalizedArchitecture === "x86" && highEntropyValues.bitness === "64") {
-    return {
-      platform,
-      architecture: "x64",
-    };
-  }
-  return null;
+  return platform === null ? null : { platform };
 };
 
 const detectOSFromNavigator = (
@@ -124,15 +91,7 @@ const detectOSFromNavigator = (
     return null;
   }
 
-  const architecture =
-    platform === "macos"
-      ? (detectMacArchitectureFromWebGl() ??
-        detectArchitectureFromNavigatorText(platformText))
-      : detectArchitectureFromNavigatorText(platformText);
-  if (architecture === null) {
-    return null;
-  }
-  return { platform, architecture };
+  return { platform };
 };
 
 const detectPlatform = (
@@ -143,65 +102,6 @@ const detectPlatform = (
   }
   if (platformText.includes("win")) {
     return "windows";
-  }
-  return null;
-};
-
-const detectArchitectureFromNavigatorText = (
-  platformText: string,
-): DetectedOS["architecture"] | null => {
-  if (platformText.includes("arm64") || platformText.includes("aarch64")) {
-    return "arm64";
-  }
-  if (
-    platformText.includes("win64") ||
-    platformText.includes("wow64") ||
-    platformText.includes("x86_64") ||
-    platformText.includes("amd64") ||
-    platformText.includes("x64")
-  ) {
-    return "x64";
-  }
-  return null;
-};
-
-const detectMacArchitectureFromWebGl = ():
-  | DetectedOS["architecture"]
-  | null => {
-  const canvas = document.createElement("canvas");
-  const renderingContext = canvas.getContext("webgl");
-  if (!renderingContext) {
-    return null;
-  }
-
-  const debugRendererInfo = renderingContext.getExtension(
-    "WEBGL_debug_renderer_info",
-  );
-  if (debugRendererInfo === null) {
-    return null;
-  }
-
-  const renderer = renderingContext.getParameter(
-    debugRendererInfo.UNMASKED_RENDERER_WEBGL,
-  );
-  if (typeof renderer !== "string") {
-    return null;
-  }
-
-  const normalizedRenderer = renderer.toLowerCase();
-  if (normalizedRenderer.includes("software")) {
-    return null;
-  }
-  if (normalizedRenderer.includes("apple")) {
-    return "arm64";
-  }
-  if (
-    normalizedRenderer.includes("intel") ||
-    normalizedRenderer.includes("amd") ||
-    normalizedRenderer.includes("radeon") ||
-    normalizedRenderer.includes("nvidia")
-  ) {
-    return "x64";
   }
   return null;
 };

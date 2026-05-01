@@ -5,8 +5,8 @@
 MoltTree uses Electron Builder for macOS packaging. The packaging flow is:
 
 1. Build the Electron app into `out/`.
-2. Regenerate the macOS icon from `src/renderer/assets/default-app-icon.png`.
-3. Build `dist/MoltTree-<version>-<arch>.dmg` and `dist/MoltTree-<version>-<arch>.zip`.
+2. Regenerate the macOS icon from `packaging/icons/app-icon-source.png`.
+3. Build universal macOS `dist/MoltTree-<version>-universal.dmg` and `dist/MoltTree-<version>-universal.zip`.
 4. Code sign and notarize when signing and Apple credentials are available.
 
 Run:
@@ -24,12 +24,24 @@ npm run icons:mac
 npx electron-builder --config electron-builder.config.cjs --mac dir -c.mac.identity=null -c.mac.notarize=false
 ```
 
+## Windows
+
+MoltTree uses Electron Builder's NSIS target for Windows packaging. The Windows build uses the transparent renderer icon at `src/renderer/assets/default-app-icon.png` so the executable icon does not render as a hard white square.
+
+Run:
+
+```bash
+npm run dist:win --workspace desktop-app
+```
+
+The first Windows target is x64. Add more Windows architectures only after deciding whether the extra installer size is worth it.
+
 ## Icons
 
-Keep the checked-in source image here:
+Keep the checked-in macOS icon source image here:
 
 ```text
-src/renderer/assets/default-app-icon.png
+packaging/icons/app-icon-source.png
 ```
 
 Regenerate icons with:
@@ -38,7 +50,7 @@ Regenerate icons with:
 npm run icons:mac --workspace desktop-app
 ```
 
-The script uses macOS `sips` and `iconutil` to write `packaging/macos/generated-icons/icon.icns`, `packaging/macos/generated-icons/dmg-background.png`, and `packaging/macos/generated-icons/dmg-background@2x.png`. That generated directory is ignored and should be recreated before packaging.
+The script uses macOS `sips` and `iconutil` to write `packaging/macos/generated-icons/icon.icns`, `packaging/macos/generated-icons/dmg-background.png`, and `packaging/macos/generated-icons/dmg-background@2x.png`. That generated directory is ignored and should be recreated before packaging. Windows packaging uses the PNG icon directly.
 
 ## Code Signing And Notarization
 
@@ -97,20 +109,20 @@ https://github.com/glassdevtools/molttree/releases
 
 This assumes the release assets are public. Do not ship a desktop updater that needs a private GitHub token on user machines.
 
-The release assets must include `latest-mac.yml`, the `.dmg`, the `.zip`, and blockmaps. The `.zip` target must stay enabled because the macOS updater uses it. The `.dmg` is for direct install downloads.
+The macOS release assets must include `latest-mac.yml`, the `.dmg`, the `.zip`, and blockmaps. The `.zip` target must stay enabled because the macOS updater uses it. The `.dmg` is for direct install downloads. Windows release assets must include `latest.yml`, the `.exe`, and blockmaps.
 
 ## Values To Decide Before Public Release
 
-- Confirm `appId` in `electron-builder.config.cjs`; changing it after public release will look like a different app to macOS.
-- Make sure `package.json` `version` is the release version before tagging.
+- Confirm `appId` in `electron-builder.config.cjs`; changing it after public release will look like a different app to macOS and Windows.
+- Make sure `package.json` `version` is the release version before pushing a release commit.
 
 ## GitHub Actions
 
-`../.github/workflows/build-macos-installer.yml` builds the macOS installer on pushes to `main` and manual dispatch.
+`../.github/workflows/build-desktop-installers.yml` builds the macOS and Windows installers on pushes to `main` and manual dispatch.
 
-The workflow reads `desktop-app/package.json` and uses `v<version>` as the release tag. If that GitHub Release already exists, the workflow only uploads the generated `desktop-app/dist/MoltTree-*.dmg`, `desktop-app/dist/MoltTree-*.zip`, and blockmaps as a GitHub Actions artifact. If the Apple signing secrets are missing, it builds an unsigned artifact for CI testing. If all Apple signing secrets are present, it signs and notarizes the app before uploading it.
+The workflow reads `desktop-app/package.json` and uses `v<version>` as the release tag. If that GitHub Release already exists, the workflow only uploads the generated `desktop-app/dist/MoltTree-*.dmg`, `desktop-app/dist/MoltTree-*.zip`, `desktop-app/dist/MoltTree-*.exe`, and blockmaps as GitHub Actions artifacts. If the Apple signing secrets are missing, the macOS job builds an unsigned artifact for CI testing. If all Apple signing secrets are present, it signs and notarizes the macOS app before uploading it.
 
-If the matching GitHub Release does not exist yet, the workflow requires signing secrets, creates the `v<version>` tag on the current commit when needed, then publishes the signed and notarized macOS release assets to `glassdevtools/molttree` GitHub Releases. If the tag already exists on a different commit, the workflow fails so that a package version cannot silently point at two different builds.
+If the matching GitHub Release does not exist yet, the workflow requires Apple signing secrets, creates the `v<version>` tag on the current commit when needed, then publishes the signed and notarized macOS release assets and the Windows installer to `glassdevtools/molttree` GitHub Releases. It also uploads `MoltTree.dmg` and `MoltTree.exe` aliases for website downloads. If the tag already exists on a different commit, the workflow fails so that a package version cannot silently point at two different builds.
 
 Required secrets for signed builds:
 

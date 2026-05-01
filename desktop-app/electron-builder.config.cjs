@@ -22,12 +22,31 @@ const config = {
   ],
   mac: {
     category: "public.app-category.developer-tools",
-    target: ["dmg", "zip"],
+    target: [
+      {
+        target: "dmg",
+        arch: ["universal"],
+      },
+      {
+        target: "zip",
+        arch: ["universal"],
+      },
+    ],
     icon: "packaging/macos/generated-icons/icon.icns",
     hardenedRuntime: true,
     entitlements: "packaging/macos/entitlements.plist",
     entitlementsInherit: "packaging/macos/entitlements.inherit.plist",
     notarize: true,
+  },
+  win: {
+    target: [
+      {
+        target: "nsis",
+        // TODO: AI-PICKED-VALUE: Windows starts with x64 because it covers normal Windows installs without increasing installer size for 32-bit support.
+        arch: ["x64"],
+      },
+    ],
+    icon: "src/renderer/assets/default-app-icon.png",
   },
   dmg: {
     artifactName: "${productName}-${version}-${arch}.${ext}",

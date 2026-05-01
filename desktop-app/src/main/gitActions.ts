@@ -1069,7 +1069,7 @@ export const checkoutGitCommit = async ({
   });
 
   if (statusText.length > 0) {
-    throw new Error("Working tree must be clean before checking out a row.");
+    throw new Error("Working tree must be clean before checking out another commit.");
   }
 
   const visibleRefText = await readGitTextForPath({
