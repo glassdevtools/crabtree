@@ -46,8 +46,12 @@ const featureItems = [
 ];
 const questionItems = [
   <>
-    Where are all my{" "}
-    <span className="featureToken featureTokenWorktree">worktrees</span>?
+    Which <span className="featureToken featureTokenChat">chats</span> were
+    merged?
+  </>,
+  <>
+    What <span className="featureToken featureTokenWorktree">worktrees</span> do
+    I have?
   </>,
   <>
     Which <span className="featureToken featureTokenChat">chats</span> are on
@@ -61,11 +65,6 @@ const questionItems = [
     Which <span className="featureToken featureTokenWorktree">worktrees</span>{" "}
     have changes?
   </>,
-  <>
-    Which <span className="featureToken featureTokenChat">chats</span> were
-    merged yet?
-  </>,
-  "And more...",
 ];
 
 const HomePage = () => {
@@ -76,6 +75,8 @@ const HomePage = () => {
           <Image
             className="transition-[filter] duration-500 ease-out"
             src={defaultAppIcon}
+            width={24}
+            height={24}
             alt=""
             aria-hidden="true"
             draggable={false}
@@ -122,7 +123,13 @@ const HomePage = () => {
           <div className="heroIntro">
             <h1 className="heroTitle" id="hero-title">
               <span className="heroTitleIcon" aria-hidden="true">
-                <Image src={defaultAppIcon} alt="" draggable={false} />
+                <Image
+                  src={defaultAppIcon}
+                  width={72}
+                  height={72}
+                  alt=""
+                  draggable={false}
+                />
               </span>
               <span>MoltTree</span>
             </h1>
@@ -152,8 +159,10 @@ const HomePage = () => {
           <figure className="productPhoto">
             <Image
               src={productScreenshot}
-              alt="MoltTree showing Codex chats, branch tags, worktrees, and Git history"
+              alt="MoltTree app showing Codex chats, branch tags, worktrees, changed files, and Git history"
+              sizes="(max-width: 760px) calc(100vw - 32px), (max-width: 1128px) calc(100vw - 48px), 1080px"
               preload
+              placeholder="blur"
               draggable={false}
             />
           </figure>
@@ -236,6 +245,8 @@ const HomePage = () => {
         <Image
           className="siteFooterIcon"
           src={defaultAppIcon}
+          width={52}
+          height={52}
           alt=""
           aria-hidden="true"
           draggable={false}
