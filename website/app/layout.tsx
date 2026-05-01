@@ -5,7 +5,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "MoltTree",
   description:
-    "Browse Codex conversations next to the Git history that produced them.",
+    "Your Codex chats, worktrees, and branches, all in one place.",
 };
 
 type RootLayoutProps = {
