@@ -423,7 +423,7 @@ test("reads a missing origin tag as a local-only tag sync change", async () => {
   });
 });
 
-test("reads a missing local tag as an origin-only tag sync change", async () => {
+test("fetches a missing local tag from origin", async () => {
   await withOriginRepo(async ({ repoRoot, mainSha }) => {
     await runGit({ cwd: repoRoot, args: ["tag", "remote-tag", mainSha] });
     const originSha = await readSha({
@@ -443,15 +443,54 @@ test("reads a missing local tag as an origin-only tag sync change", async () => 
 
     assert.equal(warnings.length, 0);
     assert.equal(gitErrors.length, 0);
+    assert.deepEqual(repo?.branchSyncChanges, []);
+    assert.equal(
+      await readSha({ cwd: repoRoot, ref: "refs/tags/remote-tag" }),
+      originSha,
+    );
+  });
+});
+
+test("does not overwrite a changed local tag while fetching origin", async () => {
+  await withOriginRepo(async ({ repoRoot, mainSha }) => {
+    await runGit({ cwd: repoRoot, args: ["tag", "shared-tag", mainSha] });
+    const originSha = await readSha({
+      cwd: repoRoot,
+      ref: "refs/tags/shared-tag",
+    });
+    await runGit({
+      cwd: repoRoot,
+      args: ["push", "origin", "refs/tags/shared-tag"],
+    });
+    const localSha = await runGit({
+      cwd: repoRoot,
+      args: ["commit-tree", `${mainSha}^{tree}`, "-m", "local"],
+    });
+    await runGit({
+      cwd: repoRoot,
+      args: ["tag", "-f", "shared-tag", localSha],
+    });
+
+    const { repos, warnings, gitErrors } = await readRepoGraphs({
+      threads: [createThread({ id: "root-thread", cwd: repoRoot })],
+    });
+    const repo = repos[0];
+
+    assert.equal(warnings.length, 0);
+    assert.equal(gitErrors.length, 0);
     assert.deepEqual(repo?.branchSyncChanges, [
       {
         repoRoot,
         gitRefType: "tag",
-        name: "remote-tag",
-        localSha: null,
+        name: "shared-tag",
+        localSha,
         originSha,
       },
     ]);
+    assert.equal(
+      await readSha({ cwd: repoRoot, ref: "refs/tags/shared-tag" }),
+      localSha,
+    );
   });
 });
 
@@ -2318,7 +2357,7 @@ test("pushes a local-only tag sync change to origin", async () => {
   });
 });
 
-test("pushes an origin-only tag sync change by deleting it from origin", async () => {
+test("push fetches an origin-only tag locally instead of deleting it from origin", async () => {
   await withOriginRepo(async ({ repoRoot, originRoot, mainSha }) => {
     await runGit({ cwd: repoRoot, args: ["tag", "remote-tag", mainSha] });
     const originSha = await readSha({
@@ -2342,8 +2381,12 @@ test("pushes an origin-only tag sync change by deleting it from origin", async (
     ]);
 
     assert.equal(
-      await readOptionalSha({ cwd: originRoot, ref: "refs/tags/remote-tag" }),
-      null,
+      await readSha({ cwd: repoRoot, ref: "refs/tags/remote-tag" }),
+      originSha,
+    );
+    assert.equal(
+      await readSha({ cwd: originRoot, ref: "refs/tags/remote-tag" }),
+      originSha,
     );
   });
 });

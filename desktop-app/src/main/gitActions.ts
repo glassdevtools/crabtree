@@ -1411,18 +1411,20 @@ export const pushGitBranchSyncChanges = async (
           args: ["rev-parse", "--verify", tagRef],
         });
 
-        if (remoteTagSha !== originSha || localTagSha !== null) {
+        if (
+          remoteTagSha !== originSha ||
+          (localTagSha !== null && localTagSha !== originSha)
+        ) {
           throw new Error(`${name} moved. Refresh and try again.`);
+        }
+
+        if (localTagSha !== null) {
+          continue;
         }
 
         await runGitCommandForPath({
           path: repoRoot,
-          args: [
-            "push",
-            `--force-with-lease=${tagRef}:${originSha}`,
-            "origin",
-            `:${tagRef}`,
-          ],
+          args: ["fetch", "origin", "--no-tags", `${tagRef}:${tagRef}`],
         });
 
         continue;

@@ -396,6 +396,16 @@ const splitLines = (value: string) => {
     .filter((line) => line.length > 0);
 };
 
+const readRemoteTagName = (remoteRef: string) => {
+  const tagPrefix = "refs/tags/";
+
+  if (!remoteRef.startsWith(tagPrefix) || remoteRef.endsWith("^{}")) {
+    return null;
+  }
+
+  return remoteRef.slice(tagPrefix.length);
+};
+
 const parseGitChangeLineCounts = (stdout: string) => {
   const lineCounts = {
     added: 0,
@@ -635,19 +645,22 @@ const readGitBranchSyncChanges = async ({
       }
 
       const [remoteSha, remoteRef] = line.split("\t");
-      const tagPrefix = "refs/tags/";
 
       if (
         remoteSha === undefined ||
         remoteRef === undefined ||
-        remoteSha === ZERO_SHA ||
-        !remoteRef.startsWith(tagPrefix) ||
-        remoteRef.endsWith("^{}")
+        remoteSha === ZERO_SHA
       ) {
         continue;
       }
 
-      remoteShaOfTag[remoteRef.slice(tagPrefix.length)] = remoteSha;
+      const tag = readRemoteTagName(remoteRef);
+
+      if (tag === null) {
+        continue;
+      }
+
+      remoteShaOfTag[tag] = remoteSha;
     }
   }
 
@@ -701,7 +714,69 @@ const readGitBranchSyncChanges = async ({
   return branchSyncChanges;
 };
 
-const fetchOriginBranches = async ({ repoSeed }: { repoSeed: RepoSeed }) => {
+const fetchMissingOriginTags = async ({ repoSeed }: { repoSeed: RepoSeed }) => {
+  const [localTagText, originTagText] = await Promise.all([
+    readGitText({
+      cwd: repoSeed.root,
+      args: ["for-each-ref", "--format=%(refname:strip=2)", "refs/tags"],
+    }),
+    readNullableGitText({
+      cwd: repoSeed.root,
+      args: ["ls-remote", "--tags", "origin"],
+    }),
+  ]);
+  const isLocalTagOfName: { [tag: string]: boolean } = {};
+  const isMissingTagOfName: { [tag: string]: boolean } = {};
+  const missingTagRefspecs: string[] = [];
+
+  for (const tag of splitLines(localTagText)) {
+    isLocalTagOfName[tag] = true;
+  }
+
+  if (originTagText === null) {
+    return;
+  }
+
+  for (const line of originTagText.split("\n")) {
+    if (line.length === 0) {
+      continue;
+    }
+
+    const [remoteSha, remoteRef] = line.split("\t");
+
+    if (
+      remoteSha === undefined ||
+      remoteRef === undefined ||
+      remoteSha === ZERO_SHA
+    ) {
+      continue;
+    }
+
+    const tag = readRemoteTagName(remoteRef);
+
+    if (
+      tag === null ||
+      isLocalTagOfName[tag] === true ||
+      isMissingTagOfName[tag] === true
+    ) {
+      continue;
+    }
+
+    isMissingTagOfName[tag] = true;
+    missingTagRefspecs.push(`refs/tags/${tag}:refs/tags/${tag}`);
+  }
+
+  if (missingTagRefspecs.length === 0) {
+    return;
+  }
+
+  await runGit({
+    cwd: repoSeed.root,
+    args: ["fetch", "origin", "--no-tags", ...missingTagRefspecs],
+  });
+};
+
+const fetchOriginRefs = async ({ repoSeed }: { repoSeed: RepoSeed }) => {
   if (repoSeed.originUrl === null) {
     return null;
   }
@@ -724,11 +799,12 @@ const fetchOriginBranches = async ({ repoSeed }: { repoSeed: RepoSeed }) => {
       cwd: repoSeed.root,
       args: ["fetch", "origin", "--prune", "--no-tags"],
     });
+    await fetchMissingOriginTags({ repoSeed });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown Git error.";
 
-    return `${repoSeed.root}: Failed to fetch origin. Branch sync state may be stale. ${message}`;
+    return `${repoSeed.root}: Failed to fetch origin. Sync state may be stale. ${message}`;
   }
 
   return null;
@@ -1154,7 +1230,7 @@ const readRepoGraphForSeed = async ({
       repoSeed,
       threads,
     });
-    const originFetchWarning = await fetchOriginBranches({ repoSeed });
+    const originFetchWarning = await fetchOriginRefs({ repoSeed });
 
     if (originFetchWarning !== null) {
       warnings.push(originFetchWarning);
