@@ -1,6 +1,7 @@
 import {
   CircleArrowLeft,
   CircleArrowUp,
+  ExternalLink,
   LoaderCircle,
   Settings,
   Tag,
@@ -131,7 +132,7 @@ const DASHBOARD_REFRESH_INTERVAL_MS = 1000;
 const TOAST_POSITION = "bottom-center";
 const UNFOCUSED_ERROR_TOAST_DURATION_MS = Infinity;
 const USER_GIT_UPDATE_TOAST_ID_PREFIX = "user-git-update";
-const RARE_LOADING_IMAGE_PROBABILITY = 0.1;
+const RARE_LOADING_IMAGE_PROBABILITY = 0.15;
 const RARE_LOADING_IMAGE_URLS = [
   logoLoaderImageUrl,
   loading2ImageUrl,
@@ -1709,6 +1710,7 @@ const CodeLocations = ({
               void openCodePath(mainWorktreePath);
             }}
           >
+            <ExternalLink aria-hidden="true" size={10} />
             <span>HEAD</span>
           </Button>
         </Badge>
