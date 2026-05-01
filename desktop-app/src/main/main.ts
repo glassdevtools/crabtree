@@ -274,14 +274,19 @@ const readGitCreateBranchRequest = (value: unknown) => {
     typeof value.path !== "string" ||
     value.path.length === 0 ||
     typeof value.branch !== "string" ||
-    value.branch.trim().length === 0
+    value.branch.trim().length === 0 ||
+    typeof value.expectedHeadSha !== "string" ||
+    value.expectedHeadSha.length === 0
   ) {
-    throw new Error("gitCreateBranchRequest needs a path and branch.");
+    throw new Error(
+      "gitCreateBranchRequest needs a path, branch, and expected head sha.",
+    );
   }
 
   const gitCreateBranchRequest: GitCreateBranchRequest = {
     path: value.path,
     branch: value.branch.trim(),
+    expectedHeadSha: value.expectedHeadSha,
   };
 
   return gitCreateBranchRequest;
@@ -381,10 +386,14 @@ const readGitMoveBranchRequest = (value: unknown) => {
     typeof value.oldSha !== "string" ||
     value.oldSha.length === 0 ||
     typeof value.newSha !== "string" ||
-    value.newSha.length === 0
+    value.newSha.length === 0 ||
+    (value.sourcePath !== null && typeof value.sourcePath !== "string") ||
+    (typeof value.sourcePath === "string" && value.sourcePath.length === 0) ||
+    (value.targetPath !== null && typeof value.targetPath !== "string") ||
+    (typeof value.targetPath === "string" && value.targetPath.length === 0)
   ) {
     throw new Error(
-      "gitMoveBranchRequest needs a repo root, branch, old sha, and new sha.",
+      "gitMoveBranchRequest needs a repo root, branch, old sha, new sha, source path, and target path.",
     );
   }
 
@@ -393,6 +402,8 @@ const readGitMoveBranchRequest = (value: unknown) => {
     branch: value.branch,
     oldSha: value.oldSha,
     newSha: value.newSha,
+    sourcePath: value.sourcePath,
+    targetPath: value.targetPath,
   };
 
   return gitMoveBranchRequest;

@@ -264,6 +264,67 @@ const detachHeadFromCurrentBranch = async ({
   });
 };
 
+const detachWorktreeHeadAtSha = async ({
+  path,
+  expectedHeadSha,
+  branch,
+}: {
+  path: string;
+  expectedHeadSha: string;
+  branch: string;
+}) => {
+  const headSha = await readGitTextForPath({
+    path,
+    args: ["rev-parse", "HEAD"],
+  });
+
+  if (headSha !== expectedHeadSha) {
+    throw new Error("HEAD moved. Refresh and try again.");
+  }
+
+  await runGitCommandForPath({
+    path,
+    args: [
+      "update-ref",
+      "--no-deref",
+      "-m",
+      `MoltTree: detach HEAD from ${branch}`,
+      "HEAD",
+      expectedHeadSha,
+    ],
+  });
+};
+
+const attachWorktreeHeadToBranch = async ({
+  path,
+  branch,
+  expectedHeadSha,
+}: {
+  path: string;
+  branch: string;
+  expectedHeadSha: string;
+}) => {
+  const headSha = await readGitTextForPath({
+    path,
+    args: ["rev-parse", "HEAD"],
+  });
+
+  if (headSha !== expectedHeadSha) {
+    throw new Error("HEAD moved. Refresh and try again.");
+  }
+
+  await runGitCommandForPath({
+    path,
+    args: [
+      "symbolic-ref",
+      "-m",
+      `MoltTree: attach HEAD to ${branch}`,
+      "HEAD",
+      `refs/heads/${branch}`,
+    ],
+  });
+};
+
 const readLocalBranchesAtSha = async ({
   repoRoot,
   sha,
@@ -578,15 +639,73 @@ export const commitAllGitChanges = async ({
   return newSha;
 };
 
+const createGitRefAtTargetSha = async ({
+  path,
+  name,
+  gitRef,
+  targetSha,
+}: {
+  path: string;
+  name: string;
+  gitRef: string;
+  targetSha: string;
+}) => {
+  const existingRef = await readNullableGitTextForPath({
+    path,
+    args: ["rev-parse", "--verify", gitRef],
+  });
+
+  if (existingRef !== null) {
+    throw new Error(`${name} already exists.`);
+  }
+
+  await runGitCommandForPath({
+    path,
+    args: [
+      "update-ref",
+      "-m",
+      `MoltTree: create ${name}`,
+      gitRef,
+      targetSha,
+      ZERO_SHA,
+    ],
+  });
+};
+
 export const createGitBranch = async ({
   path,
   branch,
+  expectedHeadSha,
 }: GitCreateBranchRequest) => {
   await runGitCommandForPath({
     path,
     args: ["check-ref-format", "--branch", branch],
   });
-  await runGitCommandForPath({ path, args: ["switch", "-c", branch] });
+
+  const targetSha = await readGitTextForPath({
+    path,
+    args: ["rev-parse", "--verify", `${expectedHeadSha}^{commit}`],
+  });
+  const headSha = await readGitTextForPath({
+    path,
+    args: ["rev-parse", "--verify", "HEAD^{commit}"],
+  });
+
+  if (headSha !== targetSha) {
+    throw new Error("HEAD moved. Refresh and try again.");
+  }
+
+  await createGitRefAtTargetSha({
+    path,
+    name: branch,
+    gitRef: `refs/heads/${branch}`,
+    targetSha,
+  });
+  await attachWorktreeHeadToBranch({
+    path,
+    branch,
+    expectedHeadSha: targetSha,
+  });
 };
 
 export const createGitRef = async ({
@@ -610,30 +729,16 @@ export const createGitRef = async ({
     });
   }
 
-  const existingRef = await readNullableGitTextForPath({
-    path: repoRoot,
-    args: ["rev-parse", "--verify", gitRef],
-  });
-
-  if (existingRef !== null) {
-    throw new Error(`${name} already exists.`);
-  }
-
   const targetSha = await readGitTextForPath({
     path: repoRoot,
     args: ["rev-parse", "--verify", `${sha}^{commit}`],
   });
 
-  await runGitCommandForPath({
+  await createGitRefAtTargetSha({
     path: repoRoot,
-    args: [
-      "update-ref",
-      "-m",
-      `MoltTree: create ${name}`,
-      gitRef,
-      targetSha,
-      ZERO_SHA,
-    ],
+    name,
+    gitRef,
+    targetSha,
   });
 };
 
@@ -1022,6 +1127,8 @@ export const moveGitBranch = async ({
   branch,
   oldSha,
   newSha,
+  sourcePath,
+  targetPath,
 }: GitMoveBranchRequest) => {
   await runGitCommandForPath({
     path: repoRoot,
@@ -1041,44 +1148,55 @@ export const moveGitBranch = async ({
     args: ["rev-parse", "--verify", `${newSha}^{commit}`],
   });
 
-  if (branchHead === targetSha) {
-    return;
-  }
-
   if (branchHead !== expectedOldSha) {
     throw new Error("Branch moved. Refresh and try again.");
   }
 
-  const checkoutPlace = await readGitBranchCheckoutPlace({
+  const checkedOutWorktreePath = await readGitWorktreePathForBranch({
     repoRoot,
     branch,
   });
+  const shouldDetachSource =
+    sourcePath !== null &&
+    sourcePath !== targetPath &&
+    checkedOutWorktreePath === sourcePath;
 
-  if (checkoutPlace === "worktree") {
+  if (
+    checkedOutWorktreePath !== null &&
+    checkedOutWorktreePath !== sourcePath &&
+    checkedOutWorktreePath !== targetPath
+  ) {
     throw new Error(CHECKED_OUT_BY_WORKTREE_MESSAGE);
   }
 
-  if (checkoutPlace === "head") {
-    await detachHeadFromCurrentBranch({
-      repoRoot,
+  if (shouldDetachSource) {
+    await detachWorktreeHeadAtSha({
+      path: sourcePath,
       expectedHeadSha: expectedOldSha,
+      branch,
     });
   }
 
-  await runGitCommandForPath({
-    path: repoRoot,
-    args: [
-      "update-ref",
-      "-m",
-      `MoltTree: move ${branch}`,
-      branchRef,
-      targetSha,
-      expectedOldSha,
-    ],
-  });
+  if (branchHead !== targetSha) {
+    await runGitCommandForPath({
+      path: repoRoot,
+      args: [
+        "update-ref",
+        "-m",
+        `MoltTree: move ${branch}`,
+        branchRef,
+        targetSha,
+        expectedOldSha,
+      ],
+    });
+  }
 
-  if (checkoutPlace === "head") {
-    await attachHeadToLocalBranchAtCurrentSha({ repoRoot });
+  if (targetPath !== null) {
+    await attachWorktreeHeadToBranch({
+      path: targetPath,
+      branch,
+      expectedHeadSha: targetSha,
+    });
   }
 };
 
@@ -1176,9 +1294,7 @@ export const checkoutGitCommit = async ({
   });
 
   if (statusText.length > 0) {
-    throw new Error(
-      "Working tree must be clean before switching away.",
-    );
+    throw new Error("Working tree must be clean before switching away.");
   }
 
   const visibleRefText = await readGitTextForPath({

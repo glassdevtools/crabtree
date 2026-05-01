@@ -333,18 +333,25 @@ const readGitWarningReasonText = (reasons: string[]) => {
 
 const readBranchPointerOperation = ({
   checkedOutBranchPath,
-  mainWorktreePath,
+  sourcePath,
+  targetPath,
 }: {
   checkedOutBranchPath: string | null;
-  mainWorktreePath: string;
+  sourcePath: string | null;
+  targetPath: string | null;
 }): BranchPointerOperation => {
   if (checkedOutBranchPath === null) {
     return "moveBranchPointer";
   }
 
-  return checkedOutBranchPath === mainWorktreePath
-    ? "moveBranchPointer"
-    : "blockedCheckedOutByWorktree";
+  if (
+    checkedOutBranchPath === sourcePath ||
+    checkedOutBranchPath === targetPath
+  ) {
+    return "moveBranchPointer";
+  }
+
+  return "blockedCheckedOutByWorktree";
 };
 
 const readBranchPointerOperationText = ({
@@ -595,6 +602,8 @@ type BranchPointerMove = {
   newSha: string;
   newShortSha: string;
   newSubject: string;
+  sourcePath: string | null;
+  targetPath: string | null;
   operation: BranchPointerOperation;
   warningMessage: string | null;
 };
@@ -611,6 +620,7 @@ type BranchCreateTarget =
   | {
       type: "path";
       path: string;
+      sha: string;
       title: string;
     }
   | {
@@ -2283,6 +2293,7 @@ const CommitHistoryRow = ({
       ? {
           type: "path",
           path: actionThreadGroup.cwd,
+          sha: commit.sha,
           title: actionThreadGroup.cwd,
         }
       : null;
@@ -2315,7 +2326,7 @@ const CommitHistoryRow = ({
 
   if (mergeBranch !== null && isHeadClean === false) {
     mergeDisabledReason =
-      "Current HEAD working tree must be clean before merging.";
+      "Before merging this into HEAD, make sure HEAD has no changes.";
   }
 
   const shouldShowGraphThreadActions =
@@ -3882,17 +3893,16 @@ const CommitHistory = ({
       return;
     }
 
-    if (!row.isCommitRow) {
-      setBranchPointerDropTargetRowId(null);
-      return;
-    }
-
     const branchPointerTarget = readBranchPointerTarget({ row });
+    const isDirtyWorktreeTarget =
+      !row.isCommitRow && branchPointerTarget.path !== null;
     const isSameBranchPointerPlace =
-      activeBranchPointerDrag.oldSha === branchPointerTarget.sha;
+      activeBranchPointerDrag.oldSha === branchPointerTarget.sha &&
+      activeBranchPointerDrag.sourcePath === branchPointerTarget.path;
 
     if (
       activeBranchPointerDrag.repoRoot !== repoRoot ||
+      (!row.isCommitRow && !isDirtyWorktreeTarget) ||
       isSameBranchPointerPlace
     ) {
       setBranchPointerDropTargetRowId(null);
@@ -3925,17 +3935,21 @@ const CommitHistory = ({
     event.preventDefault();
     const activeBranchPointerDrag = branchPointerDragRef.current;
 
-    if (activeBranchPointerDrag === null || !row.isCommitRow) {
+    if (activeBranchPointerDrag === null) {
       finishBranchPointerDrag();
       return;
     }
 
     const branchPointerTarget = readBranchPointerTarget({ row });
+    const isDirtyWorktreeTarget =
+      !row.isCommitRow && branchPointerTarget.path !== null;
     const isSameBranchPointerPlace =
-      activeBranchPointerDrag.oldSha === branchPointerTarget.sha;
+      activeBranchPointerDrag.oldSha === branchPointerTarget.sha &&
+      activeBranchPointerDrag.sourcePath === branchPointerTarget.path;
 
     if (
       activeBranchPointerDrag.repoRoot !== repoRoot ||
+      (!row.isCommitRow && !isDirtyWorktreeTarget) ||
       isSameBranchPointerPlace
     ) {
       finishBranchPointerDrag();
@@ -3955,9 +3969,12 @@ const CommitHistory = ({
       newSha: branchPointerTarget.sha,
       newShortSha: branchPointerTarget.shortSha,
       newSubject: branchPointerTarget.subject,
+      sourcePath: activeBranchPointerDrag.sourcePath,
+      targetPath: isDirtyWorktreeTarget ? branchPointerTarget.path : null,
       operation: readBranchPointerOperation({
         checkedOutBranchPath,
-        mainWorktreePath,
+        sourcePath: activeBranchPointerDrag.sourcePath,
+        targetPath: isDirtyWorktreeTarget ? branchPointerTarget.path : null,
       }),
       warningMessage: readBranchPointerMoveWarningMessage({
         branch: activeBranchPointerDrag.branch,
@@ -4125,6 +4142,7 @@ const CommitHistory = ({
               await window.molttree.createGitBranch({
                 path: branchCreateTarget.path,
                 branch,
+                expectedHeadSha: branchCreateTarget.sha,
               });
               break;
             case "commit":
@@ -4272,6 +4290,8 @@ const CommitHistory = ({
                 branch: commitMessageTarget.branchTarget.branch,
                 oldSha: commitMessageTarget.branchTarget.oldSha,
                 newSha,
+                sourcePath: null,
+                targetPath: null,
               });
             } catch {
               // The commit already succeeded, so a stale branch tag should not turn it into an error.
@@ -4441,6 +4461,8 @@ const CommitHistory = ({
                 branch: request.branch,
                 oldSha: request.oldSha,
                 newSha: request.newSha,
+                sourcePath: request.sourcePath,
+                targetPath: request.targetPath,
               });
               trackDesktopAction({
                 eventName: "branch_moved",

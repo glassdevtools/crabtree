@@ -929,7 +929,7 @@ test("keeps a successful commit when a colocated branch tag moves first", async 
   });
 });
 
-test("creates and checks out a branch at the current HEAD", async () => {
+test("creates and attaches a branch at the current HEAD", async () => {
   await withRepo(async ({ repoRoot }) => {
     const headSha = await commitRepoFile({
       repoRoot,
@@ -938,7 +938,11 @@ test("creates and checks out a branch at the current HEAD", async () => {
       message: "initial",
     });
 
-    await createGitBranch({ path: repoRoot, branch: "created" });
+    await createGitBranch({
+      path: repoRoot,
+      branch: "created",
+      expectedHeadSha: headSha,
+    });
 
     assert.equal(
       await readSha({ cwd: repoRoot, ref: "refs/heads/created" }),
@@ -948,6 +952,77 @@ test("creates and checks out a branch at the current HEAD", async () => {
       await runGit({ cwd: repoRoot, args: ["branch", "--show-current"] }),
       "created",
     );
+  });
+});
+
+test("creates and attaches a branch in a dirty detached worktree without changing files", async () => {
+  await withOriginRepo(async ({ parentRoot, repoRoot, mainSha }) => {
+    const worktreeRoot = join(parentRoot, "worktree");
+
+    await runGit({
+      cwd: repoRoot,
+      args: ["worktree", "add", "--detach", worktreeRoot, mainSha],
+    });
+    await appendRepoFile({
+      repoRoot: worktreeRoot,
+      filePath: "base.txt",
+      content: "dirty\n",
+    });
+
+    await createGitBranch({
+      path: worktreeRoot,
+      branch: "created",
+      expectedHeadSha: mainSha,
+    });
+
+    assert.equal(
+      await runGit({ cwd: worktreeRoot, args: ["branch", "--show-current"] }),
+      "created",
+    );
+    assert.equal(
+      await readSha({ cwd: repoRoot, ref: "refs/heads/created" }),
+      mainSha,
+    );
+    assert.equal(
+      await readRepoFile({ repoRoot: worktreeRoot, filePath: "base.txt" }),
+      "base\ndirty\n",
+    );
+
+    const { repos } = await readRepoGraphs({
+      threads: [createThread({ id: "thread", cwd: worktreeRoot })],
+    });
+    const repo = repos[0];
+
+    assert.ok(repo !== undefined);
+    assert.equal(
+      repo.worktrees.find((worktree) => worktree.path === worktreeRoot)?.branch,
+      "created",
+    );
+  });
+});
+
+test("rejects creating a branch when the worktree HEAD moved", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    const oldSha = await commitRepoFile({
+      repoRoot,
+      filePath: "file.txt",
+      content: "one\n",
+      message: "one",
+    });
+    await commitRepoFile({
+      repoRoot,
+      filePath: "file.txt",
+      content: "two\n",
+      message: "two",
+    });
+
+    await assert.rejects(async () => {
+      await createGitBranch({
+        path: repoRoot,
+        branch: "created",
+        expectedHeadSha: oldSha,
+      });
+    }, /HEAD moved/);
   });
 });
 
@@ -1420,6 +1495,8 @@ test("moves a branch to a descendant commit", async () => {
       branch: "topic",
       oldSha,
       newSha,
+      sourcePath: null,
+      targetPath: null,
     });
 
     assert.equal(await readSha({ cwd: repoRoot, ref: "topic" }), newSha);
@@ -1448,6 +1525,8 @@ test("moves a branch when its old tip would disappear from the graph", async () 
       branch: "topic",
       oldSha: topicSha,
       newSha: baseSha,
+      sourcePath: null,
+      targetPath: null,
     });
 
     assert.equal(await readSha({ cwd: repoRoot, ref: "topic" }), baseSha);
@@ -1476,6 +1555,8 @@ test("moves the current branch by detaching HEAD", async () => {
       branch: "main",
       oldSha,
       newSha: targetSha,
+      sourcePath: repoRoot,
+      targetPath: null,
     });
 
     assert.equal(
@@ -1487,7 +1568,43 @@ test("moves the current branch by detaching HEAD", async () => {
   });
 });
 
-test("moves the current branch and reattaches HEAD to the default branch at the old commit", async () => {
+test("detaches a dirty HEAD row from its branch without moving the branch", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    const headSha = await commitRepoFile({
+      repoRoot,
+      filePath: "file.txt",
+      content: "base\n",
+      message: "base",
+    });
+    await appendRepoFile({
+      repoRoot,
+      filePath: "file.txt",
+      content: "dirty\n",
+    });
+
+    await moveGitBranch({
+      repoRoot,
+      branch: "main",
+      oldSha: headSha,
+      newSha: headSha,
+      sourcePath: repoRoot,
+      targetPath: null,
+    });
+
+    assert.equal(
+      await runGit({ cwd: repoRoot, args: ["branch", "--show-current"] }),
+      "",
+    );
+    assert.equal(await readSha({ cwd: repoRoot, ref: "HEAD" }), headSha);
+    assert.equal(await readSha({ cwd: repoRoot, ref: "main" }), headSha);
+    assert.equal(
+      await readRepoFile({ repoRoot, filePath: "file.txt" }),
+      "base\ndirty\n",
+    );
+  });
+});
+
+test("moves the current branch and leaves HEAD detached at the old commit", async () => {
   await withOriginRepo(async ({ repoRoot, mainSha }) => {
     await runGit({ cwd: repoRoot, args: ["branch", "topic", mainSha] });
     await runGit({ cwd: repoRoot, args: ["switch", "-c", "target", mainSha] });
@@ -1504,14 +1621,161 @@ test("moves the current branch and reattaches HEAD to the default branch at the 
       branch: "topic",
       oldSha: mainSha,
       newSha: targetSha,
+      sourcePath: repoRoot,
+      targetPath: null,
+    });
+
+    assert.equal(
+      await runGit({ cwd: repoRoot, args: ["branch", "--show-current"] }),
+      "",
+    );
+    assert.equal(await readSha({ cwd: repoRoot, ref: "HEAD" }), mainSha);
+    assert.equal(await readSha({ cwd: repoRoot, ref: "topic" }), targetSha);
+  });
+});
+
+test("moves a branch onto a dirty HEAD row and attaches HEAD without changing files", async () => {
+  await withOriginRepo(async ({ repoRoot, mainSha }) => {
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "topic", mainSha] });
+    const targetSha = await commitRepoFile({
+      repoRoot,
+      filePath: "topic.txt",
+      content: "topic\n",
+      message: "topic",
+    });
+    await appendRepoFile({
+      repoRoot,
+      filePath: "topic.txt",
+      content: "dirty\n",
+    });
+
+    await moveGitBranch({
+      repoRoot,
+      branch: "main",
+      oldSha: mainSha,
+      newSha: targetSha,
+      sourcePath: null,
+      targetPath: repoRoot,
     });
 
     assert.equal(
       await runGit({ cwd: repoRoot, args: ["branch", "--show-current"] }),
       "main",
     );
-    assert.equal(await readSha({ cwd: repoRoot, ref: "HEAD" }), mainSha);
-    assert.equal(await readSha({ cwd: repoRoot, ref: "topic" }), targetSha);
+    assert.equal(await readSha({ cwd: repoRoot, ref: "HEAD" }), targetSha);
+    assert.equal(await readSha({ cwd: repoRoot, ref: "main" }), targetSha);
+    assert.equal(
+      await readRepoFile({ repoRoot, filePath: "topic.txt" }),
+      "topic\ndirty\n",
+    );
+  });
+});
+
+test("moves a branch onto a dirty linked worktree row and attaches that worktree without changing files", async () => {
+  await withOriginRepo(async ({ parentRoot, repoRoot, mainSha }) => {
+    await runGit({ cwd: repoRoot, args: ["branch", "candidate", mainSha] });
+    await runGit({ cwd: repoRoot, args: ["branch", "work", mainSha] });
+    const worktreeRoot = join(parentRoot, "worktree");
+
+    await runGit({
+      cwd: repoRoot,
+      args: ["worktree", "add", worktreeRoot, "work"],
+    });
+    const targetSha = await commitRepoFile({
+      repoRoot: worktreeRoot,
+      filePath: "work.txt",
+      content: "work\n",
+      message: "work",
+    });
+    await appendRepoFile({
+      repoRoot: worktreeRoot,
+      filePath: "work.txt",
+      content: "dirty\n",
+    });
+
+    await moveGitBranch({
+      repoRoot,
+      branch: "candidate",
+      oldSha: mainSha,
+      newSha: targetSha,
+      sourcePath: null,
+      targetPath: worktreeRoot,
+    });
+
+    assert.equal(
+      await runGit({ cwd: worktreeRoot, args: ["branch", "--show-current"] }),
+      "candidate",
+    );
+    assert.equal(await readSha({ cwd: worktreeRoot, ref: "HEAD" }), targetSha);
+    assert.equal(await readSha({ cwd: repoRoot, ref: "candidate" }), targetSha);
+    assert.equal(await readSha({ cwd: repoRoot, ref: "work" }), targetSha);
+    assert.equal(
+      await readRepoFile({ repoRoot: worktreeRoot, filePath: "work.txt" }),
+      "work\ndirty\n",
+    );
+  });
+});
+
+test("moves a branch between dirty worktree rows without changing files", async () => {
+  await withOriginRepo(async ({ parentRoot, repoRoot }) => {
+    const sourceSha = await commitRepoFile({
+      repoRoot,
+      filePath: "main.txt",
+      content: "main\n",
+      message: "main",
+    });
+    await appendRepoFile({
+      repoRoot,
+      filePath: "main.txt",
+      content: "dirty\n",
+    });
+    await runGit({ cwd: repoRoot, args: ["branch", "work", sourceSha] });
+    const worktreeRoot = join(parentRoot, "worktree");
+
+    await runGit({
+      cwd: repoRoot,
+      args: ["worktree", "add", worktreeRoot, "work"],
+    });
+    const targetSha = await commitRepoFile({
+      repoRoot: worktreeRoot,
+      filePath: "work.txt",
+      content: "work\n",
+      message: "work",
+    });
+    await appendRepoFile({
+      repoRoot: worktreeRoot,
+      filePath: "work.txt",
+      content: "dirty\n",
+    });
+
+    await moveGitBranch({
+      repoRoot,
+      branch: "main",
+      oldSha: sourceSha,
+      newSha: targetSha,
+      sourcePath: repoRoot,
+      targetPath: worktreeRoot,
+    });
+
+    assert.equal(
+      await runGit({ cwd: repoRoot, args: ["branch", "--show-current"] }),
+      "",
+    );
+    assert.equal(
+      await runGit({ cwd: worktreeRoot, args: ["branch", "--show-current"] }),
+      "main",
+    );
+    assert.equal(await readSha({ cwd: repoRoot, ref: "HEAD" }), sourceSha);
+    assert.equal(await readSha({ cwd: repoRoot, ref: "main" }), targetSha);
+    assert.equal(await readSha({ cwd: repoRoot, ref: "work" }), targetSha);
+    assert.equal(
+      await readRepoFile({ repoRoot, filePath: "main.txt" }),
+      "main\ndirty\n",
+    );
+    assert.equal(
+      await readRepoFile({ repoRoot: worktreeRoot, filePath: "work.txt" }),
+      "work\ndirty\n",
+    );
   });
 });
 
@@ -1551,6 +1815,8 @@ test("rejects moving a branch checked out in another worktree", async () => {
         branch: "topic",
         oldSha: topicSha,
         newSha: targetSha,
+        sourcePath: null,
+        targetPath: null,
       });
     }, /checked out in a worktree/);
   });
@@ -1583,6 +1849,8 @@ test("moves the current branch with dirty changes by detaching HEAD", async () =
       branch: "main",
       oldSha,
       newSha: targetSha,
+      sourcePath: repoRoot,
+      targetPath: null,
     });
 
     assert.equal(await readSha({ cwd: repoRoot, ref: "main" }), targetSha);

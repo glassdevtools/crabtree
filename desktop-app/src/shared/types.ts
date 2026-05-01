@@ -56,6 +56,7 @@ export type GitCommitChangesRequest = {
 export type GitCreateBranchRequest = {
   path: string;
   branch: string;
+  expectedHeadSha: string;
 };
 
 export type GitCreateRefRequest = {
@@ -82,6 +83,8 @@ export type GitMoveBranchRequest = {
   branch: string;
   oldSha: string;
   newSha: string;
+  sourcePath: string | null;
+  targetPath: string | null;
 };
 
 export type GitSwitchBranchRequest = {
