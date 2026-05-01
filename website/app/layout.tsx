@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 const siteTitle = "MoltTree";
-const siteDescription = "Save time on your Codex worktrees.";
+const siteDescription = "Manage every worktree, chat, and branch.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://molttree.app"),

@@ -2,7 +2,7 @@
   "name": "molttree",
   "version": "0.1.12",
   "private": true,
-  "description": "Save time on your Codex worktrees.",
+  "description": "Manage every worktree, chat, and branch.",
   "author": "Glass Devtools, Inc.",
   "repository": {
     "type": "git",

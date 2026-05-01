@@ -58,7 +58,7 @@ export const createSocialImage = async () => {
           <img src={appIconSrc} width={86} height={86} alt="" />
           <div
             style={{
-              fontSize: 58,
+              fontSize: 50,
               fontWeight: 900,
               lineHeight: 1,
             }}
@@ -74,7 +74,7 @@ export const createSocialImage = async () => {
             letterSpacing: 0,
           }}
         >
-          Manage every chat, branch, and worktree.
+          Manage every worktree, chat, and branch.
         </div>
         <div
           style={{

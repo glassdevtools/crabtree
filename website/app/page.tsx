@@ -134,7 +134,9 @@ const HomePage = () => {
               </span>
               <span>MoltTree</span>
             </h1>
-            <p className="heroSubtext">Save time on your Codex worktrees.</p>
+            <p className="heroSubtext">
+              Manage every worktree, chat, and branch.
+            </p>
             <div className="hero__actions">
               <ClientDownloadLink
                 className={ctaDownloadButtonClassName}
@@ -215,7 +217,9 @@ const HomePage = () => {
 
       <section className="bottomCta" aria-labelledby="cta-title">
         <div className="bottomCtaInner">
-          <h2 id="cta-title">Save time in Codex</h2>
+          <h2 id="cta-title">
+            Manage every worktree, chat, and branch.
+          </h2>
           <p>
             There&apos;s a better way to manage your branches and worktrees.
           </p>
