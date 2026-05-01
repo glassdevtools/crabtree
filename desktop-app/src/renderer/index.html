@@ -40,9 +40,13 @@
 
       .initial-loading-image {
         width: min(42vmin, 300px);
+        aspect-ratio: 1 / 1;
         max-width: calc(100vw - 48px);
         max-height: calc(100vh - 120px);
-        object-fit: contain;
+        background-image: var(--initial-loading-image-url);
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: contain;
         pointer-events: none;
         user-select: none;
         -webkit-user-drag: none;
@@ -76,17 +80,51 @@
         }
       }
     </style>
+    <link
+      rel="preload"
+      as="image"
+      href="./assets/default-app-icon.png"
+      data-initial-loading-image
+    />
+    <link
+      rel="preload"
+      as="image"
+      href="./assets/logo-loader.png"
+      data-initial-loading-image
+    />
+    <link
+      rel="preload"
+      as="image"
+      href="./assets/loading-2.png"
+      data-initial-loading-image
+    />
+    <link
+      rel="preload"
+      as="image"
+      href="./assets/loading-3.png"
+      data-initial-loading-image
+    />
+    <script>
+      {
+        const initialLoadingImageUrls = Array.from(
+          document.querySelectorAll("[data-initial-loading-image]"),
+          (initialLoadingImageLink) => initialLoadingImageLink.href,
+        );
+        const initialLoadingImageIndex = Math.floor(
+          Math.random() * initialLoadingImageUrls.length,
+        );
+        document.documentElement.style.setProperty(
+          "--initial-loading-image-url",
+          `url("${initialLoadingImageUrls[initialLoadingImageIndex]}")`,
+        );
+      }
+    </script>
   </head>
   <body>
     <div id="initial-loading-root">
       <main class="initial-loading-screen">
         <div class="initial-loading-content">
-          <img
-            alt=""
-            class="initial-loading-image"
-            draggable="false"
-            src="./assets/default-app-icon.png"
-          />
+          <div class="initial-loading-image" aria-hidden="true"></div>
           <div class="initial-loading-status">
             <span class="initial-loading-spinner" aria-hidden="true"></span>
             <span>Loading repositories...</span>

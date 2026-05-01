@@ -141,8 +141,7 @@ const HomePage = () => {
               <span>MoltTree</span>
             </h1>
             <p className="heroSubtext">
-              Easily merge your Codex worktrees. Your chats, branches, and
-              worktrees, all in one place.
+              Easily merge your Codex worktrees and manage your chats, worktrees, and branches.
             </p>
 
             <div className="hero__actions">
@@ -215,9 +214,14 @@ const HomePage = () => {
           <div className="sectionHeader">
             <h2 id="questions-title">Answer questions like:</h2>
           </div>
-          <ul className="questionList">
+          <ul className="questionList max-[760px]:!max-w-none">
             {questionItems.map((questionItem, index) => (
-              <li key={`question-${index}`}>{questionItem}</li>
+              <li
+                className="max-[760px]:!whitespace-nowrap max-[760px]:!text-[clamp(0.85rem,3.5vw,1rem)] max-[760px]:!leading-[1.3]"
+                key={`question-${index}`}
+              >
+                {questionItem}
+              </li>
             ))}
           </ul>
         </div>
