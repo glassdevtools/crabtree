@@ -165,8 +165,20 @@ export const createDashboardRefreshCoordinator = ({
     }
   };
 
+  const readDashboardDataIfIdle = async (
+    readMode: DashboardReadMode,
+    repoRoot: string | null,
+  ) => {
+    if (dashboardReadPromise !== null) {
+      return null;
+    }
+
+    return await readDashboardDataWithoutOverlap(readMode, repoRoot);
+  };
+
   return {
     markChangedRepoRoot,
+    readDashboardDataIfIdle,
     readDashboardDataWithoutOverlap,
   };
 };

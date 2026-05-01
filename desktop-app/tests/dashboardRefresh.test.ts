@@ -191,6 +191,39 @@ test("uses the latest focused repo root after an overlapping full dashboard read
   assert.equal(secondReadResult.generatedAt, "second-full");
 });
 
+test("drops idle dashboard reads while another dashboard read is running", async () => {
+  const fullRead = createDeferredDashboardFullReadResult();
+  let fullReadCount = 0;
+  const dashboardRefreshCoordinator = createDashboardRefreshCoordinator({
+    readFullDashboardData: async () => {
+      fullReadCount += 1;
+
+      return await fullRead.promise;
+    },
+    readDashboardDataAfterGitMutation: async () => {
+      return createDashboardData("after-git-mutation");
+    },
+  });
+  const fullReadPromise =
+    dashboardRefreshCoordinator.readDashboardDataWithoutOverlap("full", "/one");
+
+  const idleReadResult =
+    await dashboardRefreshCoordinator.readDashboardDataIfIdle("full", "/two");
+
+  fullRead.resolveDashboardFullReadResult(
+    createDashboardFullReadResult({
+      generatedAt: "full",
+      readRepoRoots: ["/one"],
+    }),
+  );
+
+  const fullReadResult = await fullReadPromise;
+
+  assert.equal(idleReadResult, null);
+  assert.equal(fullReadCount, 1);
+  assert.equal(fullReadResult.generatedAt, "full");
+});
+
 test("does not treat duplicate changed repo marks as new mutations", async () => {
   const repoRootGroups: string[][] = [];
   let fullReadCount = 0;

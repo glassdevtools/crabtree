@@ -24,6 +24,7 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  startTransition,
   useState,
 } from "react";
 import type {
@@ -122,8 +123,8 @@ const COMMIT_GRAPH_SEGMENT_STROKE_WIDTH = 2.25;
 const COMMIT_GRAPH_CWD_CHANGE_COLOR = "#8b929c";
 const COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO = 0;
 const COMMIT_HISTORY_HEADER_HEIGHT = 22;
-// Dashboard reads touch Codex and Git, so automatic refreshes share the manual refresh path and never overlap.
-// TODO: AI-PICKED-VALUE: Refreshing every second keeps branch/worktree state current while the refresh queue prevents overlapping Git reads.
+// Dashboard reads touch Codex and Git, so automatic refreshes run only when the previous read has finished.
+// TODO: AI-PICKED-VALUE: Refreshing one second after each automatic read keeps branch/worktree state current without queuing Git reads.
 const DASHBOARD_REFRESH_INTERVAL_MS = 1000;
 const TOAST_POSITION = "bottom-center";
 const UNFOCUSED_ERROR_TOAST_DURATION_MS = Infinity;
@@ -5238,6 +5239,32 @@ const MoltTreeDesktopApp = () => {
   const refreshDashboard = useCallback(async () => {
     await refreshDashboardForRepoRoot(selectedRepoRootRef.current);
   }, [refreshDashboardForRepoRoot]);
+  const refreshDashboardIfIdle = useCallback(async () => {
+    if (
+      userGitUpdateCountRef.current > 0 ||
+      isDashboardRefreshRunningRef.current
+    ) {
+      return;
+    }
+
+    const repoRoot = selectedRepoRootRef.current;
+    const nextDashboardData = await window.molttree.readDashboardIfIdle({
+      repoRoot,
+    });
+
+    if (
+      nextDashboardData === null ||
+      userGitUpdateCountRef.current > 0 ||
+      isDashboardRefreshRunningRef.current ||
+      repoRoot !== selectedRepoRootRef.current
+    ) {
+      return;
+    }
+
+    startTransition(() => {
+      applyDashboardData(nextDashboardData);
+    });
+  }, [applyDashboardData]);
   const refreshDashboardAfterUserGitUpdate = useCallback(
     async (finishUserGitUpdate: () => void) => {
       setIsLoading(true);
@@ -5347,20 +5374,31 @@ const MoltTreeDesktopApp = () => {
     [],
   );
   useEffect(() => {
-    void refreshDashboard();
+    let dashboardRefreshTimeoutId: number | null = null;
+    let didCancel = false;
+    const refreshDashboardWhenIdle = async () => {
+      await refreshDashboardIfIdle();
 
-    const dashboardRefreshIntervalId = window.setInterval(() => {
-      if (userGitUpdateCountRef.current > 0) {
-        return;
+      if (!didCancel) {
+        dashboardRefreshTimeoutId = window.setTimeout(() => {
+          void refreshDashboardWhenIdle();
+        }, DASHBOARD_REFRESH_INTERVAL_MS);
       }
+    };
 
-      void refreshDashboard();
+    void refreshDashboard();
+    dashboardRefreshTimeoutId = window.setTimeout(() => {
+      void refreshDashboardWhenIdle();
     }, DASHBOARD_REFRESH_INTERVAL_MS);
 
     return () => {
-      window.clearInterval(dashboardRefreshIntervalId);
+      didCancel = true;
+
+      if (dashboardRefreshTimeoutId !== null) {
+        window.clearTimeout(dashboardRefreshTimeoutId);
+      }
     };
-  }, [refreshDashboard]);
+  }, [refreshDashboard, refreshDashboardIfIdle]);
 
   useEffect(() => {
     if (dashboardErrorMessage === null) {

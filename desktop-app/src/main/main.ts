@@ -542,6 +542,15 @@ ipcMain.handle("dashboard:read", async (_event, value: unknown) => {
   );
 });
 
+ipcMain.handle("dashboard:readIfIdle", async (_event, value: unknown) => {
+  const request = readDashboardReadRequest(value);
+
+  return await dashboardRefreshCoordinator.readDashboardDataIfIdle(
+    "full",
+    request.repoRoot,
+  );
+});
+
 ipcMain.handle("dashboard:readAfterGitMutation", async () => {
   return await dashboardRefreshCoordinator.readDashboardDataWithoutOverlap(
     "afterGitMutation",

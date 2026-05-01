@@ -28,6 +28,14 @@ const api: MoltTreeApi = {
 
     return dashboardData;
   },
+  readDashboardIfIdle: async (request: DashboardReadRequest) => {
+    const dashboardData: DashboardData | null = await ipcRenderer.invoke(
+      "dashboard:readIfIdle",
+      request,
+    );
+
+    return dashboardData;
+  },
   readDashboardAfterGitMutation: async () => {
     const dashboardData: DashboardData = await ipcRenderer.invoke(
       "dashboard:readAfterGitMutation",

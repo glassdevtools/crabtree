@@ -187,6 +187,9 @@ export type AppUpdateStatus =
 
 export type MoltTreeApi = {
   readDashboard: (request: DashboardReadRequest) => Promise<DashboardData>;
+  readDashboardIfIdle: (
+    request: DashboardReadRequest,
+  ) => Promise<DashboardData | null>;
   readDashboardAfterGitMutation: () => Promise<DashboardData>;
   readAnalyticsInstallId: () => Promise<string>;
   readAppUpdateStatus: () => Promise<AppUpdateStatus>;
