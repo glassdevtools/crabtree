@@ -26,20 +26,12 @@ npx electron-builder --config electron-builder.config.cjs --mac dir -c.mac.ident
 
 ## Windows
 
-MoltTree uses Electron Builder's NSIS target for Windows packaging. The Windows build uses the transparent renderer icon at `src/renderer/assets/default-app-icon.png` so the executable icon does not render as a hard white square. Windows release builds are signed through Azure Artifact Signing with Electron Builder's `win.azureSignOptions`.
+MoltTree uses Electron Builder's NSIS target for Windows packaging. The Windows build uses the transparent renderer icon at `src/renderer/assets/default-app-icon.png` so the executable icon does not render as a hard white square. Windows builds are currently unsigned.
 
 Run:
 
 ```bash
 npm run dist:win --workspace desktop-app
-```
-
-For local Windows signing, authenticate with Azure CLI first and export the Artifact Signing values:
-
-```bash
-export ARTIFACT_SIGNING_ENDPOINT="https://eus.codesigning.azure.net/"
-export ARTIFACT_SIGNING_ACCOUNT="glass-signing-prod"
-export ARTIFACT_SIGNING_PROFILE="glass-certificate"
 ```
 
 The first Windows target is x64. Add more Windows architectures only after deciding whether the extra installer size is worth it.
@@ -130,7 +122,7 @@ The macOS release assets must include `latest-mac.yml`, the `.dmg`, the `.zip`, 
 
 The workflow reads `desktop-app/package.json` and uses `v<version>` as the release tag. If that GitHub Release already exists, the installer builds are skipped. Otherwise, macOS and Windows installers build in parallel, upload GitHub Actions artifacts, and a final release job waits for both builds before publishing the GitHub Release.
 
-If the matching GitHub Release does not exist yet, the workflow requires Apple signing secrets and Windows signing secrets, creates the `v<version>` tag on the current commit when needed, then publishes the signed and notarized macOS release assets and the Windows installer to `glassdevtools/molttree` GitHub Releases. It also uploads `MoltTree.dmg` and `MoltTree.exe` aliases for website downloads. If the tag already exists on a different commit, the workflow fails so that a package version cannot silently point at two different builds.
+If the matching GitHub Release does not exist yet, the workflow requires Apple signing secrets, creates the `v<version>` tag on the current commit when needed, then publishes the signed and notarized macOS release assets and the unsigned Windows installer to `glassdevtools/molttree` GitHub Releases. It also uploads `MoltTree.dmg` and `MoltTree.exe` aliases for website downloads. If the tag already exists on a different commit, the workflow fails so that a package version cannot silently point at two different builds.
 
 GitHub release uploads use the built-in `${{ github.token }}` as `GH_TOKEN`; no repository secret is needed for that token.
 
@@ -147,25 +139,6 @@ macOS signing requires the certificate secrets plus one notarization mode.
 | `APPLE_APP_SPECIFIC_PASSWORD` | macOS Apple ID mode | App-specific password for the Apple ID.                                                                                   |
 | `APPLE_TEAM_ID`               | macOS Apple ID mode | Apple Developer team id.                                                                                                  |
 
-Windows signing requires all Azure Artifact Signing secrets.
-
-The Azure federated identity credential used by `azure/login` must match this workflow's GitHub OIDC token:
-
-- Issuer: `https://token.actions.githubusercontent.com`
-- Audience: `api://AzureADTokenExchange`
-- Subject: `repo:glassdevtools/molttree:ref:refs/heads/main`
-
-| Secret                      | Required | Value                                                                       |
-| --------------------------- | -------- | --------------------------------------------------------------------------- |
-| `AZURE_CLIENT_ID`           | Windows  | Azure app registration client id used by `azure/login`.                     |
-| `AZURE_TENANT_ID`           | Windows  | Azure tenant id for the app registration.                                   |
-| `AZURE_SUBSCRIPTION_ID`     | Windows  | Azure subscription id used by `azure/login`.                                |
-| `ARTIFACT_SIGNING_ENDPOINT` | Windows  | Trusted Signing endpoint, for example `https://eus.codesigning.azure.net/`. |
-| `ARTIFACT_SIGNING_ACCOUNT`  | Windows  | Trusted Signing account name, for example `glass-signing-prod`.             |
-| `ARTIFACT_SIGNING_PROFILE`  | Windows  | Certificate profile name, for example `glass-certificate`.                  |
-
-The Azure app registration must have a GitHub Actions federated credential and the `Trusted Signing Certificate Profile Signer` role on the certificate profile. The configured Windows publisher name is `Glass Devtools, Inc.`, which must match the certificate Common Name exactly.
-
 Release command:
 
 ```bash
@@ -175,4 +148,4 @@ git commit -m "Release vX.Y.Z"
 git push origin main
 ```
 
-Replace `X.Y.Z` with the new `desktop-app/package.json` version. The workflow creates and pushes `vX.Y.Z` during the signed release build.
+Replace `X.Y.Z` with the new `desktop-app/package.json` version. The workflow creates and pushes `vX.Y.Z` during the release build.
