@@ -74,7 +74,7 @@ export const createSocialImage = async () => {
             letterSpacing: 0,
           }}
         >
-          Manage every worktree, chat, and branch.
+          Easily merge your Codex worktrees.
         </div>
         <div
           style={{

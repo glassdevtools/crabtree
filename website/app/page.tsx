@@ -14,6 +14,12 @@ const downloadButtonClassName = "downloadButton";
 const githubButtonClassName = "githubButton";
 const featureItems = [
   {
+    title: "Easily merge your worktrees",
+    descriptionLines: [
+      "Codex makes it easy to spin up 100 worktrees, but merging them back together is hard. MoltTree was built to fix that. Commit, branch, merge, update main, and push without leaving the app.",
+    ],
+  },
+  {
     title: "Everything on a single page",
     descriptionLines: [
       <>
@@ -34,7 +40,7 @@ const featureItems = [
   {
     title: "Git power tools",
     descriptionLines: [
-      "Commit, branch, merge, push, and pull. No IDE needed. Access power tools like one-click merges and moving branch tags by simply dragging.",
+      "Access power tools like one-click merges, simplified push and pull, and moving branches by simply dragging.",
     ],
   },
   {
@@ -135,8 +141,10 @@ const HomePage = () => {
               <span>MoltTree</span>
             </h1>
             <p className="heroSubtext">
-              Your chats, worktrees, and branches, all in one place.
+              Easily merge your Codex worktrees. Your chats, branches, and
+              worktrees, all in one place.
             </p>
+
             <div className="hero__actions">
               <ClientDownloadLink
                 className={ctaDownloadButtonClassName}
@@ -171,22 +179,6 @@ const HomePage = () => {
       </section>
 
       <section
-        className="contentSection questionsSection"
-        aria-labelledby="questions-title"
-      >
-        <div className="sectionInner">
-          <div className="sectionHeader">
-            <h2 id="questions-title">Answer questions like:</h2>
-          </div>
-          <ul className="questionList">
-            {questionItems.map((questionItem, index) => (
-              <li key={`question-${index}`}>{questionItem}</li>
-            ))}
-          </ul>
-        </div>
-      </section>
-
-      <section
         className="contentSection featuresSection"
         aria-labelledby="features-title"
       >
@@ -210,6 +202,22 @@ const HomePage = () => {
                   </div>
                 )}
               </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      <section
+        className="contentSection questionsSection"
+        aria-labelledby="questions-title"
+      >
+        <div className="sectionInner">
+          <div className="sectionHeader">
+            <h2 id="questions-title">Answer questions like:</h2>
+          </div>
+          <ul className="questionList">
+            {questionItems.map((questionItem, index) => (
+              <li key={`question-${index}`}>{questionItem}</li>
             ))}
           </ul>
         </div>
