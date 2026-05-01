@@ -5270,38 +5270,6 @@ const MoltTreeDesktopApp = () => {
     [applyDashboardData],
   );
   useEffect(() => {
-    return window.molttree.watchCodexThreadStatus((codexThreadStatusChange) => {
-      setDashboardData((currentDashboardData) => {
-        if (currentDashboardData === null) {
-          return currentDashboardData;
-        }
-
-        let didUpdateThread = false;
-        const threads = currentDashboardData.threads.map((thread) => {
-          if (thread.id !== codexThreadStatusChange.threadId) {
-            return thread;
-          }
-
-          didUpdateThread = true;
-
-          return {
-            ...thread,
-            status: codexThreadStatusChange.status,
-          };
-        });
-
-        if (!didUpdateThread) {
-          return currentDashboardData;
-        }
-
-        return {
-          ...currentDashboardData,
-          threads,
-        };
-      });
-    });
-  }, []);
-  useEffect(() => {
     let didCancel = false;
     const stopWatchingAppUpdateStatus =
       window.molttree.watchAppUpdateStatus(setAppUpdateStatus);

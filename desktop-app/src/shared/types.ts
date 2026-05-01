@@ -25,11 +25,6 @@ export type CodexThread = {
   gitInfo: CodexGitInfo | null;
 };
 
-export type CodexThreadStatusChange = {
-  threadId: string;
-  status: CodexThreadStatus;
-};
-
 export type GitWorktree = {
   path: string;
   head: string | null;
@@ -200,9 +195,6 @@ export type MoltTreeApi = {
   ) => () => void;
   checkForAppUpdate: () => Promise<AppUpdateStatus>;
   quitAndInstallAppUpdate: () => Promise<void>;
-  watchCodexThreadStatus: (
-    onStatusChange: (codexThreadStatusChange: CodexThreadStatusChange) => void,
-  ) => () => void;
   openCodexThread: (threadId: string) => Promise<void>;
   openNewCodexThread: () => Promise<void>;
   openExternalUrl: (url: string) => Promise<void>;

@@ -1,17 +1,30 @@
-import type {
-  CodexGitInfo,
-  CodexThread,
-  CodexThreadStatus,
-} from "../shared/types";
-import type { AppServerClient } from "./appServerClient";
+import { createReadStream, type Dirent } from "node:fs";
+import { readdir, stat } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import readline from "node:readline";
+import type { CodexGitInfo, CodexThread } from "../shared/types";
 
 // These limits keep the first dashboard load bounded while still showing a useful history.
 const MAX_THREAD_COUNT = 1000;
-const THREAD_PAGE_SIZE = 200;
+const CODEX_SESSION_FILE_PREFIX = "rollout-";
+const CODEX_SESSION_FILE_SUFFIX = ".jsonl";
 
-// Codex app-server owns thread reads so this app does not need raw transcript parsing.
-// The returned thread objects already include cwd and gitInfo for graph matching.
-// Runtime statuses come from app-server snapshots on startup and thread/status/changed notifications while the app is open.
+type CodexSessionFile = {
+  path: string;
+  updatedAt: number;
+};
+
+type CodexSessionMeta = {
+  id: string;
+  cwd: string;
+  source: string;
+  modelProvider: string;
+  createdAt: number;
+  gitInfo: CodexGitInfo | null;
+};
+
+// Codex session files are enough for startup repo discovery, so MoltTree does not need Codex app-server or Keychain access to show the dashboard.
 
 const isObject = (value: unknown): value is { [key: string]: unknown } => {
   return typeof value === "object" && value !== null;
@@ -39,18 +52,24 @@ const readNullableString = (value: unknown) => {
   return null;
 };
 
-const readNumber = ({
+const readTimestamp = ({
   value,
   fallback,
 }: {
   value: unknown;
   fallback: number;
 }) => {
-  if (typeof value === "number") {
-    return value;
+  if (typeof value !== "string") {
+    return fallback;
   }
 
-  return fallback;
+  const timestamp = Date.parse(value);
+
+  if (!Number.isFinite(timestamp)) {
+    return fallback;
+  }
+
+  return Math.floor(timestamp / 1000);
 };
 
 const convertGitInfo = (value: unknown): CodexGitInfo | null => {
@@ -59,110 +78,239 @@ const convertGitInfo = (value: unknown): CodexGitInfo | null => {
   }
 
   return {
-    sha: readNullableString(value.sha),
+    sha: readNullableString(value.sha) ?? readNullableString(value.commit_hash),
     branch: readNullableString(value.branch),
-    originUrl: readNullableString(value.originUrl),
+    originUrl:
+      readNullableString(value.originUrl) ??
+      readNullableString(value.repository_url),
   };
 };
 
-export const convertThreadStatus = (value: unknown): CodexThreadStatus => {
-  if (!isObject(value) || typeof value.type !== "string") {
-    return { type: "notLoaded" };
+const readCodexSessionMeta = (value: unknown) => {
+  if (!isObject(value) || value.type !== "session_meta") {
+    return null;
   }
 
-  switch (value.type) {
-    case "active": {
-      const activeFlags = Array.isArray(value.activeFlags)
-        ? value.activeFlags.filter(
-            (activeFlag): activeFlag is string =>
-              typeof activeFlag === "string",
-          )
-        : [];
+  const payload = value.payload;
 
-      return { type: "active", activeFlags };
-    }
-    case "idle":
-      return { type: "idle" };
-    case "systemError":
-      return { type: "systemError" };
-    case "notLoaded":
-      return { type: "notLoaded" };
-    default:
-      return { type: "notLoaded" };
+  if (!isObject(payload) || typeof payload.id !== "string") {
+    return null;
   }
+
+  const sessionMeta: CodexSessionMeta = {
+    id: payload.id,
+    cwd: readString({ value: payload.cwd, fallback: "" }),
+    source: readString({
+      value: payload.source,
+      fallback: readString({ value: payload.originator, fallback: "unknown" }),
+    }),
+    modelProvider: readString({
+      value: payload.model_provider,
+      fallback: "unknown",
+    }),
+    createdAt: readTimestamp({
+      value: payload.timestamp,
+      fallback: readTimestamp({ value: value.timestamp, fallback: 0 }),
+    }),
+    gitInfo: convertGitInfo(payload.git),
+  };
+
+  return sessionMeta;
 };
 
-const convertThread = ({
-  value,
-  archived,
+const readTextFromResponseContent = (value: unknown) => {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  for (const item of value) {
+    if (!isObject(item) || typeof item.text !== "string") {
+      continue;
+    }
+
+    if (item.type === "input_text" || item.type === "text") {
+      return item.text;
+    }
+  }
+
+  return null;
+};
+
+const readUserMessage = (value: unknown) => {
+  if (!isObject(value)) {
+    return null;
+  }
+
+  if (value.type === "event_msg") {
+    const payload = value.payload;
+
+    if (
+      isObject(payload) &&
+      payload.type === "user_message" &&
+      typeof payload.message === "string"
+    ) {
+      return payload.message;
+    }
+  }
+
+  if (value.type === "response_item") {
+    const payload = value.payload;
+
+    if (
+      isObject(payload) &&
+      payload.type === "message" &&
+      payload.role === "user"
+    ) {
+      return readTextFromResponseContent(payload.content);
+    }
+  }
+
+  return null;
+};
+
+const readPreview = (message: string) => {
+  return message.replace(/\s+/g, " ").trim();
+};
+
+const readCodexThreadFromSessionFile = async ({
+  sessionFile,
 }: {
-  value: unknown;
-  archived: boolean;
+  sessionFile: CodexSessionFile;
 }) => {
-  if (!isObject(value) || typeof value.id !== "string") {
+  const fileStream = createReadStream(sessionFile.path, { encoding: "utf8" });
+  const lineReader = readline.createInterface({
+    input: fileStream,
+    crlfDelay: Infinity,
+  });
+  let sessionMeta: CodexSessionMeta | null = null;
+  let preview = "";
+
+  try {
+    for await (const line of lineReader) {
+      let value: unknown;
+
+      try {
+        value = JSON.parse(line);
+      } catch {
+        continue;
+      }
+
+      if (sessionMeta === null) {
+        sessionMeta = readCodexSessionMeta(value);
+      }
+
+      if (preview.length === 0) {
+        const userMessage = readUserMessage(value);
+
+        if (userMessage !== null) {
+          preview = readPreview(userMessage);
+        }
+      }
+
+      if (sessionMeta !== null && preview.length > 0) {
+        break;
+      }
+    }
+  } catch {
+    return null;
+  } finally {
+    lineReader.close();
+    fileStream.destroy();
+  }
+
+  if (sessionMeta === null) {
     return null;
   }
 
   const thread: CodexThread = {
-    id: value.id,
-    name: readNullableString(value.name),
-    preview: readString({ value: value.preview, fallback: "" }),
-    cwd: readString({ value: value.cwd, fallback: "" }),
-    path: readNullableString(value.path),
-    source: readString({ value: value.source, fallback: "unknown" }),
-    modelProvider: readString({
-      value: value.modelProvider,
-      fallback: "unknown",
-    }),
-    createdAt: readNumber({ value: value.createdAt, fallback: 0 }),
-    updatedAt: readNumber({ value: value.updatedAt, fallback: 0 }),
-    archived,
-    status: convertThreadStatus(value.status),
-    gitInfo: convertGitInfo(value.gitInfo),
+    id: sessionMeta.id,
+    name: null,
+    preview,
+    cwd: sessionMeta.cwd,
+    path: sessionFile.path,
+    source: sessionMeta.source,
+    modelProvider: sessionMeta.modelProvider,
+    createdAt: sessionMeta.createdAt,
+    updatedAt: sessionFile.updatedAt,
+    archived: false,
+    status: { type: "notLoaded" },
+    gitInfo: sessionMeta.gitInfo,
   };
 
   return thread;
 };
 
-const readActiveThreads = async (appServerClient: AppServerClient) => {
+const pushCodexSessionFiles = async ({
+  sessionFiles,
+  directoryPath,
+}: {
+  sessionFiles: CodexSessionFile[];
+  directoryPath: string;
+}) => {
+  let directoryEntries: Dirent[];
+
+  try {
+    directoryEntries = await readdir(directoryPath, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  for (const directoryEntry of directoryEntries) {
+    const entryPath = join(directoryPath, directoryEntry.name);
+
+    if (directoryEntry.isDirectory()) {
+      await pushCodexSessionFiles({ sessionFiles, directoryPath: entryPath });
+      continue;
+    }
+
+    if (
+      !directoryEntry.isFile() ||
+      !directoryEntry.name.startsWith(CODEX_SESSION_FILE_PREFIX) ||
+      !directoryEntry.name.endsWith(CODEX_SESSION_FILE_SUFFIX)
+    ) {
+      continue;
+    }
+
+    try {
+      const sessionFileStat = await stat(entryPath);
+
+      sessionFiles.push({
+        path: entryPath,
+        updatedAt: Math.floor(sessionFileStat.mtimeMs / 1000),
+      });
+    } catch {
+      continue;
+    }
+  }
+};
+
+export const readCodexThreadsFromSessionRoot = async ({
+  sessionsPath,
+}: {
+  sessionsPath: string;
+}) => {
+  const sessionFiles: CodexSessionFile[] = [];
   const threads: CodexThread[] = [];
-  let cursor: string | null = null;
 
-  while (threads.length < MAX_THREAD_COUNT) {
-    const result = await appServerClient.request({
-      method: "thread/list",
-      params: {
-        limit: THREAD_PAGE_SIZE,
-        sortKey: "updated_at",
-        sortDirection: "desc",
-        archived: false,
-        cursor,
-        useStateDbOnly: true,
-      },
-    });
+  await pushCodexSessionFiles({ sessionFiles, directoryPath: sessionsPath });
 
-    if (!isObject(result) || !Array.isArray(result.data)) {
-      return threads;
-    }
+  sessionFiles.sort((sessionFileA, sessionFileB) => {
+    return sessionFileB.updatedAt - sessionFileA.updatedAt;
+  });
 
-    for (const item of result.data) {
-      const thread = convertThread({ value: item, archived: false });
+  for (const sessionFile of sessionFiles.slice(0, MAX_THREAD_COUNT)) {
+    const thread = await readCodexThreadFromSessionFile({ sessionFile });
 
-      if (thread !== null) {
-        threads.push(thread);
-      }
-    }
-
-    cursor = readNullableString(result.nextCursor);
-
-    if (cursor === null || result.data.length === 0) {
-      return threads;
+    if (thread !== null) {
+      threads.push(thread);
     }
   }
 
   return threads;
 };
 
-export const readCodexThreads = async (appServerClient: AppServerClient) => {
-  return await readActiveThreads(appServerClient);
+export const readCodexThreads = async () => {
+  return await readCodexThreadsFromSessionRoot({
+    sessionsPath: join(homedir(), ".codex", "sessions"),
+  });
 };
