@@ -26,12 +26,20 @@ npx electron-builder --config electron-builder.config.cjs --mac dir -c.mac.ident
 
 ## Windows
 
-MoltTree uses Electron Builder's NSIS target for Windows packaging. The Windows build uses the transparent renderer icon at `src/renderer/assets/default-app-icon.png` so the executable icon does not render as a hard white square.
+MoltTree uses Electron Builder's NSIS target for Windows packaging. The Windows build uses the transparent renderer icon at `src/renderer/assets/default-app-icon.png` so the executable icon does not render as a hard white square. Windows release builds are signed through Azure Artifact Signing with Electron Builder's `win.azureSignOptions`.
 
 Run:
 
 ```bash
 npm run dist:win --workspace desktop-app
+```
+
+For local Windows signing, authenticate with Azure CLI first and export the Artifact Signing values:
+
+```bash
+export ARTIFACT_SIGNING_ENDPOINT="https://eus.codesigning.azure.net/"
+export ARTIFACT_SIGNING_ACCOUNT="glass-signing-prod"
+export ARTIFACT_SIGNING_PROFILE="glass-certificate"
 ```
 
 The first Windows target is x64. Add more Windows architectures only after deciding whether the extra installer size is worth it.
@@ -124,30 +132,33 @@ The workflow reads `desktop-app/package.json` and uses `v<version>` as the relea
 
 If the matching GitHub Release does not exist yet, the workflow requires Apple signing secrets, creates the `v<version>` tag on the current commit when needed, then publishes the signed and notarized macOS release assets and the Windows installer to `glassdevtools/molttree` GitHub Releases. It also uploads `MoltTree.dmg` and `MoltTree.exe` aliases for website downloads. If the tag already exists on a different commit, the workflow fails so that a package version cannot silently point at two different builds.
 
-Required secrets for signed builds:
+GitHub release uploads use the built-in `${{ github.token }}` as `GH_TOKEN`; no repository secret is needed for that token.
 
-```text
-APPLE_CERTIFICATE
-APPLE_CERTIFICATE_PASSWORD
-```
+macOS signing requires the certificate secrets plus one notarization mode.
 
-Then choose one notarization mode.
+| Secret                        | Required            | Value                                                                                                                     |
+| ----------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `APPLE_CERTIFICATE`           | macOS               | Base64 encoded `.p12` export of the `Developer ID Application` certificate. Electron Builder receives this as `CSC_LINK`. |
+| `APPLE_CERTIFICATE_PASSWORD`  | macOS               | Password for the `.p12` certificate export. Electron Builder receives this as `CSC_KEY_PASSWORD`.                         |
+| `APPLE_API_KEY`               | macOS API key mode  | App Store Connect API key id. The workflow writes this to `APPLE_API_KEY_ID` after decoding the `.p8` file.               |
+| `APPLE_API_ISSUER`            | macOS API key mode  | App Store Connect issuer id.                                                                                              |
+| `APPLE_API_KEY_P8_BASE64`     | macOS API key mode  | Base64 encoded contents of `AuthKey_<APPLE_API_KEY>.p8`.                                                                  |
+| `APPLE_ID`                    | macOS Apple ID mode | Apple ID email for notarization.                                                                                          |
+| `APPLE_APP_SPECIFIC_PASSWORD` | macOS Apple ID mode | App-specific password for the Apple ID.                                                                                   |
+| `APPLE_TEAM_ID`               | macOS Apple ID mode | Apple Developer team id.                                                                                                  |
 
-App Store Connect API key mode:
+Windows signing requires all Azure Artifact Signing secrets.
 
-```text
-APPLE_API_KEY
-APPLE_API_ISSUER
-APPLE_API_KEY_P8_BASE64
-```
+| Secret                      | Required | Value                                                                       |
+| --------------------------- | -------- | --------------------------------------------------------------------------- |
+| `AZURE_CLIENT_ID`           | Windows  | Azure app registration client id used by `azure/login`.                     |
+| `AZURE_TENANT_ID`           | Windows  | Azure tenant id for the app registration.                                   |
+| `AZURE_SUBSCRIPTION_ID`     | Windows  | Azure subscription id used by `azure/login`.                                |
+| `ARTIFACT_SIGNING_ENDPOINT` | Windows  | Trusted Signing endpoint, for example `https://eus.codesigning.azure.net/`. |
+| `ARTIFACT_SIGNING_ACCOUNT`  | Windows  | Trusted Signing account name, for example `glass-signing-prod`.             |
+| `ARTIFACT_SIGNING_PROFILE`  | Windows  | Certificate profile name, for example `glass-certificate`.                  |
 
-Apple ID app-specific password mode:
-
-```text
-APPLE_ID
-APPLE_APP_SPECIFIC_PASSWORD
-APPLE_TEAM_ID
-```
+The Azure app registration must have a GitHub Actions federated credential and the `Trusted Signing Certificate Profile Signer` role on the certificate profile. The configured Windows publisher name is `Glass Devtools, Inc.`, which must match the certificate Common Name exactly.
 
 Release command:
 

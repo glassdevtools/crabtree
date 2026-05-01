@@ -1,3 +1,20 @@
+const isWindowsAzureSigningConfigured =
+  process.env.ARTIFACT_SIGNING_ENDPOINT !== undefined &&
+  process.env.ARTIFACT_SIGNING_ENDPOINT !== "" &&
+  process.env.ARTIFACT_SIGNING_PROFILE !== undefined &&
+  process.env.ARTIFACT_SIGNING_PROFILE !== "" &&
+  process.env.ARTIFACT_SIGNING_ACCOUNT !== undefined &&
+  process.env.ARTIFACT_SIGNING_ACCOUNT !== "";
+
+const windowsAzureSignOptions = isWindowsAzureSigningConfigured
+  ? {
+      publisherName: "Glass Devtools, Inc.",
+      endpoint: process.env.ARTIFACT_SIGNING_ENDPOINT,
+      certificateProfileName: process.env.ARTIFACT_SIGNING_PROFILE,
+      codeSigningAccountName: process.env.ARTIFACT_SIGNING_ACCOUNT,
+    }
+  : null;
+
 const config = {
   // TODO: AI-PICKED-VALUE: This bundle id is based on the existing Glass signing identity and the MoltTree app name.
   appId: "com.glassdevtools.molttree",
@@ -47,6 +64,8 @@ const config = {
       },
     ],
     icon: "src/renderer/assets/default-app-icon.png",
+    forceCodeSigning: true,
+    azureSignOptions: windowsAzureSignOptions,
   },
   dmg: {
     artifactName: "${productName}-${version}-${arch}.${ext}",

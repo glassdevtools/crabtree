@@ -191,6 +191,16 @@ jobs:
       - build-macos-installer
     if: needs.read-package-release-status.outputs.should_publish == 'true'
     runs-on: windows-latest
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARTIFACT_SIGNING_ENDPOINT: ${{ secrets.ARTIFACT_SIGNING_ENDPOINT }}
+      ARTIFACT_SIGNING_ACCOUNT: ${{ secrets.ARTIFACT_SIGNING_ACCOUNT }}
+      ARTIFACT_SIGNING_PROFILE: ${{ secrets.ARTIFACT_SIGNING_PROFILE }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -204,6 +214,32 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Require Windows signing secrets
+        shell: bash
+        run: |
+          required_env_names=(
+            AZURE_CLIENT_ID
+            AZURE_TENANT_ID
+            AZURE_SUBSCRIPTION_ID
+            ARTIFACT_SIGNING_ENDPOINT
+            ARTIFACT_SIGNING_ACCOUNT
+            ARTIFACT_SIGNING_PROFILE
+          )
+
+          for required_env_name in "${required_env_names[@]}"; do
+            if [[ -z "${!required_env_name}" ]]; then
+              echo "Missing $required_env_name for Windows code signing." >&2
+              exit 1
+            fi
+          done
+
+      - name: Azure login
+        uses: azure/login@v3
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
       - name: Build and publish Windows release
         run: npm run dist:win --workspace desktop-app -- --publish always
