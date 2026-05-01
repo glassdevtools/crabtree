@@ -1,6 +1,7 @@
 import { BrowserWindow } from "electron";
 import type { App } from "electron";
 import type { AppUpdater } from "electron-updater";
+
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { AppUpdateStatus } from "../shared/types";
