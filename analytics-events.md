@@ -1,5 +1,7 @@
 # Website Events
 
+This inventory should stay small enough to scan when analytics behavior changes.
+
 | Event                  | Properties                                                                       | Where                  |
 | ---------------------- | -------------------------------------------------------------------------------- | ---------------------- |
 | `download_app_clicked` | `surface: "website"`, `app_version`, `button_location: "nav" \| "hero" \| "cta"` | three download buttons |
