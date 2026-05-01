@@ -6,7 +6,7 @@
 <div align="center">
 	<img
 		src="./website/src/assets/default-app-icon.png"
-	 	alt="MoltTree Icon"
+	 	alt="MoltTree app icon"
 		width="300"
 	 	height="300"
 	/>
@@ -33,9 +33,8 @@ Download MoltTree on our [Website](https://molttree.app).
 <div align="center">
 	<img
 		src="./website/src/assets/product-screenshot.png"
-	 	alt="MoltTree Icon"
+	 	alt="MoltTree app showing Codex chats, worktrees, branches, and Git history"
 		width="1000"
 	 	height="1000"
 	/>
 </div>
-
