@@ -5755,7 +5755,7 @@ const MoltTreeDesktopApp = () => {
                     className={
                       appUpdateStatus.type === "ready"
                         ? undefined
-                        : "bg-white hover:bg-white aria-expanded:bg-white disabled:bg-white"
+                        : "bg-white hover:bg-white aria-expanded:bg-white"
                     }
                     onClick={() => {
                       void runAppUpdateAction();
