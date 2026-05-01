@@ -14,6 +14,7 @@ export const readIsGitChangeSummaryEmpty = (
   changeSummary: GitChangeSummary,
 ) => {
   const added = changeSummary.staged.added + changeSummary.unstaged.added;
+
   const removed = changeSummary.staged.removed + changeSummary.unstaged.removed;
 
   return added === 0 && removed === 0;
