@@ -29,7 +29,28 @@ export const readDashboardData = async ({
     warnings.push(message);
   }
 
+  console.log("[MoltTree diagnostics] Codex threads", {
+    threadCount: threads.length,
+    threadsWithCwdCount: threads.filter((thread) => thread.cwd.length > 0)
+      .length,
+    focusedRepoRoot,
+    threadSamples: threads.slice(0, 5).map((thread) => ({
+      id: thread.id,
+      name: thread.name,
+      cwd: thread.cwd,
+      source: thread.source,
+      status: thread.status.type,
+    })),
+  });
+
   const repoGraphResult = await readRepoGraphs({ threads, focusedRepoRoot });
+  console.log("[MoltTree diagnostics] dashboard Git result", {
+    repoCount: repoGraphResult.repos.length,
+    readRepoRoots: repoGraphResult.readRepoRoots,
+    warningCount: repoGraphResult.warnings.length,
+    gitErrorCount: repoGraphResult.gitErrors.length,
+    gitErrors: repoGraphResult.gitErrors.slice(0, 10),
+  });
   const gitChangeResult = await readGitChangesOfCwdForRepoRoots({
     threads,
     repos: repoGraphResult.repos,

@@ -5924,7 +5924,7 @@ const MoltTreeDesktopApp = () => {
                     <LuGitCommitHorizontal size={22} />
                   </EmptyMedia>
                   <EmptyDescription>
-                    No Git repos found from Codex thread working directories.
+                    No Git repositories found from Codex.
                   </EmptyDescription>
                 </EmptyHeader>
               </Empty>
