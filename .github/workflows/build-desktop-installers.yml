@@ -40,10 +40,9 @@ jobs:
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             echo "should_publish=false" >> "$GITHUB_OUTPUT"
             echo "should_create_tag=false" >> "$GITHUB_OUTPUT"
+            echo "Release $RELEASE_TAG already exists, so installer builds were skipped." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-
-          echo "should_publish=true" >> "$GITHUB_OUTPUT"
 
           TAG_SHA="$(git ls-remote --tags origin "refs/tags/${RELEASE_TAG}^{}" | awk '{print $1}' | head -n 1)"
           if [[ -z "$TAG_SHA" ]]; then
@@ -51,6 +50,7 @@ jobs:
           fi
 
           if [[ -z "$TAG_SHA" ]]; then
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
             echo "should_create_tag=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -58,10 +58,13 @@ jobs:
           echo "should_create_tag=false" >> "$GITHUB_OUTPUT"
 
           if [[ "$TAG_SHA" != "$GITHUB_SHA" ]]; then
-            echo "$RELEASE_TAG already exists at $TAG_SHA, but this build is $GITHUB_SHA." >&2
-            echo "Bump desktop-app/package.json before publishing a new release." >&2
-            exit 1
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+            echo "$RELEASE_TAG already exists at $TAG_SHA, but this build is $GITHUB_SHA." >> "$GITHUB_STEP_SUMMARY"
+            echo "Bump desktop-app/package.json before publishing a new release." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
+
+          echo "should_publish=true" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ github.token }}
 
