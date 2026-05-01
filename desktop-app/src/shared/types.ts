@@ -178,6 +178,10 @@ export type DashboardData = {
   warnings: string[];
 };
 
+export type DashboardReadRequest = {
+  repoRoot: string | null;
+};
+
 export type AppUpdateStatus =
   | { type: "unavailable" }
   | { type: "idle" }
@@ -187,7 +191,7 @@ export type AppUpdateStatus =
   | { type: "error"; message: string };
 
 export type MoltTreeApi = {
-  readDashboard: () => Promise<DashboardData>;
+  readDashboard: (request: DashboardReadRequest) => Promise<DashboardData>;
   readDashboardAfterGitMutation: () => Promise<DashboardData>;
   readAnalyticsInstallId: () => Promise<string>;
   readAppUpdateStatus: () => Promise<AppUpdateStatus>;

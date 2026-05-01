@@ -264,7 +264,10 @@ test("reads repo graphs with commits, worktrees, and branch sync changes", async
       createThread({ id: "root-thread", cwd: repoRoot }),
       createThread({ id: "worktree-thread", cwd: worktreeRoot }),
     ];
-    const { repos, warnings, gitErrors } = await readRepoGraphs({ threads });
+    const { repos, warnings, gitErrors } = await readRepoGraphs({
+      threads,
+      focusedRepoRoot: null,
+    });
     const repo = repos[0];
 
     assert.equal(warnings.length, 0);
@@ -299,6 +302,47 @@ test("reads repo graphs with commits, worktrees, and branch sync changes", async
   });
 });
 
+test("deeply reads only the focused repo graph", async () => {
+  await withRepo(async ({ repoRoot: repoRootOne }) => {
+    await withRepo(async ({ repoRoot: repoRootTwo }) => {
+      await commitRepoFile({
+        repoRoot: repoRootOne,
+        filePath: "one.txt",
+        content: "one\n",
+        message: "one",
+      });
+      const repoTwoSha = await commitRepoFile({
+        repoRoot: repoRootTwo,
+        filePath: "two.txt",
+        content: "two\n",
+        message: "two",
+      });
+      const threads = [
+        createThread({ id: "one-thread", cwd: repoRootOne }),
+        createThread({ id: "two-thread", cwd: repoRootTwo }),
+      ];
+      const { repos, warnings, gitErrors, readRepoRoots } =
+        await readRepoGraphs({
+          threads,
+          focusedRepoRoot: repoRootTwo,
+        });
+      const repoOne = repos.find((repo) => repo.root === repoRootOne);
+      const repoTwo = repos.find((repo) => repo.root === repoRootTwo);
+
+      assert.equal(warnings.length, 0);
+      assert.equal(gitErrors.length, 0);
+      assert.deepEqual(readRepoRoots, [repoRootTwo]);
+      assert.equal(repoOne?.commits.length, 0);
+      assert.equal(repoOne?.worktrees.length, 0);
+      assert.equal(repoOne?.branchSyncChanges.length, 0);
+      assert.equal(
+        repoTwo?.commits.some((commit) => commit.sha === repoTwoSha),
+        true,
+      );
+    });
+  });
+});
+
 test("reads repo graphs when a linked worktree branch is missing", async () => {
   await withOriginRepo(async ({ parentRoot, repoRoot }) => {
     await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
@@ -324,6 +368,7 @@ test("reads repo graphs when a linked worktree branch is missing", async () => {
 
     const { repos, warnings, gitErrors } = await readRepoGraphs({
       threads: [createThread({ id: "root-thread", cwd: repoRoot })],
+      focusedRepoRoot: null,
     });
     const repo = repos[0];
 
@@ -350,6 +395,7 @@ test("reads a missing local branch as an origin-only branch sync change", async 
 
     const { repos, warnings, gitErrors } = await readRepoGraphs({
       threads: [createThread({ id: "root-thread", cwd: repoRoot })],
+      focusedRepoRoot: null,
     });
     const repo = repos[0];
 
@@ -379,6 +425,7 @@ test("reads a missing origin branch as a local-only branch sync change", async (
 
     const { repos, warnings, gitErrors } = await readRepoGraphs({
       threads: [createThread({ id: "root-thread", cwd: repoRoot })],
+      focusedRepoRoot: null,
     });
     const repo = repos[0];
 
@@ -406,6 +453,7 @@ test("reads a missing origin tag as a local-only tag sync change", async () => {
 
     const { repos, warnings, gitErrors } = await readRepoGraphs({
       threads: [createThread({ id: "root-thread", cwd: repoRoot })],
+      focusedRepoRoot: null,
     });
     const repo = repos[0];
 
@@ -438,6 +486,7 @@ test("fetches a missing local tag from origin", async () => {
 
     const { repos, warnings, gitErrors } = await readRepoGraphs({
       threads: [createThread({ id: "root-thread", cwd: repoRoot })],
+      focusedRepoRoot: null,
     });
     const repo = repos[0];
 
@@ -473,6 +522,7 @@ test("does not overwrite a changed local tag while fetching origin", async () =>
 
     const { repos, warnings, gitErrors } = await readRepoGraphs({
       threads: [createThread({ id: "root-thread", cwd: repoRoot })],
+      focusedRepoRoot: null,
     });
     const repo = repos[0];
 
@@ -510,6 +560,7 @@ test("reads local branches as branch sync changes when origin tracking refs are 
     });
     const { repos, warnings, gitErrors } = await readRepoGraphs({
       threads: [createThread({ id: "root-thread", cwd: repoRoot })],
+      focusedRepoRoot: null,
     });
     const repo = repos[0];
 
@@ -537,6 +588,7 @@ test("reads the remote default branch when origin head tracking ref is missing",
 
     const { repos, warnings, gitErrors } = await readRepoGraphs({
       threads: [createThread({ id: "root-thread", cwd: repoRoot })],
+      focusedRepoRoot: null,
     });
     const repo = repos[0];
 
@@ -567,7 +619,10 @@ test("reads staged and unstaged change summaries for repo and worktree cwd value
       createThread({ id: "root-thread", cwd: repoRoot }),
       createThread({ id: "worktree-thread", cwd: worktreeRoot }),
     ];
-    const repoGraphResult = await readRepoGraphs({ threads });
+    const repoGraphResult = await readRepoGraphs({
+      threads,
+      focusedRepoRoot: null,
+    });
 
     await appendRepoFile({
       repoRoot,
@@ -629,6 +684,7 @@ test("uses the main worktree as the repo root for linked worktree threads", asyn
 
     const { repos, warnings, gitErrors } = await readRepoGraphs({
       threads: [createThread({ id: "worktree-thread", cwd: worktreeRoot })],
+      focusedRepoRoot: null,
     });
     const repo = repos[0];
 
@@ -670,7 +726,10 @@ test("reads main worktree changes even when every thread is in a linked worktree
     const threads = [
       createThread({ id: "worktree-thread", cwd: worktreeRoot }),
     ];
-    const repoGraphResult = await readRepoGraphs({ threads });
+    const repoGraphResult = await readRepoGraphs({
+      threads,
+      focusedRepoRoot: null,
+    });
 
     await appendRepoFile({
       repoRoot,
@@ -713,7 +772,10 @@ test("rereads only requested repo graphs after a git mutation", async () => {
         createThread({ id: "one-thread", cwd: repoRootOne }),
         createThread({ id: "two-thread", cwd: repoRootTwo }),
       ];
-      const fullGraphResult = await readRepoGraphs({ threads });
+      const fullGraphResult = await readRepoGraphs({
+        threads,
+        focusedRepoRoot: null,
+      });
       const previousRepoOne = fullGraphResult.repos.find(
         (repo) => repo.root === repoRootOne,
       );
@@ -780,7 +842,10 @@ test("updates changed repo change summaries after a git mutation", async () => {
         createThread({ id: "one-thread", cwd: repoRootOne }),
         createThread({ id: "two-thread", cwd: repoRootTwo }),
       ];
-      const repoGraphResult = await readRepoGraphs({ threads });
+      const repoGraphResult = await readRepoGraphs({
+        threads,
+        focusedRepoRoot: null,
+      });
       const gitChangeResult = await readGitChangesOfCwd({
         threads,
         repos: repoGraphResult.repos,
@@ -1029,6 +1094,7 @@ test("creates and attaches a branch in a dirty detached worktree without changin
 
     const { repos } = await readRepoGraphs({
       threads: [createThread({ id: "thread", cwd: worktreeRoot })],
+      focusedRepoRoot: null,
     });
     const repo = repos[0];
 

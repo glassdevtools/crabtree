@@ -17,6 +17,8 @@ const COMMIT_PAGE_SIZE = 1000;
 const ORIGIN_FETCH_INTERVAL_MS = 30_000;
 // TODO: AI-PICKED-VALUE: Six parallel Git reads keeps dashboard refreshes responsive without launching a large process burst.
 const GIT_READ_PARALLEL_LIMIT = 6;
+// TODO: AI-PICKED-VALUE: This stops one blocked Git process from holding the whole dashboard load forever.
+const GIT_COMMAND_TIMEOUT_MS = 20_000;
 const FIELD_SEPARATOR = "\u001f";
 const ZERO_SHA = "0000000000000000000000000000000000000000";
 const lastOriginFetchAttemptTimeOfRepoRoot: { [repoRoot: string]: number } = {};
@@ -76,7 +78,12 @@ const readValuesWithGitReadLimit = async <Item, Result>({
 };
 
 const runGit = async ({ cwd, args }: { cwd: string; args: string[] }) => {
-  const stdout = await simpleGit({ baseDir: cwd }).raw(args);
+  const stdout = await simpleGit({
+    baseDir: cwd,
+    timeout: { block: GIT_COMMAND_TIMEOUT_MS },
+  })
+    .env("GIT_TERMINAL_PROMPT", "0")
+    .raw(args);
 
   return { stdout };
 };
@@ -150,7 +157,7 @@ const readDefaultBranchNameFromOriginHeadText = (originHeadText: string) => {
   return originHeadText;
 };
 
-const readDefaultBranch = async ({ root }: { root: string }) => {
+const readLocalDefaultBranch = async ({ root }: { root: string }) => {
   const originHead = await readNullableGitText({
     cwd: root,
     args: ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
@@ -158,6 +165,16 @@ const readDefaultBranch = async ({ root }: { root: string }) => {
 
   if (originHead !== null) {
     return readDefaultBranchNameFromOriginHeadText(originHead);
+  }
+
+  return null;
+};
+
+const readDefaultBranch = async ({ root }: { root: string }) => {
+  const localDefaultBranch = await readLocalDefaultBranch({ root });
+
+  if (localDefaultBranch !== null) {
+    return localDefaultBranch;
   }
 
   const cachedDefaultBranch = defaultBranchCacheOfRepoRoot[root];
@@ -223,7 +240,7 @@ const readRepoSeedForThread = async ({ thread }: { thread: CodexThread }) => {
     cwd: root,
     args: ["branch", "--show-current"],
   });
-  const defaultBranch = await readDefaultBranch({ root });
+  const defaultBranch = await readLocalDefaultBranch({ root });
 
   const repoSeed: RepoSeed = {
     key: originUrl ?? root,
@@ -1230,6 +1247,7 @@ const readRepoGraphForSeed = async ({
       repoSeed,
       threads,
     });
+    const defaultBranch = await readDefaultBranch({ root: repoSeed.root });
     const originFetchWarning = await fetchOriginRefs({ repoSeed });
 
     if (originFetchWarning !== null) {
@@ -1266,7 +1284,7 @@ const readRepoGraphForSeed = async ({
         mainWorktreePath,
         originUrl: repoSeed.originUrl,
         currentBranch: repoSeed.currentBranch,
-        defaultBranch: repoSeed.defaultBranch,
+        defaultBranch,
         branchSyncChanges,
         worktrees,
         commits,
@@ -1289,27 +1307,61 @@ const readRepoGraphForSeed = async ({
 
 export const readRepoGraphs = async ({
   threads,
+  focusedRepoRoot,
 }: {
   threads: CodexThread[];
+  focusedRepoRoot: string | null;
 }) => {
   const repoSeeds = await readRepoSeeds({ threads });
   const repos: RepoGraph[] = [];
   const warnings: string[] = [];
   const gitErrors: string[] = [];
+  const readRepoRoots: string[] = [];
+  const focusedRepoSeed =
+    repoSeeds.find((repoSeed) => repoSeed.root === focusedRepoRoot) ??
+    repoSeeds[0] ??
+    null;
+  const readRepoGraphResultOfRoot: { [repoRoot: string]: RepoGraphReadResult } =
+    {};
 
-  const readResults = await readValuesWithGitReadLimit({
-    items: repoSeeds,
-    readItem: async (repoSeed) => {
-      const threadsInRepo = threads.filter((thread) =>
-        repoSeed.threadIds.includes(thread.id),
-      );
+  const readUnloadedRepoGraph = (repoSeed: RepoSeed): RepoGraph => {
+    return {
+      key: repoSeed.key,
+      root: repoSeed.root,
+      mainWorktreePath: repoSeed.root,
+      originUrl: repoSeed.originUrl,
+      currentBranch: repoSeed.currentBranch,
+      defaultBranch: repoSeed.defaultBranch,
+      branchSyncChanges: [],
+      worktrees: [],
+      commits: [],
+      threadIds: repoSeed.threadIds,
+    };
+  };
 
-      return await readRepoGraphForSeed({ repoSeed, threads: threadsInRepo });
-    },
-  });
+  if (focusedRepoSeed !== null) {
+    const threadsInRepo = threads.filter((thread) =>
+      focusedRepoSeed.threadIds.includes(thread.id),
+    );
+    readRepoGraphResultOfRoot[focusedRepoSeed.root] =
+      await readRepoGraphForSeed({
+        repoSeed: focusedRepoSeed,
+        threads: threadsInRepo,
+      });
+    readRepoRoots.push(focusedRepoSeed.root);
+  }
 
-  for (const readResult of readResults) {
-    if (readResult.repo !== null) {
+  for (const repoSeed of repoSeeds) {
+    const readResult = readRepoGraphResultOfRoot[repoSeed.root];
+
+    if (readResult === undefined) {
+      repos.push(readUnloadedRepoGraph(repoSeed));
+      continue;
+    }
+
+    if (readResult.repo === null) {
+      repos.push(readUnloadedRepoGraph(repoSeed));
+    } else {
       repos.push(readResult.repo);
     }
 
@@ -1317,7 +1369,7 @@ export const readRepoGraphs = async ({
     gitErrors.push(...readResult.gitErrors);
   }
 
-  return { repos, warnings, gitErrors };
+  return { repos, warnings, gitErrors, readRepoRoots };
 };
 
 export const readRepoGraphsForRepoRoots = async ({

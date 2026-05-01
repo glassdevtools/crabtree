@@ -4,6 +4,7 @@ import readline from "node:readline";
 type PendingRequest = {
   resolve: (value: unknown) => void;
   reject: (reason: Error) => void;
+  timeoutId: ReturnType<typeof setTimeout>;
 };
 
 export type AppServerNotification = {
@@ -26,6 +27,8 @@ export type AppServerClient = {
 // Everything else calls this small request wrapper instead of touching Codex files.
 // TODO: AI-PICKED-VALUE: This points at the bundled Codex binary from the macOS desktop app so Finder-launched Electron builds do not depend on shell PATH.
 const CODEX_BINARY_PATH = "/Applications/Codex.app/Contents/Resources/codex";
+// TODO: AI-PICKED-VALUE: This turns Codex app-server stalls into visible app errors instead of an endless loading state.
+const APP_SERVER_REQUEST_TIMEOUT_MS = 30_000;
 
 const isObject = (value: unknown): value is { [key: string]: unknown } => {
   return typeof value === "object" && value !== null;
@@ -57,11 +60,27 @@ export const createAppServerClient = async ({
     appServerProcess.stdin.write(`${JSON.stringify(message)}\n`);
   };
 
+  const deletePendingRequest = (id: number) => {
+    const pendingRequest = pendingRequestOfId[id];
+
+    if (pendingRequest === undefined) {
+      return null;
+    }
+
+    clearTimeout(pendingRequest.timeoutId);
+    delete pendingRequestOfId[id];
+
+    return pendingRequest;
+  };
+
   const rejectPendingRequests = (message: string) => {
     for (const idText of Object.keys(pendingRequestOfId)) {
       const id = Number(idText);
-      pendingRequestOfId[id].reject(makeError(message));
-      delete pendingRequestOfId[id];
+      const pendingRequest = deletePendingRequest(id);
+
+      if (pendingRequest !== null) {
+        pendingRequest.reject(makeError(message));
+      }
     }
   };
   const finishClose = (message: string) => {
@@ -95,13 +114,11 @@ export const createAppServerClient = async ({
       return;
     }
 
-    const pendingRequest = pendingRequestOfId[message.id];
+    const pendingRequest = deletePendingRequest(message.id);
 
-    if (pendingRequest === undefined) {
+    if (pendingRequest === null) {
       return;
     }
-
-    delete pendingRequestOfId[message.id];
 
     if (isObject(message.error) && typeof message.error.message === "string") {
       pendingRequest.reject(makeError(message.error.message));
@@ -130,15 +147,40 @@ export const createAppServerClient = async ({
     nextRequestId += 1;
 
     return new Promise<unknown>((resolve, reject) => {
-      pendingRequestOfId[id] = { resolve, reject };
+      const timeoutId = setTimeout(() => {
+        const pendingRequest = deletePendingRequest(id);
+
+        if (pendingRequest !== null) {
+          pendingRequest.reject(
+            makeError(
+              `${method} timed out after ${APP_SERVER_REQUEST_TIMEOUT_MS}ms.`,
+            ),
+          );
+        }
+      }, APP_SERVER_REQUEST_TIMEOUT_MS);
+
+      pendingRequestOfId[id] = { resolve, reject, timeoutId };
       send({ method, id, params });
     });
   };
 
   const initializePromise = new Promise<void>((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      const pendingRequest = deletePendingRequest(0);
+
+      if (pendingRequest !== null) {
+        pendingRequest.reject(
+          makeError(
+            `initialize timed out after ${APP_SERVER_REQUEST_TIMEOUT_MS}ms.`,
+          ),
+        );
+      }
+    }, APP_SERVER_REQUEST_TIMEOUT_MS);
+
     pendingRequestOfId[0] = {
       resolve: () => resolve(),
       reject,
+      timeoutId,
     };
   });
 

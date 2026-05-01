@@ -7,12 +7,93 @@
     <style>
       html,
       body,
+      #initial-loading-root,
       #root {
         background: #f4f6f8;
+      }
+
+      body {
+        margin: 0;
+      }
+
+      .initial-loading-screen {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #f4f6f8;
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+
+      .initial-loading-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .initial-loading-image {
+        width: min(42vmin, 300px);
+        max-width: calc(100vw - 48px);
+        max-height: calc(100vh - 120px);
+        object-fit: contain;
+        pointer-events: none;
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+
+      .initial-loading-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        color: #5f6670;
+        font-size: 12px;
+        font-weight: 650;
+      }
+
+      .initial-loading-spinner {
+        width: 16px;
+        height: 16px;
+        border: 2px solid #c6ccd4;
+        border-top-color: #68717d;
+        border-radius: 999px;
+        animation: initial-loading-spin 900ms linear infinite;
+      }
+
+      @keyframes initial-loading-spin {
+        from {
+          transform: rotate(0deg);
+        }
+
+        to {
+          transform: rotate(360deg);
+        }
       }
     </style>
   </head>
   <body>
+    <div id="initial-loading-root">
+      <main class="initial-loading-screen">
+        <div class="initial-loading-content">
+          <img
+            alt=""
+            class="initial-loading-image"
+            draggable="false"
+            src="./assets/default-app-icon.png"
+          />
+          <div class="initial-loading-status">
+            <span class="initial-loading-spinner" aria-hidden="true"></span>
+            <span>Loading repositories...</span>
+          </div>
+        </div>
+      </main>
+    </div>
     <div id="root"></div>
     <script type="module" src="/main.tsx"></script>
   </body>

@@ -3,7 +3,6 @@ import type { CodexThread } from "../shared/types";
 import type { AppServerClient } from "./appServerClient";
 import { readCodexThreads } from "./codexThreads";
 import {
-  readGitChangesOfCwd,
   readGitChangesOfCwdForRepoRoots,
   readRepoGraphs,
   readRepoGraphsForRepoRoots,
@@ -12,8 +11,10 @@ import {
 // The dashboard joins Codex thread metadata with Git graph data into one renderer-friendly object.
 export const readDashboardData = async ({
   appServerClient,
+  focusedRepoRoot,
 }: {
   appServerClient: AppServerClient;
+  focusedRepoRoot: string | null;
 }) => {
   const warnings: string[] = [];
   let threads: CodexThread[] = [];
@@ -28,10 +29,12 @@ export const readDashboardData = async ({
     warnings.push(message);
   }
 
-  const repoGraphResult = await readRepoGraphs({ threads });
-  const gitChangeResult = await readGitChangesOfCwd({
+  const repoGraphResult = await readRepoGraphs({ threads, focusedRepoRoot });
+  const gitChangeResult = await readGitChangesOfCwdForRepoRoots({
     threads,
     repos: repoGraphResult.repos,
+    previousGitChangesOfCwd: {},
+    repoRoots: repoGraphResult.readRepoRoots,
   });
 
   const dashboardData: DashboardData = {
@@ -43,7 +46,7 @@ export const readDashboardData = async ({
     warnings: [...warnings, ...repoGraphResult.warnings],
   };
 
-  return dashboardData;
+  return { dashboardData, readRepoRoots: repoGraphResult.readRepoRoots };
 };
 
 const readMessageDoesNotStartWithRepoRoot = ({

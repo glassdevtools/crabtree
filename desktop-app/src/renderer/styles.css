@@ -142,43 +142,28 @@ textarea,
   flex-direction: column;
 }
 
-.initial-loading-screen {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  background: #f4f6f8;
-}
-
-.initial-loading-content {
+.initial-loading-error {
+  width: min(440px, calc(100vw - 48px));
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
+  color: #374151;
+  text-align: center;
 }
 
-/* TODO: AI-PICKED-VALUE: This keeps the first-load image present but restrained so the spinner and status text feel like the main loading state. */
-.initial-loading-image {
-  width: min(42vmin, 300px);
-  max-width: calc(100vw - 48px);
-  max-height: calc(100vh - 120px);
-  object-fit: contain;
-  pointer-events: none;
-  user-select: none;
-  -webkit-user-drag: none;
+.initial-loading-error-title {
+  font-size: 14px;
+  font-weight: 750;
 }
 
-.initial-loading-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: #5f6670;
+.initial-loading-error-message {
+  max-height: 180px;
+  overflow: auto;
+  color: #6b7280;
   font-size: 12px;
-  font-weight: 650;
-}
-
-.initial-loading-spinner {
-  color: #68717d;
-  animation: initial-loading-spin 900ms linear infinite;
+  line-height: 1.45;
+  white-space: pre-wrap;
 }
 
 @keyframes initial-loading-spin {

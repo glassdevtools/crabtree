@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type {
   CodexThreadStatusChange,
+  DashboardReadRequest,
   GitBranchSyncChange,
   GitCheckoutCommitRequest,
   GitCommitChangesRequest,
@@ -102,6 +103,7 @@ const createMainWindow = () => {
     minHeight: MAIN_WINDOW_MIN_HEIGHT,
     title: "MoltTree",
     backgroundColor: "#f4f6f8",
+    show: false,
     webPreferences: {
       preload: join(__dirname, "../preload/preload.js"),
       contextIsolation: true,
@@ -110,6 +112,9 @@ const createMainWindow = () => {
     },
   });
 
+  mainWindow.once("ready-to-show", () => {
+    mainWindow.show();
+  });
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     openExternalUrlInBrowserFromWindow(url);
     return { action: "deny" };
@@ -133,6 +138,18 @@ const createMainWindow = () => {
 
 const isObject = (value: unknown): value is { [key: string]: unknown } => {
   return typeof value === "object" && value !== null;
+};
+
+const readDashboardReadRequest = (value: unknown): DashboardReadRequest => {
+  if (
+    !isObject(value) ||
+    (value.repoRoot !== null &&
+      (typeof value.repoRoot !== "string" || value.repoRoot.length === 0))
+  ) {
+    throw new Error("Dashboard reads need a repo root or null.");
+  }
+
+  return { repoRoot: value.repoRoot };
 };
 
 const readAppServerClient = async () => {
@@ -205,9 +222,10 @@ const readAppServerClient = async () => {
 };
 
 const dashboardRefreshCoordinator = createDashboardRefreshCoordinator({
-  readFullDashboardData: async () => {
+  readFullDashboardData: async ({ repoRoot }) => {
     return await readDashboardData({
       appServerClient: await readAppServerClient(),
+      focusedRepoRoot: repoRoot,
     });
   },
   readDashboardDataAfterGitMutation,
@@ -593,15 +611,19 @@ const readGitBranchSyncChanges = (value: unknown) => {
   return gitBranchSyncChanges;
 };
 
-ipcMain.handle("dashboard:read", async () => {
+ipcMain.handle("dashboard:read", async (_event, value: unknown) => {
+  const request = readDashboardReadRequest(value);
+
   return await dashboardRefreshCoordinator.readDashboardDataWithoutOverlap(
     "full",
+    request.repoRoot,
   );
 });
 
 ipcMain.handle("dashboard:readAfterGitMutation", async () => {
   return await dashboardRefreshCoordinator.readDashboardDataWithoutOverlap(
     "afterGitMutation",
+    null,
   );
 });
 

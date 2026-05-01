@@ -88,11 +88,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import cursorAppIconUrl from "./assets/cursor-app-icon.png";
-import defaultAppIconUrl from "./assets/default-app-icon.png";
 import finderAppIconUrl from "./assets/finder-app-icon.png";
-import loading2ImageUrl from "./assets/loading-2.png";
-import loading3ImageUrl from "./assets/loading-3.png";
-import logoLoaderImageUrl from "./assets/logo-loader.png";
 import {
   readDisplayedThreadGroups,
   readIsGitChangeSummaryEmpty,
@@ -132,12 +128,6 @@ const DASHBOARD_REFRESH_INTERVAL_MS = 1000;
 const TOAST_POSITION = "bottom-center";
 const UNFOCUSED_ERROR_TOAST_DURATION_MS = Infinity;
 const USER_GIT_UPDATE_TOAST_ID_PREFIX = "user-git-update";
-const RARE_LOADING_IMAGE_PROBABILITY = 0.15;
-const RARE_LOADING_IMAGE_URLS = [
-  logoLoaderImageUrl,
-  loading2ImageUrl,
-  loading3ImageUrl,
-];
 const GITHUB_REPOSITORY_URL = packageInfo.repository.url.replace(/\.git$/, "");
 const MERGE_BRANCH_BUTTON_TITLE = "Merge this into HEAD";
 const CHECKED_OUT_BY_WORKTREE_MESSAGE =
@@ -618,17 +608,17 @@ type GitRefDeleteTarget = {
 
 type BranchCreateTarget =
   | {
-    type: "path";
-    path: string;
-    sha: string;
-    title: string;
-  }
+      type: "path";
+      path: string;
+      sha: string;
+      title: string;
+    }
   | {
-    type: "commit";
-    repoRoot: string;
-    sha: string;
-    title: string;
-  };
+      type: "commit";
+      repoRoot: string;
+      sha: string;
+      title: string;
+    };
 
 type GitRefCreateMenuTarget = {
   x: number;
@@ -1885,7 +1875,7 @@ const CommitGraphSvg = ({
         const toY = readSegmentY(segment.toRowIndex);
         const rowTopConnectionY = Math.min(
           segment.toRowIndex * COMMIT_GRAPH_ROW_HEIGHT +
-          COMMIT_GRAPH_ROW_HEIGHT * COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO,
+            COMMIT_GRAPH_ROW_HEIGHT * COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO,
           toY,
         );
         const path =
@@ -2041,10 +2031,10 @@ const CommitHistoryRow = ({
   const threadGroups =
     row.threadGroup === null
       ? readDisplayedThreadGroups({
-        threads,
-        worktrees,
-        gitChangesOfCwd,
-      })
+          threads,
+          worktrees,
+          gitChangesOfCwd,
+        })
       : [row.threadGroup];
   const rowThreadIdOfId: { [threadId: string]: boolean } = {};
 
@@ -2215,20 +2205,20 @@ const CommitHistoryRow = ({
   const rowCommitRefs =
     row.threadGroup === null
       ? commit.refs.filter((ref) => {
-        const refName = cleanRefName(ref);
+          const refName = cleanRefName(ref);
 
-        if (hasChangedMainWorktreeThreadGroup && readIsHeadRef(ref)) {
-          return false;
-        }
+          if (hasChangedMainWorktreeThreadGroup && readIsHeadRef(ref)) {
+            return false;
+          }
 
-        return (
-          excludedLocalBranchOfName[refName] !== true ||
-          !readIsLocalBranch({
-            branch: refName,
-            localBranches: commit.localBranches,
-          })
-        );
-      })
+          return (
+            excludedLocalBranchOfName[refName] !== true ||
+            !readIsLocalBranch({
+              branch: refName,
+              localBranches: commit.localBranches,
+            })
+          );
+        })
       : [];
   const rowRefNameOfName: { [name: string]: boolean } = {};
 
@@ -2239,11 +2229,11 @@ const CommitHistoryRow = ({
   const rowRefs =
     row.threadGroup === null
       ? [
-        ...rowCommitRefs,
-        ...rowLocalBranches.filter(
-          (localBranch) => rowRefNameOfName[localBranch] !== true,
-        ),
-      ]
+          ...rowCommitRefs,
+          ...rowLocalBranches.filter(
+            (localBranch) => rowRefNameOfName[localBranch] !== true,
+          ),
+        ]
       : isMainWorktreeThreadGroupRow
         ? shouldOwnMainWorktreeHead
           ? currentBranch === null
@@ -2272,13 +2262,13 @@ const CommitHistoryRow = ({
     actionThreadGroup === null
       ? null
       : readCommitBranchTarget({
-        cwd: actionThreadGroup.cwd,
-        groupThreads: actionThreadGroup.threads,
-        repoRoot,
-        currentBranch: rowCurrentBranch,
-        localBranches: rowLocalBranches,
-        commitSha: commit.sha,
-      });
+          cwd: actionThreadGroup.cwd,
+          groupThreads: actionThreadGroup.threads,
+          repoRoot,
+          currentBranch: rowCurrentBranch,
+          localBranches: rowLocalBranches,
+          commitSha: commit.sha,
+        });
   const shouldShowActionCommit =
     actionThreadGroup !== null &&
     actionThreadGroup.cwd.length > 0 &&
@@ -2287,24 +2277,24 @@ const CommitHistoryRow = ({
   const shouldShowBranchCreateActions = rowLocalBranches.length === 0;
   const actionBranchCreateTarget: BranchCreateTarget | null =
     actionThreadGroup !== null &&
-      shouldShowBranchCreateActions &&
-      actionThreadGroup.cwd.length > 0 &&
-      shouldShowActionChangeCount
+    shouldShowBranchCreateActions &&
+    actionThreadGroup.cwd.length > 0 &&
+    shouldShowActionChangeCount
       ? {
-        type: "path",
-        path: actionThreadGroup.cwd,
-        sha: commit.sha,
-        title: actionThreadGroup.cwd,
-      }
+          type: "path",
+          path: actionThreadGroup.cwd,
+          sha: commit.sha,
+          title: actionThreadGroup.cwd,
+        }
       : null;
   const mergeBranch =
     currentBranch === null || !row.isCommitRow || isHeadRow
       ? null
       : (rowLocalBranches.find(
-        (localBranch) =>
-          localBranch !== currentBranch &&
-          isBranchMergeableOfBranch[localBranch] === true,
-      ) ?? null);
+          (localBranch) =>
+            localBranch !== currentBranch &&
+            isBranchMergeableOfBranch[localBranch] === true,
+        ) ?? null);
   const shouldShowCreateBranchToMerge =
     currentBranch !== null &&
     row.isCommitRow &&
@@ -2315,11 +2305,11 @@ const CommitHistoryRow = ({
   const createBranchToMergeTarget: BranchCreateTarget | null =
     shouldShowCreateBranchToMerge
       ? {
-        type: "commit",
-        repoRoot,
-        sha: commit.sha,
-        title: commit.subject,
-      }
+          type: "commit",
+          repoRoot,
+          sha: commit.sha,
+          title: commit.subject,
+        }
       : null;
   let mergeDisabledReason: string | null = null;
   let rowClassName = "commit-history-row";
@@ -2528,12 +2518,12 @@ const CommitHistoryRow = ({
         onContextMenu={
           row.isCommitRow
             ? (event) => {
-              void copyTextAfterContextMenu({
-                event,
-                text: commit.subject,
-                errorMessage: "Failed to copy description.",
-              });
-            }
+                void copyTextAfterContextMenu({
+                  event,
+                  text: commit.subject,
+                  errorMessage: "Failed to copy description.",
+                });
+              }
             : undefined
         }
       >
@@ -2546,12 +2536,12 @@ const CommitHistoryRow = ({
         onContextMenu={
           row.isCommitRow
             ? (event) => {
-              void copyTextAfterContextMenu({
-                event,
-                text: commit.sha,
-                errorMessage: "Failed to copy commit.",
-              });
-            }
+                void copyTextAfterContextMenu({
+                  event,
+                  text: commit.sha,
+                  errorMessage: "Failed to copy commit.",
+                });
+              }
             : undefined
         }
       >
@@ -2562,12 +2552,12 @@ const CommitHistoryRow = ({
         onContextMenu={
           row.isCommitRow
             ? (event) => {
-              void copyTextAfterContextMenu({
-                event,
-                text: commit.author,
-                errorMessage: "Failed to copy author.",
-              });
-            }
+                void copyTextAfterContextMenu({
+                  event,
+                  text: commit.author,
+                  errorMessage: "Failed to copy author.",
+                });
+              }
             : undefined
         }
       >
@@ -2578,12 +2568,12 @@ const CommitHistoryRow = ({
         onContextMenu={
           row.isCommitRow
             ? (event) => {
-              void copyTextAfterContextMenu({
-                event,
-                text: commitDateText,
-                errorMessage: "Failed to copy date.",
-              });
-            }
+                void copyTextAfterContextMenu({
+                  event,
+                  text: commitDateText,
+                  errorMessage: "Failed to copy date.",
+                });
+              }
             : undefined
         }
       >
@@ -4050,12 +4040,12 @@ const CommitHistory = ({
       isEnabled: row.isCommitRow,
       pullRequestTarget: row.isCommitRow
         ? {
-          sha: row.commit.sha,
-          subject: row.commit.subject,
-          baseBranches: pullRequestBaseBranches,
-          headBranches: readPushedBranchNamesForCommit(row.commit),
-          defaultBaseBranch: defaultBranch,
-        }
+            sha: row.commit.sha,
+            subject: row.commit.subject,
+            baseBranches: pullRequestBaseBranches,
+            headBranches: readPushedBranchNamesForCommit(row.commit),
+            defaultBaseBranch: defaultBranch,
+          }
         : null,
       x: event.clientX,
       y: event.clientY,
@@ -4522,9 +4512,9 @@ const CommitHistory = ({
     branchPointerMove === null
       ? null
       : readBranchPointerOperationText({
-        operation: branchPointerMove.operation,
-        branch: branchPointerMove.branch,
-      });
+          operation: branchPointerMove.operation,
+          branch: branchPointerMove.branch,
+        });
   return (
     <>
       {gitRefCreateMenuTarget === null ? null : (
@@ -4791,7 +4781,7 @@ const CommitHistory = ({
                 <div
                   className={
                     changeSummaryTarget.changeSummary.staged.added === 0 &&
-                      changeSummaryTarget.changeSummary.staged.removed === 0
+                    changeSummaryTarget.changeSummary.staged.removed === 0
                       ? "change-summary-row change-summary-row-empty"
                       : "change-summary-row"
                   }
@@ -4807,7 +4797,7 @@ const CommitHistory = ({
                 <div
                   className={
                     changeSummaryTarget.changeSummary.unstaged.added === 0 &&
-                      changeSummaryTarget.changeSummary.unstaged.removed === 0
+                    changeSummaryTarget.changeSummary.unstaged.removed === 0
                       ? "change-summary-row change-summary-row-empty"
                       : "change-summary-row"
                   }
@@ -4847,10 +4837,11 @@ const CommitHistory = ({
           description={
             gitRefDeleteTarget === null
               ? ""
-              : `Are you sure you want to delete the ${gitRefDeleteTarget.name} ${gitRefDeleteTarget.gitRefType === "branch"
-                ? "branch tag"
-                : "tag"
-              }?`
+              : `Are you sure you want to delete the ${gitRefDeleteTarget.name} ${
+                  gitRefDeleteTarget.gitRefType === "branch"
+                    ? "branch tag"
+                    : "tag"
+                }?`
           }
           confirmButtonText="Delete"
           confirmButtonVariant="default"
@@ -4858,7 +4849,7 @@ const CommitHistory = ({
           confirmButtonAction={deleteSelectedGitRef}
         >
           {gitRefDeleteTarget === null ||
-            gitRefDeleteTarget.warningMessage === null ? undefined : (
+          gitRefDeleteTarget.warningMessage === null ? undefined : (
             <Alert className="git-action-warning" variant="destructive">
               <AlertDescription>
                 {gitRefDeleteTarget.warningMessage}
@@ -4937,13 +4928,13 @@ const CommitHistory = ({
                 </li>
               </ul>
               {branchPointerOperationText?.description ===
-                null ? null : branchPointerOperationText?.shouldBlock ? (
-                  <Alert className="git-action-warning" variant="destructive">
-                    <AlertDescription>
-                      {branchPointerOperationText?.description}
-                    </AlertDescription>
-                  </Alert>
-                ) : (
+              null ? null : branchPointerOperationText?.shouldBlock ? (
+                <Alert className="git-action-warning" variant="destructive">
+                  <AlertDescription>
+                    {branchPointerOperationText?.description}
+                  </AlertDescription>
+                </Alert>
+              ) : (
                 <DialogDescription>
                   {branchPointerOperationText?.description}
                 </DialogDescription>
@@ -5036,7 +5027,9 @@ const MoltTreeDesktopApp = () => {
     null,
   );
   const [dashboardPaintWaitCount, setDashboardPaintWaitCount] = useState(0);
-  const [selectedRepoRoot, setSelectedRepoRoot] = useState<string | null>(null);
+  const [selectedRepoRoot, setSelectedRepoRootState] = useState<string | null>(
+    null,
+  );
   const [pathLauncher, setPathLauncher] = useState<PathLauncher>("vscode");
   const [isLoading, setIsLoading] = useState(true);
   const [dashboardErrorMessage, setDashboardErrorMessage] = useState<
@@ -5051,20 +5044,12 @@ const MoltTreeDesktopApp = () => {
   const [appUpdateStatus, setAppUpdateStatus] = useState<AppUpdateStatus>({
     type: "unavailable",
   });
-  const [initialLoadingImageUrl] = useState(() => {
-    const randomLoadingImageValue = Math.random();
-    const rareLoadingImageIndex = Math.floor(
-      randomLoadingImageValue / RARE_LOADING_IMAGE_PROBABILITY,
-    );
-
-    return rareLoadingImageIndex < RARE_LOADING_IMAGE_URLS.length
-      ? RARE_LOADING_IMAGE_URLS[rareLoadingImageIndex]
-      : defaultAppIconUrl;
-  });
   const userGitUpdateCountRef = useRef(0);
   const nextUserGitUpdateToastIdRef = useRef(0);
   const isDashboardRefreshRunningRef = useRef(false);
   const shouldRefreshDashboardAgainRef = useRef(false);
+  const selectedRepoRootRef = useRef<string | null>(null);
+  const pendingDashboardRefreshRepoRootRef = useRef<string | null>(null);
   const dashboardRefreshPromiseRef = useRef<Promise<void> | null>(null);
   const dashboardPaintResolversRef = useRef<(() => void)[]>([]);
 
@@ -5102,6 +5087,17 @@ const MoltTreeDesktopApp = () => {
       setDashboardErrorMessage(null);
     }
   }, []);
+  const selectRepoRoot = useCallback((repoRoot: string | null) => {
+    selectedRepoRootRef.current = repoRoot;
+    setSelectedRepoRootState(repoRoot);
+  }, []);
+  useEffect(() => {
+    if (dashboardData === null && dashboardErrorMessage === null) {
+      return;
+    }
+
+    document.getElementById("initial-loading-root")?.remove();
+  }, [dashboardData, dashboardErrorMessage]);
   useEffect(() => {
     const dashboardPaintResolvers = dashboardPaintResolversRef.current;
 
@@ -5116,53 +5112,66 @@ const MoltTreeDesktopApp = () => {
       }
     });
   }, [dashboardPaintWaitCount]);
+  const refreshDashboardForRepoRoot = useCallback(
+    async (repoRoot: string | null) => {
+      if (isDashboardRefreshRunningRef.current) {
+        shouldRefreshDashboardAgainRef.current = true;
+        pendingDashboardRefreshRepoRootRef.current = repoRoot;
+
+        if (dashboardRefreshPromiseRef.current !== null) {
+          await dashboardRefreshPromiseRef.current;
+        }
+
+        return;
+      }
+
+      const dashboardRefreshPromise = (async () => {
+        isDashboardRefreshRunningRef.current = true;
+        setIsLoading(true);
+
+        try {
+          let nextRepoRoot = repoRoot;
+
+          do {
+            shouldRefreshDashboardAgainRef.current = false;
+            pendingDashboardRefreshRepoRootRef.current = null;
+
+            try {
+              const nextDashboardData = await window.molttree.readDashboard({
+                repoRoot: nextRepoRoot,
+              });
+
+              if (userGitUpdateCountRef.current === 0) {
+                applyDashboardData(nextDashboardData);
+              }
+            } catch (error) {
+              if (userGitUpdateCountRef.current > 0) {
+                continue;
+              }
+
+              const message = readCaughtUserFacingErrorMessage({
+                error,
+                fallbackMessage: "Failed to read dashboard data.",
+              });
+              setDashboardErrorMessage(message);
+            }
+            nextRepoRoot = pendingDashboardRefreshRepoRootRef.current;
+          } while (shouldRefreshDashboardAgainRef.current);
+        } finally {
+          isDashboardRefreshRunningRef.current = false;
+          dashboardRefreshPromiseRef.current = null;
+          setIsLoading(false);
+        }
+      })();
+
+      dashboardRefreshPromiseRef.current = dashboardRefreshPromise;
+      await dashboardRefreshPromise;
+    },
+    [applyDashboardData],
+  );
   const refreshDashboard = useCallback(async () => {
-    if (isDashboardRefreshRunningRef.current) {
-      shouldRefreshDashboardAgainRef.current = true;
-
-      if (dashboardRefreshPromiseRef.current !== null) {
-        await dashboardRefreshPromiseRef.current;
-      }
-
-      return;
-    }
-
-    const dashboardRefreshPromise = (async () => {
-      isDashboardRefreshRunningRef.current = true;
-      setIsLoading(true);
-
-      try {
-        do {
-          shouldRefreshDashboardAgainRef.current = false;
-
-          try {
-            const nextDashboardData = await window.molttree.readDashboard();
-
-            if (userGitUpdateCountRef.current === 0) {
-              applyDashboardData(nextDashboardData);
-            }
-          } catch (error) {
-            if (userGitUpdateCountRef.current > 0) {
-              continue;
-            }
-
-            const message = readCaughtUserFacingErrorMessage({
-              error,
-              fallbackMessage: "Failed to read dashboard data.",
-            });
-            setDashboardErrorMessage(message);
-          }
-        } while (shouldRefreshDashboardAgainRef.current);
-      } finally {
-        isDashboardRefreshRunningRef.current = false;
-        dashboardRefreshPromiseRef.current = null;
-        setIsLoading(false);
-      }
-    })();
-
-    dashboardRefreshPromiseRef.current = dashboardRefreshPromise;
-    await dashboardRefreshPromise;
-  }, [applyDashboardData]);
+    await refreshDashboardForRepoRoot(selectedRepoRootRef.current);
+  }, [refreshDashboardForRepoRoot]);
   const refreshDashboardAfterUserGitUpdate = useCallback(
     async (finishUserGitUpdate: () => void) => {
       setIsLoading(true);
@@ -5326,7 +5335,7 @@ const MoltTreeDesktopApp = () => {
 
     if (dashboardData.repos.length === 0) {
       if (selectedRepoRoot !== null) {
-        setSelectedRepoRoot(null);
+        selectRepoRoot(null);
       }
 
       return;
@@ -5342,9 +5351,9 @@ const MoltTreeDesktopApp = () => {
     const firstRepo = dashboardData.repos[0];
 
     if (firstRepo !== undefined) {
-      setSelectedRepoRoot(firstRepo.root);
+      selectRepoRoot(firstRepo.root);
     }
-  }, [dashboardData, selectedRepoRoot]);
+  }, [dashboardData, selectRepoRoot, selectedRepoRoot]);
 
   useEffect(() => {
     if (dashboardErrorMessage === null) {
@@ -5362,8 +5371,8 @@ const MoltTreeDesktopApp = () => {
       dashboardData === null
         ? undefined
         : dashboardData.repos.find(
-          (dashboardRepo) => dashboardRepo.root === repoRoot,
-        );
+            (dashboardRepo) => dashboardRepo.root === repoRoot,
+          );
 
     return repo === undefined ? [] : repo.branchSyncChanges;
   };
@@ -5448,24 +5457,24 @@ const MoltTreeDesktopApp = () => {
     branchSyncConfirmation === null
       ? []
       : readActionableBranchSyncChanges({
-        action: branchSyncConfirmation.action,
-        branchSyncChanges: readVisibleBranchSyncChangesForRepo(
-          branchSyncConfirmation.repoRoot,
-        ),
-      });
+          action: branchSyncConfirmation.action,
+          branchSyncChanges: readVisibleBranchSyncChangesForRepo(
+            branchSyncConfirmation.repoRoot,
+          ),
+        });
   const branchSyncConfirmationRepo =
     branchSyncConfirmation === null || dashboardData === null
       ? null
       : (dashboardData.repos.find(
-        (repo) => repo.root === branchSyncConfirmation.repoRoot,
-      ) ?? null);
+          (repo) => repo.root === branchSyncConfirmation.repoRoot,
+        ) ?? null);
   const branchSyncPushWarningMessages =
     branchSyncConfirmation?.action === "push" &&
-      branchSyncConfirmationRepo !== null
+    branchSyncConfirmationRepo !== null
       ? readBranchSyncPushWarningMessages({
-        branchSyncChanges: branchSyncChangesInConfirmation,
-        commits: branchSyncConfirmationRepo.commits,
-      })
+          branchSyncChanges: branchSyncChangesInConfirmation,
+          commits: branchSyncConfirmationRepo.commits,
+        })
       : [];
   const branchSyncActionText =
     branchSyncConfirmation === null
@@ -5473,29 +5482,35 @@ const MoltTreeDesktopApp = () => {
       : readBranchSyncActionText(branchSyncConfirmation.action);
 
   if (dashboardData === null) {
-    return (
-      <>
-        <main className="initial-loading-screen">
-          <div className="initial-loading-content">
-            <img
-              alt=""
-              className="initial-loading-image"
-              draggable={false}
-              src={initialLoadingImageUrl}
-            />
-            <div className="initial-loading-status">
-              <LoaderCircle
-                aria-hidden="true"
-                className="initial-loading-spinner"
-                size={16}
-              />
-              <span>Loading repositories...</span>
+    if (dashboardErrorMessage !== null) {
+      return (
+        <>
+          <main className="initial-loading-screen">
+            <div className="initial-loading-content">
+              <div className="initial-loading-error">
+                <div className="initial-loading-error-title">
+                  Failed to load repositories
+                </div>
+                <div className="initial-loading-error-message">
+                  {dashboardErrorMessage}
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void refreshDashboard()}
+                >
+                  Retry
+                </Button>
+              </div>
             </div>
-          </div>
-        </main>
-        <Toaster />
-      </>
-    );
+          </main>
+          <Toaster />
+        </>
+      );
+    }
+
+    return <Toaster />;
   }
   const openSelectedRepoPath = async () => {
     if (selectedRepo === null) {
@@ -5518,7 +5533,8 @@ const MoltTreeDesktopApp = () => {
     }
   };
   const changeSelectedRepoRoot = (repoRoot: string) => {
-    setSelectedRepoRoot(repoRoot);
+    selectRepoRoot(repoRoot);
+    void refreshDashboardForRepoRoot(repoRoot);
     trackDesktopAction({ eventName: "repo_selected", properties: {} });
   };
   const changePathLauncher = (value: string) => {

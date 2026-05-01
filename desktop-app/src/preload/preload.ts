@@ -4,6 +4,7 @@ import type {
   AppUpdateStatus,
   CodexThreadStatusChange,
   DashboardData,
+  DashboardReadRequest,
   GitBranchSyncChange,
   GitCheckoutCommitRequest,
   GitCommitChangesRequest,
@@ -20,9 +21,11 @@ import type {
 } from "../shared/types";
 
 const api: MoltTreeApi = {
-  readDashboard: async () => {
-    const dashboardData: DashboardData =
-      await ipcRenderer.invoke("dashboard:read");
+  readDashboard: async (request: DashboardReadRequest) => {
+    const dashboardData: DashboardData = await ipcRenderer.invoke(
+      "dashboard:read",
+      request,
+    );
 
     return dashboardData;
   },

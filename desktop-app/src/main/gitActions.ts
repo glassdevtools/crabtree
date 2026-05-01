@@ -22,6 +22,8 @@ const FIELD_SEPARATOR = "\u001f";
 const ZERO_SHA = "0000000000000000000000000000000000000000";
 const CHECKED_OUT_BY_WORKTREE_MESSAGE =
   "This branch is checked out in a worktree. Delete that worktree or switch its branch first.";
+// TODO: AI-PICKED-VALUE: This prevents Git mutations and remote reads from waiting forever on a blocked process.
+const GIT_COMMAND_TIMEOUT_MS = 20_000;
 const execFileAsync = promisify(execFile);
 
 type GitWorktreePointer = {
@@ -31,6 +33,13 @@ type GitWorktreePointer = {
 };
 
 // Git actions live here so IPC can stay focused on validating inputs before calling a small surface of mutations.
+const createGitClientForPath = ({ path }: { path: string }) => {
+  return simpleGit({
+    baseDir: path,
+    timeout: { block: GIT_COMMAND_TIMEOUT_MS },
+  }).env("GIT_TERMINAL_PROMPT", "0");
+};
+
 const runGitCommandForPath = async ({
   path,
   args,
@@ -38,7 +47,7 @@ const runGitCommandForPath = async ({
   path: string;
   args: string[];
 }) => {
-  await simpleGit({ baseDir: path }).raw(args);
+  await createGitClientForPath({ path }).raw(args);
 };
 
 const readGitTextForPath = async ({
@@ -48,7 +57,7 @@ const readGitTextForPath = async ({
   path: string;
   args: string[];
 }) => {
-  return (await simpleGit({ baseDir: path }).raw(args)).trim();
+  return (await createGitClientForPath({ path }).raw(args)).trim();
 };
 
 const readNullableGitTextForPath = async ({

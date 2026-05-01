@@ -1,12 +1,20 @@
 import type { DashboardData } from "../shared/types";
 
 type DashboardReadMode = "full" | "afterGitMutation";
+type DashboardFullReadResult = {
+  dashboardData: DashboardData;
+  readRepoRoots: string[];
+};
 
 export const createDashboardRefreshCoordinator = ({
   readFullDashboardData,
   readDashboardDataAfterGitMutation,
 }: {
-  readFullDashboardData: () => Promise<DashboardData>;
+  readFullDashboardData: ({
+    repoRoot,
+  }: {
+    repoRoot: string | null;
+  }) => Promise<DashboardFullReadResult>;
   readDashboardDataAfterGitMutation: ({
     previousDashboardData,
     repoRoots,
@@ -18,6 +26,7 @@ export const createDashboardRefreshCoordinator = ({
   let dashboardDataCache: DashboardData | null = null;
   let dashboardReadPromise: Promise<DashboardData> | null = null;
   let pendingDashboardReadMode: DashboardReadMode | null = null;
+  let pendingFullDashboardRepoRoot: string | null = null;
   let changedRepoRootOfRoot: { [repoRoot: string]: boolean } = {};
   let gitMutationVersion = 0;
 
@@ -57,7 +66,13 @@ export const createDashboardRefreshCoordinator = ({
     }
   };
 
-  const readDashboardDataForMode = async (readMode: DashboardReadMode) => {
+  const readDashboardDataForMode = async ({
+    readMode,
+    repoRoot,
+  }: {
+    readMode: DashboardReadMode;
+    repoRoot: string | null;
+  }) => {
     if (readMode === "afterGitMutation" && dashboardDataCache !== null) {
       const changedRepoRoots = takeChangedRepoRoots();
 
@@ -79,11 +94,19 @@ export const createDashboardRefreshCoordinator = ({
     }
 
     const gitMutationVersionBeforeRead = gitMutationVersion;
-    dashboardDataCache = await readFullDashboardData();
+    const fullReadResult = await readFullDashboardData({ repoRoot });
+    dashboardDataCache = fullReadResult.dashboardData;
 
     if (gitMutationVersion === gitMutationVersionBeforeRead) {
-      changedRepoRootOfRoot = {};
-    } else {
+      for (const readRepoRoot of fullReadResult.readRepoRoots) {
+        delete changedRepoRootOfRoot[readRepoRoot];
+      }
+    }
+
+    if (
+      gitMutationVersion !== gitMutationVersionBeforeRead ||
+      Object.keys(changedRepoRootOfRoot).length > 0
+    ) {
       pendingDashboardReadMode = mergeDashboardReadModes({
         currentMode: pendingDashboardReadMode,
         nextMode: "afterGitMutation",
@@ -95,6 +118,7 @@ export const createDashboardRefreshCoordinator = ({
 
   const readDashboardDataWithoutOverlap = async (
     readMode: DashboardReadMode,
+    repoRoot: string | null,
   ) => {
     if (dashboardReadPromise !== null) {
       pendingDashboardReadMode = mergeDashboardReadModes({
@@ -102,21 +126,31 @@ export const createDashboardRefreshCoordinator = ({
         nextMode: readMode,
       });
 
+      if (readMode === "full") {
+        pendingFullDashboardRepoRoot = repoRoot;
+      }
+
       return await dashboardReadPromise;
     }
 
     const currentDashboardReadPromise = (async () => {
       let nextReadMode = readMode;
+      let nextRepoRoot = repoRoot;
 
       for (;;) {
         pendingDashboardReadMode = null;
-        const dashboardData = await readDashboardDataForMode(nextReadMode);
+        pendingFullDashboardRepoRoot = null;
+        const dashboardData = await readDashboardDataForMode({
+          readMode: nextReadMode,
+          repoRoot: nextRepoRoot,
+        });
 
         if (pendingDashboardReadMode === null) {
           return dashboardData;
         }
 
         nextReadMode = pendingDashboardReadMode;
+        nextRepoRoot = pendingFullDashboardRepoRoot;
       }
     })();
 
