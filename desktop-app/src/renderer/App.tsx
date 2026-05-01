@@ -5748,15 +5748,14 @@ const MoltTreeDesktopApp = () => {
                 <dt>Updates</dt>
                 <dd>
                   <Button
+                    className="bg-white"
                     disabled={readIsAppUpdateButtonDisabled(appUpdateStatus)}
                     onClick={() => {
                       void runAppUpdateAction();
                     }}
                     size="sm"
                     type="button"
-                    variant={
-                      appUpdateStatus.type === "ready" ? "default" : "outline"
-                    }
+                    variant="outline"
                   >
                     {readAppUpdateButtonText(appUpdateStatus)}
                   </Button>
