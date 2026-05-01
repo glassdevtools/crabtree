@@ -659,6 +659,35 @@ test("reads staged and unstaged change summaries for repo and worktree cwd value
   });
 });
 
+test("caps untracked line counts at ten thousand lines", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    await commitRepoFile({
+      repoRoot,
+      filePath: "base.txt",
+      content: "base\n",
+      message: "base",
+    });
+    await writeRepoFile({
+      repoRoot,
+      filePath: "large-untracked.txt",
+      content: "line\n".repeat(10_050),
+    });
+
+    const threads = [createThread({ id: "root-thread", cwd: repoRoot })];
+    const repoGraphResult = await readRepoGraphs({
+      threads,
+      focusedRepoRoot: null,
+    });
+    const { gitChangesOfCwd, gitErrors } = await readGitChangesOfCwd({
+      threads,
+      repos: repoGraphResult.repos,
+    });
+
+    assert.equal(gitErrors.length, 0);
+    assert.equal(gitChangesOfCwd[repoRoot]?.unstaged.added, 10_000);
+  });
+});
+
 test("uses the main worktree as the repo root for linked worktree threads", async () => {
   await withRepo(async ({ repoRoot }) => {
     await commitRepoFile({

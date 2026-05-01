@@ -5020,6 +5020,9 @@ const MoltTreeDesktopApp = () => {
   );
   const [pathLauncher, setPathLauncher] = useState<PathLauncher>("vscode");
   const [isLoading, setIsLoading] = useState(true);
+  const [loadingRepoRoot, setLoadingRepoRootState] = useState<string | null>(
+    null,
+  );
   const [dashboardErrorMessage, setDashboardErrorMessage] = useState<
     string | null
   >(null);
@@ -5037,6 +5040,7 @@ const MoltTreeDesktopApp = () => {
   const isDashboardRefreshRunningRef = useRef(false);
   const shouldRefreshDashboardAgainRef = useRef(false);
   const selectedRepoRootRef = useRef<string | null>(null);
+  const loadingRepoRootRef = useRef<string | null>(null);
   const pendingDashboardRefreshRepoRootRef = useRef<string | null>(null);
   const dashboardRefreshPromiseRef = useRef<Promise<void> | null>(null);
   const dashboardPaintResolversRef = useRef<(() => void)[]>([]);
@@ -5067,7 +5071,39 @@ const MoltTreeDesktopApp = () => {
   }, [dashboardData, selectedRepoRoot]);
 
   const applyDashboardData = useCallback((nextDashboardData: DashboardData) => {
-    setDashboardData(nextDashboardData);
+    let nextSelectedRepoRoot = selectedRepoRootRef.current;
+
+    if (
+      nextSelectedRepoRoot === null ||
+      !nextDashboardData.repos.some(
+        (repo) => repo.root === nextSelectedRepoRoot,
+      )
+    ) {
+      nextSelectedRepoRoot = nextDashboardData.repos[0]?.root ?? null;
+      selectedRepoRootRef.current = nextSelectedRepoRoot;
+      setSelectedRepoRootState(nextSelectedRepoRoot);
+    }
+
+    setDashboardData((currentDashboardData) => {
+      if (currentDashboardData === null) {
+        return nextDashboardData;
+      }
+
+      const statusOfThreadId: { [threadId: string]: CodexThread["status"] } =
+        {};
+
+      for (const thread of currentDashboardData.threads) {
+        statusOfThreadId[thread.id] = thread.status;
+      }
+
+      return {
+        ...nextDashboardData,
+        threads: nextDashboardData.threads.map((thread) => ({
+          ...thread,
+          status: statusOfThreadId[thread.id] ?? thread.status,
+        })),
+      };
+    });
 
     if (nextDashboardData.gitErrors.length > 0) {
       setDashboardErrorMessage(nextDashboardData.gitErrors.join("\n"));
@@ -5078,6 +5114,34 @@ const MoltTreeDesktopApp = () => {
   const selectRepoRoot = useCallback((repoRoot: string | null) => {
     selectedRepoRootRef.current = repoRoot;
     setSelectedRepoRootState(repoRoot);
+  }, []);
+  const setLoadingRepoRoot = useCallback((repoRoot: string | null) => {
+    if (repoRoot !== null) {
+      const initialLoadingImageUrls = Array.from(
+        document.querySelectorAll<HTMLLinkElement>(
+          "[data-initial-loading-image]",
+        ),
+        (initialLoadingImageLink) => initialLoadingImageLink.href,
+      );
+
+      if (initialLoadingImageUrls.length > 0) {
+        const initialLoadingImageIndex = Math.floor(
+          Math.random() * initialLoadingImageUrls.length,
+        );
+        const initialLoadingImageUrl =
+          initialLoadingImageUrls[initialLoadingImageIndex];
+
+        if (initialLoadingImageUrl !== undefined) {
+          document.documentElement.style.setProperty(
+            "--initial-loading-image-url",
+            `url("${initialLoadingImageUrl}")`,
+          );
+        }
+      }
+    }
+
+    loadingRepoRootRef.current = repoRoot;
+    setLoadingRepoRootState(repoRoot);
   }, []);
   useEffect(() => {
     if (dashboardData === null && dashboardErrorMessage === null) {
@@ -5131,6 +5195,13 @@ const MoltTreeDesktopApp = () => {
 
               if (userGitUpdateCountRef.current === 0) {
                 applyDashboardData(nextDashboardData);
+
+                if (
+                  nextRepoRoot !== null &&
+                  loadingRepoRootRef.current === nextRepoRoot
+                ) {
+                  setLoadingRepoRoot(null);
+                }
               }
             } catch (error) {
               if (userGitUpdateCountRef.current > 0) {
@@ -5142,6 +5213,13 @@ const MoltTreeDesktopApp = () => {
                 fallbackMessage: "Failed to read dashboard data.",
               });
               setDashboardErrorMessage(message);
+
+              if (
+                nextRepoRoot !== null &&
+                loadingRepoRootRef.current === nextRepoRoot
+              ) {
+                setLoadingRepoRoot(null);
+              }
             }
             nextRepoRoot = pendingDashboardRefreshRepoRootRef.current;
           } while (shouldRefreshDashboardAgainRef.current);
@@ -5155,7 +5233,7 @@ const MoltTreeDesktopApp = () => {
       dashboardRefreshPromiseRef.current = dashboardRefreshPromise;
       await dashboardRefreshPromise;
     },
-    [applyDashboardData],
+    [applyDashboardData, setLoadingRepoRoot],
   );
   const refreshDashboard = useCallback(async () => {
     await refreshDashboardForRepoRoot(selectedRepoRootRef.current);
@@ -5315,33 +5393,6 @@ const MoltTreeDesktopApp = () => {
       window.clearInterval(dashboardRefreshIntervalId);
     };
   }, [refreshDashboard]);
-
-  useEffect(() => {
-    if (dashboardData === null) {
-      return;
-    }
-
-    if (dashboardData.repos.length === 0) {
-      if (selectedRepoRoot !== null) {
-        selectRepoRoot(null);
-      }
-
-      return;
-    }
-
-    if (
-      selectedRepoRoot !== null &&
-      dashboardData.repos.some((repo) => repo.root === selectedRepoRoot)
-    ) {
-      return;
-    }
-
-    const firstRepo = dashboardData.repos[0];
-
-    if (firstRepo !== undefined) {
-      selectRepoRoot(firstRepo.root);
-    }
-  }, [dashboardData, selectRepoRoot, selectedRepoRoot]);
 
   useEffect(() => {
     if (dashboardErrorMessage === null) {
@@ -5522,6 +5573,7 @@ const MoltTreeDesktopApp = () => {
   };
   const changeSelectedRepoRoot = (repoRoot: string) => {
     selectRepoRoot(repoRoot);
+    setLoadingRepoRoot(repoRoot);
     void refreshDashboardForRepoRoot(repoRoot);
     trackDesktopAction({ eventName: "repo_selected", properties: {} });
   };
@@ -5589,6 +5641,8 @@ const MoltTreeDesktopApp = () => {
       action: "revert",
       branchSyncChanges: selectedRepoBranchSyncChanges,
     });
+  const isSelectedRepoContextLoading =
+    loadingRepoRoot !== null && selectedRepo?.root === loadingRepoRoot;
   const repoHeaderControls = (
     <>
       {dashboardData.repos.length === 0 ? null : (
@@ -5825,7 +5879,28 @@ const MoltTreeDesktopApp = () => {
 
         <div className="content-shell">
           <div className="repo-list">
-            {selectedRepo === null ? null : (
+            {isSelectedRepoContextLoading ? (
+              <section className="repo-section">
+                <div className="repo-header">{repoHeaderControls}</div>
+                <div className="repo-panel">
+                  <div className="repo-context-loading-screen">
+                    <div className="initial-loading-content">
+                      <div
+                        className="initial-loading-image"
+                        aria-hidden="true"
+                      />
+                      <div className="initial-loading-status">
+                        <span
+                          className="initial-loading-spinner"
+                          aria-hidden="true"
+                        />
+                        <span>Loading repository...</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            ) : selectedRepo === null ? null : (
               <RepoSection
                 key={selectedRepo.key}
                 repo={selectedRepo}

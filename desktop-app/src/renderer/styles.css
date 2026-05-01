@@ -432,6 +432,14 @@ textarea,
   padding: 12px 0 0;
 }
 
+.repo-context-loading-screen {
+  min-height: 0;
+  flex: 1;
+  display: grid;
+  place-items: center;
+  background: #f4f6f8;
+}
+
 .repo-section {
   min-height: 0;
   flex: 1;

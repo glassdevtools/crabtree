@@ -1,4 +1,4 @@
-import { readFile, stat } from "node:fs/promises";
+import { open, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { simpleGit } from "simple-git";
 import type {
@@ -11,14 +11,16 @@ import type {
 } from "../shared/types";
 
 // Git is the source of truth for graph structure. Codex only tells us which thread belongs near a branch, commit, or worktree.
-// TODO: AI-PICKED-VALUE: Reading commits in pages of 1000 keeps Git responses bounded while still walking to the root.
-const COMMIT_PAGE_SIZE = 1000;
+const COMMIT_READ_LIMIT = 2000;
 // TODO: AI-PICKED-VALUE: Fetching origin every 30 seconds keeps remote branch state current without turning one-second dashboard refreshes into network polling.
 const ORIGIN_FETCH_INTERVAL_MS = 30_000;
 // TODO: AI-PICKED-VALUE: Six parallel Git reads keeps dashboard refreshes responsive without launching a large process burst.
 const GIT_READ_PARALLEL_LIMIT = 6;
 // TODO: AI-PICKED-VALUE: This stops one blocked Git process from holding the whole dashboard load forever.
 const GIT_COMMAND_TIMEOUT_MS = 20_000;
+const MAX_UNTRACKED_ADDED_LINE_COUNT = 10_000;
+// TODO: AI-PICKED-VALUE: Reading files in 64 KiB chunks keeps untracked line counts bounded without loading large files into memory.
+const UNTRACKED_FILE_READ_CHUNK_BYTE_COUNT = 64 * 1024;
 const FIELD_SEPARATOR = "\u001f";
 const ZERO_SHA = "0000000000000000000000000000000000000000";
 const lastOriginFetchAttemptTimeOfRepoRoot: { [repoRoot: string]: number } = {};
@@ -470,22 +472,67 @@ const parseGitStatusUntrackedPaths = (stdout: string) => {
   return paths;
 };
 
-const readFileAddedLineCount = async (path: string) => {
-  const bytes = await readFile(path);
+const readFileAddedLineCount = async ({
+  path,
+  maxAddedLineCount,
+}: {
+  path: string;
+  maxAddedLineCount: number;
+}) => {
+  const fileHandle = await open(path, "r");
+  const buffer = Buffer.alloc(UNTRACKED_FILE_READ_CHUNK_BYTE_COUNT);
+  let addedLineCount = 0;
+  let didReadAnyBytes = false;
+  let lastByte = 0;
 
-  if (bytes.length === 0 || bytes.includes(0)) {
-    return 0;
-  }
+  try {
+    for (;;) {
+      const { bytesRead } = await fileHandle.read({
+        buffer,
+        offset: 0,
+        length: buffer.length,
+        position: null,
+      });
 
-  let lineCount = 0;
+      if (bytesRead === 0) {
+        break;
+      }
 
-  for (const byte of bytes) {
-    if (byte === 10) {
-      lineCount += 1;
+      didReadAnyBytes = true;
+
+      for (let byteIndex = 0; byteIndex < bytesRead; byteIndex += 1) {
+        const byte = buffer[byteIndex];
+
+        if (byte === undefined) {
+          continue;
+        }
+
+        if (byte === 0) {
+          return 0;
+        }
+
+        lastByte = byte;
+
+        if (byte !== 10) {
+          continue;
+        }
+
+        addedLineCount += 1;
+
+        if (addedLineCount >= maxAddedLineCount) {
+          return maxAddedLineCount;
+        }
+      }
     }
-  }
 
-  return bytes[bytes.length - 1] === 10 ? lineCount : lineCount + 1;
+    if (didReadAnyBytes && lastByte !== 10) {
+      addedLineCount += 1;
+    }
+
+    return Math.min(addedLineCount, maxAddedLineCount);
+  } finally {
+    await fileHandle.close();
+  }
 };
 
 const readUntrackedGitChangeLineCounts = async ({ cwd }: { cwd: string }) => {
@@ -496,23 +543,28 @@ const readUntrackedGitChangeLineCounts = async ({ cwd }: { cwd: string }) => {
       args: ["status", "--porcelain=v1", "-uall", "-z", "--", "."],
     }),
   ]);
-  const untrackedPaths = parseGitStatusUntrackedPaths(status.stdout);
-  const addedLineCounts = await readValuesWithGitReadLimit({
-    items: untrackedPaths,
-    readItem: async (untrackedPath) => {
-      const path = join(repoRoot, untrackedPath);
-      const pathStat = await stat(path);
+  let addedLineCount = 0;
 
-      if (!pathStat.isFile()) {
-        return 0;
-      }
+  for (const untrackedPath of parseGitStatusUntrackedPaths(status.stdout)) {
+    if (addedLineCount >= MAX_UNTRACKED_ADDED_LINE_COUNT) {
+      break;
+    }
 
-      return await readFileAddedLineCount(path);
-    },
-  });
+    const path = join(repoRoot, untrackedPath);
+    const pathStat = await stat(path);
+
+    if (!pathStat.isFile()) {
+      continue;
+    }
+
+    addedLineCount += await readFileAddedLineCount({
+      path,
+      maxAddedLineCount: MAX_UNTRACKED_ADDED_LINE_COUNT - addedLineCount,
+    });
+  }
 
   return {
-    added: addedLineCounts.reduce((total, count) => total + count, 0),
+    added: Math.min(addedLineCount, MAX_UNTRACKED_ADDED_LINE_COUNT),
     removed: 0,
   };
 };
@@ -1105,84 +1157,77 @@ const readCommits = async ({
     localBranchesOfSha[sha].push(branch);
   }
 
-  for (let skip = 0; ; skip += COMMIT_PAGE_SIZE) {
-    const { stdout: shaStdout } = await runGit({
-      cwd: repoSeed.root,
-      args: [
-        "rev-list",
-        "--topo-order",
-        `--max-count=${COMMIT_PAGE_SIZE}`,
-        `--skip=${skip}`,
-        ...historyRoots,
-      ],
-    });
-    const shas = shaStdout
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0);
+  const { stdout: shaStdout } = await runGit({
+    cwd: repoSeed.root,
+    args: [
+      "rev-list",
+      "--topo-order",
+      `--max-count=${COMMIT_READ_LIMIT}`,
+      ...historyRoots,
+    ],
+  });
+  const shas = shaStdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
 
-    if (shas.length === 0) {
-      break;
+  if (shas.length === 0) {
+    return commits;
+  }
+
+  const { stdout } = await runGit({
+    cwd: repoSeed.root,
+    args: [
+      "log",
+      "--no-walk=unsorted",
+      "--date=iso-strict",
+      `--pretty=format:${format}`,
+      ...shas,
+    ],
+  });
+
+  const commitOfSha: { [sha: string]: GitCommit } = {};
+
+  for (const line of stdout.split("\n")) {
+    if (line.length === 0) {
+      continue;
     }
 
-    const { stdout } = await runGit({
-      cwd: repoSeed.root,
-      args: [
-        "log",
-        "--no-walk=unsorted",
-        "--date=iso-strict",
-        `--pretty=format:${format}`,
-        ...shas,
-      ],
-    });
+    const [sha, parentsText, refsText, author, date, subject] =
+      line.split(FIELD_SEPARATOR);
 
-    const commitOfSha: { [sha: string]: GitCommit } = {};
-
-    for (const line of stdout.split("\n")) {
-      if (line.length === 0) {
-        continue;
-      }
-
-      const [sha, parentsText, refsText, author, date, subject] =
-        line.split(FIELD_SEPARATOR);
-
-      if (
-        sha === undefined ||
-        parentsText === undefined ||
-        refsText === undefined ||
-        author === undefined ||
-        date === undefined ||
-        subject === undefined
-      ) {
-        continue;
-      }
-
-      commitOfSha[sha] = {
-        sha,
-        shortSha: sha.slice(0, 7),
-        parents: parentsText.length === 0 ? [] : parentsText.split(" "),
-        refs: splitRefs(refsText),
-        localBranches: localBranchesOfSha[sha] ?? [],
-        author,
-        date,
-        subject,
-        threadIds: threadIdsOfSha[sha] ?? [],
-      };
+    if (
+      sha === undefined ||
+      parentsText === undefined ||
+      refsText === undefined ||
+      author === undefined ||
+      date === undefined ||
+      subject === undefined
+    ) {
+      continue;
     }
 
-    for (const sha of shas) {
-      const commit = commitOfSha[sha];
+    commitOfSha[sha] = {
+      sha,
+      shortSha: sha.slice(0, 7),
+      parents: parentsText.length === 0 ? [] : parentsText.split(" "),
+      refs: splitRefs(refsText),
+      localBranches: localBranchesOfSha[sha] ?? [],
+      author,
+      date,
+      subject,
+      threadIds: threadIdsOfSha[sha] ?? [],
+    };
+  }
 
-      if (commit === undefined) {
-        continue;
-      }
+  for (const sha of shas) {
+    const commit = commitOfSha[sha];
 
-      commits.push(commit);
+    if (commit === undefined) {
+      continue;
     }
 
-    if (shas.length < COMMIT_PAGE_SIZE) {
-      break;
-    }
+    commits.push(commit);
   }
 
   return commits;
@@ -1268,6 +1313,12 @@ const readRepoGraphForSeed = async ({
     if (isShallowRepositoryText === "true") {
       warnings.push(
         `${repoSeed.root}: Git repository is shallow, so history can only show commits available locally.`,
+      );
+    }
+
+    if (commits.length >= COMMIT_READ_LIMIT) {
+      warnings.push(
+        `${repoSeed.root}: Showing the latest ${COMMIT_READ_LIMIT} commits.`,
       );
     }
 
