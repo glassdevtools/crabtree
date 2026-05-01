@@ -288,22 +288,10 @@ const readAppUpdateButtonText = (appUpdateStatus: AppUpdateStatus) => {
     case "downloading":
       return "Downloading...";
     case "unavailable":
+      return "Updates disabled";
     case "idle":
     case "error":
       return "Check for updates";
-  }
-};
-
-const readIsAppUpdateButtonDisabled = (appUpdateStatus: AppUpdateStatus) => {
-  switch (appUpdateStatus.type) {
-    case "unavailable":
-    case "checking":
-    case "downloading":
-      return true;
-    case "idle":
-    case "ready":
-    case "error":
-      return false;
   }
 };
 
@@ -5764,7 +5752,11 @@ const MoltTreeDesktopApp = () => {
                 <dt>Updates</dt>
                 <dd>
                   <Button
-                    disabled={readIsAppUpdateButtonDisabled(appUpdateStatus)}
+                    className={
+                      appUpdateStatus.type === "ready"
+                        ? undefined
+                        : "bg-white hover:bg-white aria-expanded:bg-white disabled:bg-white"
+                    }
                     onClick={() => {
                       void runAppUpdateAction();
                     }}

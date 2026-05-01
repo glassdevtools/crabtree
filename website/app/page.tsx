@@ -135,7 +135,7 @@ const HomePage = () => {
               <span>MoltTree</span>
             </h1>
             <p className="heroSubtext">
-              Manage every worktree, chat, and branch.
+              Your chats, worktrees, and branches, all in one place.
             </p>
             <div className="hero__actions">
               <ClientDownloadLink
@@ -217,9 +217,7 @@ const HomePage = () => {
 
       <section className="bottomCta" aria-labelledby="cta-title">
         <div className="bottomCtaInner">
-          <h2 id="cta-title">
-            Manage every worktree, chat, and branch.
-          </h2>
+          <h2 id="cta-title">Save time in Codex</h2>
           <p>
             There&apos;s a better way to manage your branches and worktrees.
           </p>
