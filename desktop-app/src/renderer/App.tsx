@@ -129,7 +129,7 @@ const COMMIT_HISTORY_HEADER_HEIGHT = 22;
 // TODO: AI-PICKED-VALUE: Refreshing every second keeps branch/worktree state current while the refresh queue prevents overlapping Git reads.
 const DASHBOARD_REFRESH_INTERVAL_MS = 1000;
 const TOAST_POSITION = "bottom-center";
-const ERROR_TOAST_DURATION_MS = Infinity;
+const UNFOCUSED_ERROR_TOAST_DURATION_MS = Infinity;
 const USER_GIT_UPDATE_TOAST_ID_PREFIX = "user-git-update";
 const RARE_LOADING_IMAGE_PROBABILITY = 0.1;
 const RARE_LOADING_IMAGE_URLS = [
@@ -197,6 +197,32 @@ const readCaughtUserFacingErrorMessage = ({
   }
 
   return userFacingMessage;
+};
+
+const showErrorToast = ({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) => {
+  const isWindowFocused = document.hasFocus();
+
+  if (isWindowFocused) {
+    toast.error(title, {
+      closeButton: false,
+      description,
+      position: TOAST_POSITION,
+    });
+    return;
+  }
+
+  toast.error(title, {
+    closeButton: true,
+    description,
+    duration: UNFOCUSED_ERROR_TOAST_DURATION_MS,
+    position: TOAST_POSITION,
+  });
 };
 
 const readGitRefCreateText = (gitRefType: "branch" | "tag") => {
@@ -480,10 +506,7 @@ const copyTextAfterContextMenu = async ({
       error,
       fallbackMessage: errorMessage,
     });
-    toast.error("Error", {
-      description: message,
-      position: TOAST_POSITION,
-    });
+    showErrorToast({ title: "Error", description: message });
   }
 };
 
@@ -5215,11 +5238,7 @@ const MoltTreeDesktopApp = () => {
       console.error(message);
     }
 
-    toast.error("Error", {
-      description: userFacingMessage,
-      duration: ERROR_TOAST_DURATION_MS,
-      position: TOAST_POSITION,
-    });
+    showErrorToast({ title: "Error", description: userFacingMessage });
   }, []);
   // User Git updates use this wrapper so the loading toast is tied to action results, not background polling.
   const runUserGitUpdate = useCallback(
@@ -5310,10 +5329,9 @@ const MoltTreeDesktopApp = () => {
       return;
     }
 
-    toast.error("Dashboard error", {
+    showErrorToast({
+      title: "Dashboard error",
       description: dashboardErrorMessage,
-      duration: ERROR_TOAST_DURATION_MS,
-      position: TOAST_POSITION,
     });
   }, [dashboardErrorMessage]);
 

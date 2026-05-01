@@ -100,6 +100,34 @@ const readDefaultBranchNameFromOriginHeadText = (originHeadText: string) => {
   return originHeadText;
 };
 
+const readLocalDefaultBranch = async ({ repoRoot }: { repoRoot: string }) => {
+  const originHead = await readNullableGitTextForPath({
+    path: repoRoot,
+    args: ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
+  });
+
+  return originHead === null
+    ? null
+    : readDefaultBranchNameFromOriginHeadText(originHead);
+};
+
+const readDefaultBranch = async ({ repoRoot }: { repoRoot: string }) => {
+  const localDefaultBranch = await readLocalDefaultBranch({ repoRoot });
+
+  if (localDefaultBranch !== null) {
+    return localDefaultBranch;
+  }
+
+  const remoteOriginHead = await readNullableGitTextForPath({
+    path: repoRoot,
+    args: ["ls-remote", "--symref", "origin", "HEAD"],
+  });
+
+  return remoteOriginHead === null
+    ? null
+    : readDefaultBranchNameFromOriginHeadText(remoteOriginHead);
+};
+
 // -------------------------- Worktree and visibility helpers ---------------
 
 // Worktree state matters because a checked-out branch has to move through its own worktree.
@@ -179,6 +207,15 @@ const readGitWorktreePathForBranch = async ({
   return null;
 };
 
+const readCurrentBranch = async ({ repoRoot }: { repoRoot: string }) => {
+  const branch = await readGitTextForPath({
+    path: repoRoot,
+    args: ["branch", "--show-current"],
+  });
+
+  return branch.length === 0 ? null : branch;
+};
+
 type GitBranchCheckoutPlace = "head" | "worktree";
 
 const readGitBranchCheckoutPlace = async ({
@@ -188,10 +225,7 @@ const readGitBranchCheckoutPlace = async ({
   repoRoot: string;
   branch: string;
 }) => {
-  const currentBranch = await readGitTextForPath({
-    path: repoRoot,
-    args: ["branch", "--show-current"],
-  });
+  const currentBranch = await readCurrentBranch({ repoRoot });
 
   if (branch === currentBranch) {
     return "head";
@@ -228,6 +262,97 @@ const detachHeadFromCurrentBranch = async ({
     path: repoRoot,
     args: ["switch", "--detach", expectedHeadSha],
   });
+};
+
+const readLocalBranchesAtSha = async ({
+  repoRoot,
+  sha,
+}: {
+  repoRoot: string;
+  sha: string;
+}) => {
+  const localBranchText = await readGitTextForPath({
+    path: repoRoot,
+    args: [
+      "for-each-ref",
+      "--sort=refname",
+      "--points-at",
+      sha,
+      "--format=%(refname:short)",
+      "refs/heads",
+    ],
+  });
+
+  return localBranchText.split("\n").filter((branch) => branch.length > 0);
+};
+
+// Detached HEAD should reattach when a local branch already points at the same commit.
+const readAvailableLocalBranchAtSha = async ({
+  repoRoot,
+  sha,
+}: {
+  repoRoot: string;
+  sha: string;
+}) => {
+  const localBranches = await readLocalBranchesAtSha({ repoRoot, sha });
+
+  if (localBranches.length === 0) {
+    return null;
+  }
+
+  const worktrees = await readGitWorktrees({ repoRoot });
+  const isCheckedOutBranchOfBranch: { [branch: string]: boolean } = {};
+
+  for (const worktree of worktrees) {
+    if (worktree.branch !== null) {
+      isCheckedOutBranchOfBranch[worktree.branch] = true;
+    }
+  }
+
+  const localDefaultBranch = await readLocalDefaultBranch({ repoRoot });
+
+  if (
+    localDefaultBranch !== null &&
+    localBranches.includes(localDefaultBranch) &&
+    isCheckedOutBranchOfBranch[localDefaultBranch] !== true
+  ) {
+    return localDefaultBranch;
+  }
+
+  for (const localBranch of localBranches) {
+    if (isCheckedOutBranchOfBranch[localBranch] !== true) {
+      return localBranch;
+    }
+  }
+
+  return null;
+};
+
+const attachHeadToLocalBranchAtCurrentSha = async ({
+  repoRoot,
+}: {
+  repoRoot: string;
+}) => {
+  const currentBranch = await readCurrentBranch({ repoRoot });
+
+  if (currentBranch !== null) {
+    return;
+  }
+
+  const headSha = await readGitTextForPath({
+    path: repoRoot,
+    args: ["rev-parse", "HEAD"],
+  });
+  const branch = await readAvailableLocalBranchAtSha({
+    repoRoot,
+    sha: headSha,
+  });
+
+  if (branch === null) {
+    return;
+  }
+
+  await runGitCommandForPath({ path: repoRoot, args: ["switch", branch] });
 };
 
 export const readGitMainWorktreePathForPath = async ({
@@ -397,19 +522,10 @@ export const commitAllGitChanges = async ({
     path,
     args: ["rev-parse", "HEAD"],
   });
-  const localBranchText = await readGitTextForPath({
-    path,
-    args: [
-      "for-each-ref",
-      "--points-at",
-      oldSha,
-      "--format=%(refname:short)",
-      "refs/heads",
-    ],
+  const branchesToMove = await readLocalBranchesAtSha({
+    repoRoot,
+    sha: oldSha,
   });
-  const branchesToMove = localBranchText
-    .split("\n")
-    .filter((branch) => branch.length > 0);
 
   await stageGitChanges(path);
   await runGitCommandForPath({ path, args: ["commit", "-m", message] });
@@ -456,6 +572,8 @@ export const commitAllGitChanges = async ({
       continue;
     }
   }
+
+  await attachHeadToLocalBranchAtCurrentSha({ repoRoot });
 
   return newSha;
 };
@@ -602,32 +720,12 @@ export const deleteGitBranch = async ({
   branch,
   oldSha,
 }: GitDeleteBranchRequest) => {
-  const readDefaultBranch = async () => {
-    const originHead = await readNullableGitTextForPath({
-      path: repoRoot,
-      args: ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
-    });
-
-    if (originHead !== null) {
-      return readDefaultBranchNameFromOriginHeadText(originHead);
-    }
-
-    const remoteOriginHead = await readNullableGitTextForPath({
-      path: repoRoot,
-      args: ["ls-remote", "--symref", "origin", "HEAD"],
-    });
-
-    return remoteOriginHead === null
-      ? null
-      : readDefaultBranchNameFromOriginHeadText(remoteOriginHead);
-  };
-
   await runGitCommandForPath({
     path: repoRoot,
     args: ["check-ref-format", "--branch", branch],
   });
 
-  if (branch === (await readDefaultBranch())) {
+  if (branch === (await readDefaultBranch({ repoRoot }))) {
     throw new Error("This is the default branch, so you can't delete it.");
   }
 
@@ -661,6 +759,10 @@ export const deleteGitBranch = async ({
     gitRef,
     refHead,
   });
+
+  if (checkoutPlace === "head") {
+    await attachHeadToLocalBranchAtCurrentSha({ repoRoot });
+  }
 };
 
 export const deleteGitTag = async ({
@@ -974,6 +1076,10 @@ export const moveGitBranch = async ({
       expectedOldSha,
     ],
   });
+
+  if (checkoutPlace === "head") {
+    await attachHeadToLocalBranchAtCurrentSha({ repoRoot });
+  }
 };
 
 export const switchGitBranch = async ({
@@ -1060,6 +1166,7 @@ export const checkoutGitCommit = async ({
   });
 
   if (currentSha === targetSha) {
+    await attachHeadToLocalBranchAtCurrentSha({ repoRoot });
     return;
   }
 
@@ -1069,7 +1176,9 @@ export const checkoutGitCommit = async ({
   });
 
   if (statusText.length > 0) {
-    throw new Error("Working tree must be clean before checking out another commit.");
+    throw new Error(
+      "Working tree must be clean before switching away.",
+    );
   }
 
   const visibleRefText = await readGitTextForPath({
@@ -1087,8 +1196,18 @@ export const checkoutGitCommit = async ({
 
   if (visibleRefText.length === 0) {
     throw new Error(
-      "Current HEAD must be reachable from a branch or tag before switching rows.",
+      "Current HEAD must be reachable from a branch or tag before switching away.",
     );
+  }
+
+  const branch = await readAvailableLocalBranchAtSha({
+    repoRoot,
+    sha: targetSha,
+  });
+
+  if (branch !== null) {
+    await runGitCommandForPath({ path: repoRoot, args: ["switch", branch] });
+    return;
   }
 
   await runGitCommandForPath({
