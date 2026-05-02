@@ -948,6 +948,14 @@ textarea,
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
+.branch-tag-change-action-create {
+  color: #166534;
+}
+
+.branch-tag-change-action-delete {
+  color: #b42318;
+}
+
 .branch-tag-change-ref {
   max-width: 100%;
 }

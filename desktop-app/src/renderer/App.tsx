@@ -262,35 +262,93 @@ const readBranchSyncActionText = (
     case "revert":
       return {
         title: "Sync",
-        message: "Revert local tag changes so they match origin?",
-        buttonText: "Revert",
-        loadingDescription: "Reverting",
+        message: "Revert local tag changes so they match origin? This will revert these tag changes:",
+        buttonText: "Sync",
+        loadingDescription: "Syncing",
         successMessage: "Successfully synced with origin.",
       };
   }
 };
 
-const readBranchSyncChangeShaText = ({
-  action,
+const readBranchSyncChangeTypeText = (
+  branchSyncChanges: GitBranchSyncChange[],
+) => {
+  let hasBranchChange = false;
+  let hasTagChange = false;
+
+  for (const branchSyncChange of branchSyncChanges) {
+    switch (branchSyncChange.gitRefType) {
+      case "branch":
+        hasBranchChange = true;
+        break;
+      case "tag":
+        hasTagChange = true;
+        break;
+    }
+  }
+
+  if (hasBranchChange && hasTagChange) {
+    return "branch and tag";
+  }
+
+  if (hasTagChange) {
+    return "tag";
+  }
+
+  return "branch";
+};
+
+const readBranchSyncChangeSummary = ({
   branchSyncChange,
+  summaryMode,
 }: {
-  action: BranchSyncAction;
   branchSyncChange: GitBranchSyncChange;
+  summaryMode: BranchSyncChangeSummaryMode;
 }) => {
-  const oldSha =
-    action === "push" ? branchSyncChange.originSha : branchSyncChange.localSha;
-  const newSha =
-    action === "push" ? branchSyncChange.localSha : branchSyncChange.originSha;
+  const oldSha = branchSyncChange.originSha;
+  const newSha = branchSyncChange.localSha;
 
   if (oldSha === null && newSha !== null) {
-    return "create";
+    if (summaryMode === "default") {
+      return (
+        <>
+          <strong className="branch-tag-change-action-create">created</strong>{" "}
+          on {newSha.slice(0, 7)}
+        </>
+      );
+    }
+
+    return (
+      <>
+        <strong className="branch-tag-change-action-create">created</strong>{" "}
+        here
+      </>
+    );
   }
 
   if (oldSha !== null && newSha === null) {
-    return "delete";
+    if (summaryMode === "default") {
+      return (
+        <>
+          <strong className="branch-tag-change-action-delete">deleted</strong>{" "}
+          from {oldSha.slice(0, 7)}
+        </>
+      );
+    }
+
+    return (
+      <>
+        <strong className="branch-tag-change-action-delete">deleted</strong>{" "}
+        from here
+      </>
+    );
   }
 
-  return `${oldSha?.slice(0, 7) ?? "none"} -> ${newSha?.slice(0, 7) ?? "none"}`;
+  if (summaryMode === "rowPush") {
+    return "moved here";
+  }
+
+  return `moved to ${newSha?.slice(0, 7) ?? "none"}`;
 };
 
 const readAppUpdateButtonText = (appUpdateStatus: AppUpdateStatus) => {
@@ -765,6 +823,8 @@ type HeadMoveConfirmation = {
 };
 
 type BranchSyncAction = "push" | "revert";
+
+type BranchSyncChangeSummaryMode = "default" | "rowPush";
 
 type BranchSyncActionText = {
   title: string;
@@ -1720,7 +1780,7 @@ const BranchTags = ({
         const originBranchTooltip =
           originBranchName === null
             ? null
-            : `${originBranchName} is here on origin, but not here locally.`;
+            : `${originBranchName} is here on origin, but elsewhere locally.`;
         const deleteWarningMessage = isTag
           ? (deleteWarningMessageOfTag[cleanName] ?? null)
           : (deleteWarningMessageOfBranch[refName] ?? null);
@@ -2479,17 +2539,45 @@ const CommitHistoryRow = ({
         title: actionThreadGroup.cwd,
       }
       : null;
-  const pushableBranchSyncChanges = branchSyncChanges.filter(
+  const pushableGitRefSyncChanges = branchSyncChanges.filter(
     (branchSyncChange) =>
-      branchSyncChange.gitRefType === "branch" &&
-      branchSyncChange.localSha !== null &&
       branchSyncChange.localSha !== branchSyncChange.originSha,
   );
-  const hasPushableBranchSyncChangeOnRow = pushableBranchSyncChanges.some(
-    (branchSyncChange) =>
-      branchSyncChange.localSha === commit.sha &&
-      rowLocalBranches.includes(branchSyncChange.name),
+  const rowPushableGitRefSyncChanges = pushableGitRefSyncChanges.filter(
+    (branchSyncChange) => {
+      if (branchSyncChange.localSha !== null) {
+        if (branchSyncChange.localSha !== commit.sha) {
+          return false;
+        }
+
+        switch (branchSyncChange.gitRefType) {
+          case "branch":
+            return rowLocalBranches.includes(branchSyncChange.name);
+          case "tag":
+            return rowRefs.some(
+              (ref) =>
+                ref.startsWith("tag: ") &&
+                cleanRefName(ref) === branchSyncChange.name,
+            );
+        }
+      }
+
+      if (branchSyncChange.originSha !== commit.sha) {
+        return false;
+      }
+
+      switch (branchSyncChange.gitRefType) {
+        case "branch":
+          return rowRefs.some(
+            (ref) => cleanRefName(ref) === `origin/${branchSyncChange.name}`,
+          );
+        case "tag":
+          return false;
+      }
+    },
   );
+  const hasPushableGitRefSyncChangeOnRow =
+    rowPushableGitRefSyncChanges.length > 0;
   const mergeBranch =
     currentBranch === null || !row.isCommitRow || isHeadRow
       ? null
@@ -2529,11 +2617,10 @@ const CommitHistoryRow = ({
   const shouldShowGraphThreadActions =
     actionThreadGroup !== null && shouldShowActionChangeCount;
   const shouldShowBranchPushAction =
-    hasPushableBranchSyncChangeOnRow &&
+    hasPushableGitRefSyncChangeOnRow &&
     !shouldShowActionCommit &&
     actionBranchCreateTarget === null &&
-    mergeBranch === null &&
-    createBranchToMergeTarget === null;
+    mergeBranch === null;
   const shouldShowGraphActions =
     shouldShowGraphThreadActions ||
     (row.isCommitRow &&
@@ -2647,7 +2734,7 @@ const CommitHistoryRow = ({
                   onMouseDown={(event) => event.stopPropagation()}
                   onDoubleClick={(event) => event.stopPropagation()}
                   onClick={(event) =>
-                    openBranchPushModal(event, pushableBranchSyncChanges)
+                    openBranchPushModal(event, rowPushableGitRefSyncChanges)
                   }
                 >
                   <CircleArrowUp
@@ -4995,22 +5082,7 @@ const CommitHistory = ({
   let branchPushConfirmationDescription: ReactNode = "";
 
   if (branchPushConfirmation !== null) {
-    const [branchSyncChange] = branchPushConfirmation.branchSyncChanges;
-
-    branchPushConfirmationDescription =
-      branchPushConfirmation.branchSyncChanges.length === 1 &&
-        branchSyncChange !== undefined ? (
-        <span className="dialog-description-inline">
-          Push{" "}
-          <GitRefModalBadge
-            gitRefType={branchSyncChange.gitRefType}
-            name={branchSyncChange.name}
-          />{" "}
-          to origin?
-        </span>
-      ) : (
-        `Push ${branchPushConfirmation.branchSyncChanges.length} branches to origin?`
-      );
+    branchPushConfirmationDescription = `Push local ${readBranchSyncChangeTypeText(branchPushConfirmation.branchSyncChanges)} changes to origin?`;
   }
   return (
     <>
@@ -5497,11 +5569,7 @@ const CommitHistory = ({
         <ConfirmationDialog
           isOpen={branchPushConfirmation !== null}
           closeConfirmationDialog={closeBranchPushModal}
-          title={
-            branchPushConfirmation?.branchSyncChanges.length === 1
-              ? "Push Branch"
-              : "Push Branches"
-          }
+          title="Push"
           description={branchPushConfirmationDescription}
           confirmButtonText="Push"
           confirmButtonVariant="default"
@@ -5521,9 +5589,9 @@ const CommitHistory = ({
                         name={branchSyncChange.name}
                       />
                       <code>
-                        {readBranchSyncChangeShaText({
-                          action: "push",
+                        {readBranchSyncChangeSummary({
                           branchSyncChange,
+                          summaryMode: "rowPush",
                         })}
                       </code>
                     </li>
@@ -6529,9 +6597,9 @@ const MoltTreeDesktopApp = () => {
                       name={branchSyncChange.name}
                     />
                     <code>
-                      {readBranchSyncChangeShaText({
-                        action: branchSyncConfirmation.action,
+                      {readBranchSyncChangeSummary({
                         branchSyncChange,
+                        summaryMode: "default",
                       })}
                     </code>
                   </li>
