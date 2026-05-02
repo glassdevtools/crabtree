@@ -320,8 +320,7 @@ const readBranchSyncChangeSummary = ({
 
     return (
       <>
-        <strong className="branch-tag-change-action-create">created</strong>{" "}
-        here
+        <strong className="branch-tag-change-action-create">created</strong>
       </>
     );
   }
@@ -338,8 +337,7 @@ const readBranchSyncChangeSummary = ({
 
     return (
       <>
-        <strong className="branch-tag-change-action-delete">deleted</strong>{" "}
-        here
+        <strong className="branch-tag-change-action-delete">deleted</strong>
       </>
     );
   }
@@ -1780,7 +1778,7 @@ const BranchTags = ({
         const originBranchTooltip =
           originBranchName === null
             ? null
-            : `${originBranchName} is here on origin, but elsewhere locally.`;
+            : `${originBranchName} is here on origin. Push or Sync to update origin.`;
         const deleteWarningMessage = isTag
           ? (deleteWarningMessageOfTag[cleanName] ?? null)
           : (deleteWarningMessageOfBranch[refName] ?? null);
