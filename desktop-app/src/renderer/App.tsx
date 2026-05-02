@@ -5833,6 +5833,7 @@ const MoltTreeDesktopApp = () => {
   const dashboardWarnings =
     dashboardData === null ? [] : dashboardData.warnings;
   const dashboardWarningsKey = dashboardWarnings.join("\n");
+  const isDashboardLoaded = dashboardData !== null;
 
   const applyDashboardData = useCallback((nextDashboardData: DashboardData) => {
     let nextSelectedRepoRoot = selectedRepoRootRef.current;
@@ -5899,11 +5900,8 @@ const MoltTreeDesktopApp = () => {
       };
     });
 
-    if (nextDashboardData.gitErrors.length > 0) {
-      setDashboardErrorMessage(nextDashboardData.gitErrors.join("\n"));
-    } else {
-      setDashboardErrorMessage(null);
-    }
+    // Git read errors can come from old Codex threads, deleted folders, or blocked folders, so they should not block readable repos.
+    setDashboardErrorMessage(null);
   }, []);
   const selectRepoRoot = useCallback((repoRoot: string | null) => {
     selectedRepoRootRef.current = repoRoot;
@@ -6004,7 +6002,7 @@ const MoltTreeDesktopApp = () => {
 
               const message = readCaughtUserFacingErrorMessage({
                 error,
-                fallbackMessage: "Failed to read dashboard data.",
+                fallbackMessage: "Failed to load repositories.",
               });
               setDashboardErrorMessage(message);
 
@@ -6041,9 +6039,20 @@ const MoltTreeDesktopApp = () => {
     }
 
     const repoRoot = selectedRepoRootRef.current;
-    const nextDashboardData = await window.molttree.readDashboardIfIdle({
-      repoRoot,
-    });
+    let nextDashboardData: DashboardData | null;
+
+    try {
+      nextDashboardData = await window.molttree.readDashboardIfIdle({
+        repoRoot,
+      });
+    } catch (error) {
+      const message = readCaughtUserFacingErrorMessage({
+        error,
+        fallbackMessage: "Failed to refresh repositories.",
+      });
+      setDashboardErrorMessage(message);
+      return;
+    }
 
     if (
       nextDashboardData === null ||
@@ -6079,7 +6088,7 @@ const MoltTreeDesktopApp = () => {
         finishUserGitUpdate();
         const message = readCaughtUserFacingErrorMessage({
           error,
-          fallbackMessage: "Failed to read dashboard data.",
+          fallbackMessage: "Failed to refresh repositories.",
         });
         setDashboardErrorMessage(message);
         return false;
@@ -6233,11 +6242,15 @@ const MoltTreeDesktopApp = () => {
       return;
     }
 
+    const title = isDashboardLoaded
+      ? "Failed to refresh repositories"
+      : "Failed to load repositories";
+
     showErrorToast({
-      title: "Dashboard error",
+      title,
       description: dashboardErrorMessage,
     });
-  }, [dashboardErrorMessage]);
+  }, [dashboardErrorMessage, isDashboardLoaded]);
   useEffect(() => {
     const dashboardWarningToastIdOfWarning =
       dashboardWarningToastIdOfWarningRef.current;
@@ -6547,7 +6560,7 @@ const MoltTreeDesktopApp = () => {
   const emptyRepoDescription =
     dashboardData.gitErrors.length > 0 && dashboardData.threads.length > 0
       ? "MoltTree found Codex chats, but Git could not read their folders. " +
-        "Grant MoltTree access to your repositories in macOS Privacy & Security, then retry."
+        "They may be deleted, moved, not valid Git worktrees, or blocked by macOS permissions."
       : "No Git repositories found from Codex.";
   const repoHeaderControls = (
     <>
