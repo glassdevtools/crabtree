@@ -16,7 +16,7 @@ const featureItems = [
   {
     title: "Easily merge your worktrees",
     descriptionLines: [
-      "Codex lets you spin up 100 worktrees easily, but merging them back together is hard. MoltTree was built to fix that. Commit, branch, merge, update main, and push without leaving the app.",
+      "In Codex it's easy to spin up 100 worktrees, but merging them back together is hard. MoltTree was built to fix that. Commit, branch, merge, update main, and push without leaving the app.",
     ],
   },
   {
@@ -159,7 +159,7 @@ const HomePage = () => {
               <span>MoltTree</span>
             </h1>
             <p className="heroSubtext">
-              Easily merge your Codex worktrees together. MoltTree gives you power tools to manage your chats, worktrees, and branches.
+              Merge your Codex worktrees together with ease. MoltTree gives you power tools to manage your chats, worktrees, and branches.
             </p>
 
             <div className="hero__actions">
