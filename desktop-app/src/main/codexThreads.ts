@@ -1,30 +1,17 @@
-import { createReadStream, type Dirent } from "node:fs";
-import { readdir, stat } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join } from "node:path";
-import readline from "node:readline";
-import type { CodexGitInfo, CodexThread } from "../shared/types";
+import type {
+  CodexGitInfo,
+  CodexThread,
+  CodexThreadStatusChange,
+  CodexThreadStatus,
+} from "../shared/types";
+import type { AppServerClient } from "./appServerClient";
 
 // These limits keep the first dashboard load bounded while still showing a useful history.
 const MAX_THREAD_COUNT = 1000;
-const CODEX_SESSION_FILE_PREFIX = "rollout-";
-const CODEX_SESSION_FILE_SUFFIX = ".jsonl";
+// TODO: AI-PICKED-VALUE: Page size 200 matches a large sidebar batch without making one app-server response too large.
+const THREAD_PAGE_SIZE = 200;
 
-type CodexSessionFile = {
-  path: string;
-  updatedAt: number;
-};
-
-type CodexSessionMeta = {
-  id: string;
-  cwd: string;
-  source: string;
-  modelProvider: string;
-  createdAt: number;
-  gitInfo: CodexGitInfo | null;
-};
-
-// Codex session files are enough for startup repo discovery, so MoltTree does not need Codex app-server or Keychain access to show the dashboard.
+// Codex app-server is the only thread source because it owns current titles, cwd values, and running statuses.
 
 const isObject = (value: unknown): value is { [key: string]: unknown } => {
   return typeof value === "object" && value !== null;
@@ -52,24 +39,26 @@ const readNullableString = (value: unknown) => {
   return null;
 };
 
-const readTimestamp = ({
+const readUnixTime = ({
   value,
   fallback,
 }: {
   value: unknown;
   fallback: number;
 }) => {
-  if (typeof value !== "string") {
-    return fallback;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
   }
 
-  const timestamp = Date.parse(value);
+  if (typeof value === "string") {
+    const timestamp = Date.parse(value);
 
-  if (!Number.isFinite(timestamp)) {
-    return fallback;
+    if (Number.isFinite(timestamp)) {
+      return Math.floor(timestamp / 1000);
+    }
   }
 
-  return Math.floor(timestamp / 1000);
+  return fallback;
 };
 
 const convertGitInfo = (value: unknown): CodexGitInfo | null => {
@@ -86,220 +75,225 @@ const convertGitInfo = (value: unknown): CodexGitInfo | null => {
   };
 };
 
-const readCodexSessionMeta = (value: unknown) => {
-  if (!isObject(value) || value.type !== "session_meta") {
-    return null;
+export const convertCodexThreadStatus = (value: unknown): CodexThreadStatus => {
+  if (typeof value === "string") {
+    switch (value) {
+      case "active":
+      case "running":
+        return { type: "active", activeFlags: [] };
+      case "idle":
+        return { type: "idle" };
+      case "systemError":
+        return { type: "systemError" };
+      case "notLoaded":
+        return { type: "notLoaded" };
+      default:
+        return { type: "notLoaded" };
+    }
   }
 
-  const payload = value.payload;
-
-  if (!isObject(payload) || typeof payload.id !== "string") {
-    return null;
+  if (!isObject(value)) {
+    return { type: "notLoaded" };
   }
 
-  const sessionMeta: CodexSessionMeta = {
-    id: payload.id,
-    cwd: readString({ value: payload.cwd, fallback: "" }),
-    source: readString({
-      value: payload.source,
-      fallback: readString({ value: payload.originator, fallback: "unknown" }),
-    }),
-    modelProvider: readString({
-      value: payload.model_provider,
-      fallback: "unknown",
-    }),
-    createdAt: readTimestamp({
-      value: payload.timestamp,
-      fallback: readTimestamp({ value: value.timestamp, fallback: 0 }),
-    }),
-    gitInfo: convertGitInfo(payload.git),
-  };
+  switch (value.type) {
+    case "running":
+      return { type: "active", activeFlags: [] };
+    case "notLoaded":
+      return { type: "notLoaded" };
+    case "idle":
+      return { type: "idle" };
+    case "systemError":
+      return { type: "systemError" };
+    case "active": {
+      const activeFlagsValue = value.activeFlags ?? value.active_flags;
+      const activeFlags = Array.isArray(activeFlagsValue)
+        ? activeFlagsValue.filter(
+            (activeFlag): activeFlag is string =>
+              typeof activeFlag === "string",
+          )
+        : [];
 
-  return sessionMeta;
+      return { type: "active", activeFlags };
+    }
+    default:
+      return { type: "notLoaded" };
+  }
 };
 
-const readTextFromResponseContent = (value: unknown) => {
-  if (!Array.isArray(value)) {
-    return null;
+const readThreadIdFromStatusChange = (value: { [key: string]: unknown }) => {
+  if (typeof value.threadId === "string" && value.threadId.length > 0) {
+    return value.threadId;
   }
 
-  for (const item of value) {
-    if (!isObject(item) || typeof item.text !== "string") {
-      continue;
-    }
+  if (typeof value.thread_id === "string" && value.thread_id.length > 0) {
+    return value.thread_id;
+  }
 
-    if (item.type === "input_text" || item.type === "text") {
-      return item.text;
-    }
+  if (typeof value.id === "string" && value.id.length > 0) {
+    return value.id;
+  }
+
+  const thread = value.thread;
+
+  if (
+    isObject(thread) &&
+    typeof thread.id === "string" &&
+    thread.id.length > 0
+  ) {
+    return thread.id;
   }
 
   return null;
 };
 
-const readUserMessage = (value: unknown) => {
+const readStatusValueFromStatusChange = (value: { [key: string]: unknown }) => {
+  if (value.status !== undefined) {
+    return value.status;
+  }
+
+  const thread = value.thread;
+
+  if (isObject(thread)) {
+    return thread.status;
+  }
+
+  return null;
+};
+
+export const readCodexThreadStatusChangeFromAppServerNotification = (
+  value: unknown,
+) => {
   if (!isObject(value)) {
     return null;
   }
 
-  if (value.type === "event_msg") {
-    const payload = value.payload;
+  const threadId = readThreadIdFromStatusChange(value);
+  const statusValue = readStatusValueFromStatusChange(value);
 
-    if (
-      isObject(payload) &&
-      payload.type === "user_message" &&
-      typeof payload.message === "string"
-    ) {
-      return payload.message;
-    }
-  }
-
-  if (value.type === "response_item") {
-    const payload = value.payload;
-
-    if (
-      isObject(payload) &&
-      payload.type === "message" &&
-      payload.role === "user"
-    ) {
-      return readTextFromResponseContent(payload.content);
-    }
-  }
-
-  return null;
-};
-
-const readPreview = (message: string) => {
-  return message.replace(/\s+/g, " ").trim();
-};
-
-const readCodexThreadFromSessionFile = async ({
-  sessionFile,
-}: {
-  sessionFile: CodexSessionFile;
-}) => {
-  const fileStream = createReadStream(sessionFile.path, { encoding: "utf8" });
-  const lineReader = readline.createInterface({
-    input: fileStream,
-    crlfDelay: Infinity,
-  });
-  let sessionMeta: CodexSessionMeta | null = null;
-  let preview = "";
-
-  try {
-    for await (const line of lineReader) {
-      let value: unknown;
-
-      try {
-        value = JSON.parse(line);
-      } catch {
-        continue;
-      }
-
-      if (sessionMeta === null) {
-        sessionMeta = readCodexSessionMeta(value);
-      }
-
-      if (preview.length === 0) {
-        const userMessage = readUserMessage(value);
-
-        if (userMessage !== null) {
-          preview = readPreview(userMessage);
-        }
-      }
-
-      if (sessionMeta !== null && preview.length > 0) {
-        break;
-      }
-    }
-  } catch {
+  if (threadId === null || statusValue === null) {
     return null;
-  } finally {
-    lineReader.close();
-    fileStream.destroy();
   }
 
-  if (sessionMeta === null) {
+  const codexThreadStatusChange: CodexThreadStatusChange = {
+    threadId,
+    status: convertCodexThreadStatus(statusValue),
+  };
+
+  return codexThreadStatusChange;
+};
+
+export const readCodexThreadStatusChangeFromAppServerTurnStartedNotification = (
+  value: unknown,
+) => {
+  if (!isObject(value)) {
+    return null;
+  }
+
+  const threadId = readThreadIdFromStatusChange(value);
+
+  if (threadId === null) {
+    return null;
+  }
+
+  const codexThreadStatusChange: CodexThreadStatusChange = {
+    threadId,
+    status: { type: "active", activeFlags: [] },
+  };
+
+  return codexThreadStatusChange;
+};
+
+export const readCodexThreadStatusChangeFromAppServerTurnCompletedNotification =
+  (value: unknown) => {
+    if (!isObject(value)) {
+      return null;
+    }
+
+    const threadId = readThreadIdFromStatusChange(value);
+
+    if (threadId === null) {
+      return null;
+    }
+
+    const codexThreadStatusChange: CodexThreadStatusChange = {
+      threadId,
+      status: { type: "idle" },
+    };
+
+    return codexThreadStatusChange;
+  };
+
+export const readCodexThreadFromAppServerValue = (value: unknown) => {
+  if (!isObject(value) || typeof value.id !== "string") {
     return null;
   }
 
   const thread: CodexThread = {
-    id: sessionMeta.id,
-    name: null,
-    preview,
-    cwd: sessionMeta.cwd,
-    path: sessionFile.path,
-    source: sessionMeta.source,
-    modelProvider: sessionMeta.modelProvider,
-    createdAt: sessionMeta.createdAt,
-    updatedAt: sessionFile.updatedAt,
-    archived: false,
-    status: { type: "notLoaded" },
-    gitInfo: sessionMeta.gitInfo,
+    id: value.id,
+    name: readNullableString(value.name),
+    preview: readString({ value: value.preview, fallback: "" }),
+    cwd: readString({ value: value.cwd, fallback: "" }),
+    path: readNullableString(value.path),
+    source: readString({ value: value.source, fallback: "unknown" }),
+    modelProvider: readString({
+      value: value.modelProvider,
+      fallback: readString({
+        value: value.model_provider,
+        fallback: "unknown",
+      }),
+    }),
+    createdAt: readUnixTime({ value: value.createdAt, fallback: 0 }),
+    updatedAt: readUnixTime({ value: value.updatedAt, fallback: 0 }),
+    archived: value.archived === true,
+    status: convertCodexThreadStatus(value.status),
+    gitInfo: convertGitInfo(value.gitInfo ?? value.git),
   };
 
   return thread;
 };
 
-const pushCodexSessionFiles = async ({
-  sessionFiles,
-  directoryPath,
-}: {
-  sessionFiles: CodexSessionFile[];
-  directoryPath: string;
-}) => {
-  let directoryEntries: Dirent[];
-
-  try {
-    directoryEntries = await readdir(directoryPath, { withFileTypes: true });
-  } catch {
-    return;
+export const readCodexThreadFromAppServerReadResponse = (value: unknown) => {
+  if (!isObject(value)) {
+    return null;
   }
 
-  for (const directoryEntry of directoryEntries) {
-    const entryPath = join(directoryPath, directoryEntry.name);
-
-    if (directoryEntry.isDirectory()) {
-      await pushCodexSessionFiles({ sessionFiles, directoryPath: entryPath });
-      continue;
-    }
-
-    if (
-      !directoryEntry.isFile() ||
-      !directoryEntry.name.startsWith(CODEX_SESSION_FILE_PREFIX) ||
-      !directoryEntry.name.endsWith(CODEX_SESSION_FILE_SUFFIX)
-    ) {
-      continue;
-    }
-
-    try {
-      const sessionFileStat = await stat(entryPath);
-
-      sessionFiles.push({
-        path: entryPath,
-        updatedAt: Math.floor(sessionFileStat.mtimeMs / 1000),
-      });
-    } catch {
-      continue;
-    }
-  }
+  return readCodexThreadFromAppServerValue(value.thread);
 };
 
-export const readCodexThreadsFromSessionRoot = async ({
-  sessionsPath,
-}: {
-  sessionsPath: string;
-}) => {
-  const sessionFiles: CodexSessionFile[] = [];
+export const readCodexThreadLoadedListFromAppServerResult = (
+  value: unknown,
+) => {
+  const threadIds: string[] = [];
+
+  if (!isObject(value) || !Array.isArray(value.data)) {
+    return { threadIds, nextCursor: null };
+  }
+
+  for (const threadId of value.data) {
+    if (typeof threadId === "string" && threadId.length > 0) {
+      threadIds.push(threadId);
+    }
+  }
+
+  return {
+    threadIds,
+    nextCursor:
+      typeof value.nextCursor === "string" && value.nextCursor.length > 0
+        ? value.nextCursor
+        : null,
+  };
+};
+
+const readCodexThreadsFromAppServerData = (value: unknown) => {
   const threads: CodexThread[] = [];
 
-  await pushCodexSessionFiles({ sessionFiles, directoryPath: sessionsPath });
+  if (!Array.isArray(value)) {
+    return threads;
+  }
 
-  sessionFiles.sort((sessionFileA, sessionFileB) => {
-    return sessionFileB.updatedAt - sessionFileA.updatedAt;
-  });
-
-  for (const sessionFile of sessionFiles.slice(0, MAX_THREAD_COUNT)) {
-    const thread = await readCodexThreadFromSessionFile({ sessionFile });
+  for (const item of value) {
+    const thread = readCodexThreadFromAppServerValue(item);
 
     if (thread !== null) {
       threads.push(thread);
@@ -309,8 +303,61 @@ export const readCodexThreadsFromSessionRoot = async ({
   return threads;
 };
 
-export const readCodexThreads = async () => {
-  return await readCodexThreadsFromSessionRoot({
-    sessionsPath: join(homedir(), ".codex", "sessions"),
+const readCodexThreadsFromAppServerResult = (value: unknown) => {
+  if (!isObject(value)) {
+    return null;
+  }
+
+  return readCodexThreadsFromAppServerData(value.data);
+};
+
+export const readCodexThreads = async (appServerClient: AppServerClient) => {
+  const threads: CodexThread[] = [];
+  let cursor: string | null = null;
+
+  while (threads.length < MAX_THREAD_COUNT) {
+    const result = await appServerClient.request({
+      method: "thread/list",
+      params: {
+        limit: THREAD_PAGE_SIZE,
+        sortKey: "updated_at",
+        sortDirection: "desc",
+        archived: false,
+        cursor,
+        useStateDbOnly: true,
+      },
+    });
+
+    const nextThreads = readCodexThreadsFromAppServerResult(result);
+
+    if (nextThreads === null) {
+      throw new Error("Codex app-server thread/list returned invalid data.");
+    }
+
+    threads.push(...nextThreads);
+    cursor = isObject(result) ? readNullableString(result.nextCursor) : null;
+
+    if (cursor === null || nextThreads.length === 0) {
+      break;
+    }
+  }
+
+  console.log("[MoltTree diagnostics] Codex thread source", {
+    source: "app-server",
+    threadCount: threads.length,
+    threadsWithCwdCount: threads.filter((thread) => thread.cwd.length > 0)
+      .length,
+    activeThreadCount: threads.filter(
+      (thread) => thread.status.type === "active",
+    ).length,
+    threadSamples: threads.slice(0, 5).map((thread) => ({
+      id: thread.id,
+      name: thread.name,
+      preview: thread.preview,
+      cwd: thread.cwd,
+      source: thread.source,
+      status: thread.status.type,
+    })),
   });
+  return threads;
 };

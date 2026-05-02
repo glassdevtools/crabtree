@@ -1,5 +1,6 @@
 import type { DashboardData } from "../shared/types";
 import type { CodexThread } from "../shared/types";
+import type { AppServerClient } from "./appServerClient";
 import { readCodexThreads } from "./codexThreads";
 import {
   readGitChangesOfCwdForRepoRoots,
@@ -9,22 +10,13 @@ import {
 
 // The dashboard joins Codex thread metadata with Git graph data into one renderer-friendly object.
 export const readDashboardData = async ({
+  appServerClient,
   focusedRepoRoot,
 }: {
+  appServerClient: AppServerClient;
   focusedRepoRoot: string | null;
 }) => {
-  const warnings: string[] = [];
-  let threads: CodexThread[] = [];
-
-  try {
-    threads = await readCodexThreads();
-  } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Unknown Codex session read error.";
-    warnings.push(message);
-  }
+  const threads = await readCodexThreads(appServerClient);
 
   console.log("[MoltTree diagnostics] Codex threads", {
     threadCount: threads.length,
@@ -61,7 +53,7 @@ export const readDashboardData = async ({
     threads,
     gitChangesOfCwd: gitChangeResult.gitChangesOfCwd,
     gitErrors: [...repoGraphResult.gitErrors, ...gitChangeResult.gitErrors],
-    warnings: [...warnings, ...repoGraphResult.warnings],
+    warnings: repoGraphResult.warnings,
   };
 
   return { dashboardData, readRepoRoots: repoGraphResult.readRepoRoots };

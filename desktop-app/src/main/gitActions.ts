@@ -15,6 +15,7 @@ import type {
   GitMergeBranchResult,
   GitMergePreview,
   GitMoveBranchRequest,
+  GitMoveTagRequest,
   GitSwitchBranchRequest,
 } from "../shared/types";
 
@@ -751,7 +752,7 @@ export const createGitRef = async ({
   });
 };
 
-const readVerifiedGitRefForDelete = async ({
+const readVerifiedGitRefForChange = async ({
   repoRoot,
   refName,
   gitRef,
@@ -818,7 +819,7 @@ const deleteGitRef = async ({
   gitRef: string;
   oldSha: string;
 }) => {
-  const { refHead } = await readVerifiedGitRefForDelete({
+  const { refHead } = await readVerifiedGitRefForChange({
     repoRoot,
     refName,
     gitRef,
@@ -853,7 +854,7 @@ export const deleteGitBranch = async ({
   }
 
   const gitRef = `refs/heads/${branch}`;
-  const { expectedOldSha, refHead } = await readVerifiedGitRefForDelete({
+  const { expectedOldSha, refHead } = await readVerifiedGitRefForChange({
     repoRoot,
     refName: branch,
     gitRef,
@@ -1207,6 +1208,45 @@ export const moveGitBranch = async ({
       expectedHeadSha: targetSha,
     });
   }
+};
+
+export const moveGitTag = async ({
+  repoRoot,
+  tag,
+  oldSha,
+  newSha,
+}: GitMoveTagRequest) => {
+  await runGitCommandForPath({
+    path: repoRoot,
+    args: ["check-ref-format", `refs/tags/${tag}`],
+  });
+  const tagRef = `refs/tags/${tag}`;
+  const { expectedOldSha, refHead } = await readVerifiedGitRefForChange({
+    repoRoot,
+    refName: tag,
+    gitRef: tagRef,
+    oldSha,
+  });
+  const targetSha = await readGitTextForPath({
+    path: repoRoot,
+    args: ["rev-parse", "--verify", `${newSha}^{commit}`],
+  });
+
+  if (expectedOldSha === targetSha) {
+    return;
+  }
+
+  await runGitCommandForPath({
+    path: repoRoot,
+    args: [
+      "update-ref",
+      "-m",
+      `MoltTree: move ${tag}`,
+      tagRef,
+      targetSha,
+      refHead,
+    ],
+  });
 };
 
 export const switchGitBranch = async ({

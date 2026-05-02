@@ -167,7 +167,7 @@ const HomePage = () => {
           <figure className="productPhoto">
             <Image
               src={productScreenshot}
-              alt="MoltTree app showing Codex chats, branch tags, worktrees, changed files, and Git history"
+              alt="MoltTree app showing Codex chats, branches, worktrees, changed files, and Git history"
               sizes="(max-width: 760px) calc(100vw - 32px), (max-width: 1128px) calc(100vw - 48px), 1080px"
               preload
               placeholder="blur"

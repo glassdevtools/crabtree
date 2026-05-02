@@ -25,6 +25,11 @@ export type CodexThread = {
   gitInfo: CodexGitInfo | null;
 };
 
+export type CodexThreadStatusChange = {
+  threadId: string;
+  status: CodexThreadStatus;
+};
+
 export type GitWorktree = {
   path: string;
   head: string | null;
@@ -80,6 +85,13 @@ export type GitMoveBranchRequest = {
   newSha: string;
   sourcePath: string | null;
   targetPath: string | null;
+};
+
+export type GitMoveTagRequest = {
+  repoRoot: string;
+  tag: string;
+  oldSha: string;
+  newSha: string;
 };
 
 export type GitSwitchBranchRequest = {
@@ -196,6 +208,9 @@ export type MoltTreeApi = {
   watchAppUpdateStatus: (
     onStatusChange: (appUpdateStatus: AppUpdateStatus) => void,
   ) => () => void;
+  watchCodexThreadStatus: (
+    onStatusChange: (codexThreadStatusChange: CodexThreadStatusChange) => void,
+  ) => () => void;
   checkForAppUpdate: () => Promise<AppUpdateStatus>;
   quitAndInstallAppUpdate: () => Promise<void>;
   openCodexThread: (threadId: string) => Promise<void>;
@@ -217,6 +232,7 @@ export type MoltTreeApi = {
   ) => Promise<void>;
   deleteGitTag: (gitDeleteTagRequest: GitDeleteTagRequest) => Promise<void>;
   moveGitBranch: (gitMoveBranchRequest: GitMoveBranchRequest) => Promise<void>;
+  moveGitTag: (gitMoveTagRequest: GitMoveTagRequest) => Promise<void>;
   switchGitBranch: (
     gitSwitchBranchRequest: GitSwitchBranchRequest,
   ) => Promise<void>;

@@ -24,6 +24,7 @@ import {
   deleteGitTag,
   mergeGitBranch,
   moveGitBranch,
+  moveGitTag,
   previewGitMerge,
   pushGitBranchSyncChanges,
   readGitMainWorktreePathForPath,
@@ -1607,6 +1608,74 @@ test("rejects deleting a tag when the old sha is stale", async () => {
 });
 
 // -------------------------- Branch pointer moves ---------------
+
+test("moves a tag to another commit", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    const oldSha = await commitRepoFile({
+      repoRoot,
+      filePath: "file.txt",
+      content: "base\n",
+      message: "base",
+    });
+    await runGit({ cwd: repoRoot, args: ["tag", "move-me", oldSha] });
+    const newSha = await commitRepoFile({
+      repoRoot,
+      filePath: "file.txt",
+      content: "base\nnew\n",
+      message: "new",
+    });
+
+    await moveGitTag({
+      repoRoot,
+      tag: "move-me",
+      oldSha,
+      newSha,
+    });
+
+    assert.equal(
+      await readSha({ cwd: repoRoot, ref: "refs/tags/move-me^{commit}" }),
+      newSha,
+    );
+  });
+});
+
+test("rejects moving a tag when the old sha is stale", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    const oldSha = await commitRepoFile({
+      repoRoot,
+      filePath: "file.txt",
+      content: "base\n",
+      message: "base",
+    });
+    const currentSha = await commitRepoFile({
+      repoRoot,
+      filePath: "file.txt",
+      content: "base\ncurrent\n",
+      message: "current",
+    });
+    const newSha = await commitRepoFile({
+      repoRoot,
+      filePath: "file.txt",
+      content: "base\ncurrent\nnew\n",
+      message: "new",
+    });
+    await runGit({ cwd: repoRoot, args: ["tag", "move-me", currentSha] });
+
+    await assert.rejects(async () => {
+      await moveGitTag({
+        repoRoot,
+        tag: "move-me",
+        oldSha,
+        newSha,
+      });
+    }, /moved/);
+
+    assert.equal(
+      await readSha({ cwd: repoRoot, ref: "refs/tags/move-me^{commit}" }),
+      currentSha,
+    );
+  });
+});
 
 test("moves a branch to a descendant commit", async () => {
   await withRepo(async ({ repoRoot }) => {

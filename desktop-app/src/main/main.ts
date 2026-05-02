@@ -3,6 +3,8 @@ import electronUpdater from "electron-updater";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type {
+  CodexThreadStatusChange,
+  DashboardData,
   DashboardReadRequest,
   GitBranchSyncChange,
   GitCheckoutCommitRequest,
@@ -14,12 +16,22 @@ import type {
   GitDeleteTagRequest,
   GitMergeBranchRequest,
   GitMoveBranchRequest,
+  GitMoveTagRequest,
   GitSwitchBranchRequest,
   OpenPathRequest,
   PathLauncher,
 } from "../shared/types";
+import type { AppServerClient } from "./appServerClient";
 import { readOrCreateAnalyticsInstallId } from "./analyticsStore";
 import { createAppUpdateController } from "./appUpdates";
+import { createAppServerClient } from "./appServerClient";
+import {
+  readCodexThreadFromAppServerReadResponse,
+  readCodexThreadLoadedListFromAppServerResult,
+  readCodexThreadStatusChangeFromAppServerNotification,
+  readCodexThreadStatusChangeFromAppServerTurnCompletedNotification,
+  readCodexThreadStatusChangeFromAppServerTurnStartedNotification,
+} from "./codexThreads";
 import {
   readDashboardData,
   readDashboardDataAfterGitMutation,
@@ -35,6 +47,7 @@ import {
   deleteGitTag,
   mergeGitBranch,
   moveGitBranch,
+  moveGitTag,
   previewGitMerge,
   pushGitBranchSyncChanges,
   readGitMainWorktreePathForPath,
@@ -50,6 +63,21 @@ const MAIN_WINDOW_WIDTH = 1320;
 const MAIN_WINDOW_HEIGHT = 860;
 const MAIN_WINDOW_MIN_WIDTH = 980;
 const MAIN_WINDOW_MIN_HEIGHT = 640;
+// The Codex app-server process stays warm so refreshes and status notifications do not pay the startup cost each time.
+let appServerClient: AppServerClient | null = null;
+let appServerClientPromise: Promise<AppServerClient> | null = null;
+let appServerClientVersion = 0;
+let appServerStatusClient: AppServerClient | null = null;
+let appServerStatusClientPromise: Promise<AppServerClient | null> | null = null;
+let appServerStatusClientVersion = 0;
+let appServerStatusConnectTimeout: ReturnType<typeof setTimeout> | null = null;
+const codexThreadStatusOfId: {
+  [threadId: string]: CodexThreadStatusChange["status"];
+} = {};
+// TODO: AI-PICKED-VALUE: This is large enough for normal loaded Codex thread counts without making one proxy request too large.
+const APP_SERVER_LOADED_THREAD_PAGE_SIZE = 200;
+// TODO: AI-PICKED-VALUE: This retries soon after Codex opens its app-server socket without spamming process starts.
+const APP_SERVER_STATUS_CONNECT_RETRY_DELAY_MS = 2000;
 const { autoUpdater } = electronUpdater;
 const appUpdateController = createAppUpdateController({ app, autoUpdater });
 
@@ -144,13 +172,300 @@ const readDashboardReadRequest = (value: unknown): DashboardReadRequest => {
   return { repoRoot: value.repoRoot };
 };
 
+const logStartupDiagnostics = () => {
+  console.log("[MoltTree startup]", {
+    version: app.getVersion(),
+    isPackaged: app.isPackaged,
+    execPath: process.execPath,
+    appPath: app.getAppPath(),
+  });
+};
+
+const sendCodexThreadStatusChange = (
+  codexThreadStatusChange: CodexThreadStatusChange,
+) => {
+  codexThreadStatusOfId[codexThreadStatusChange.threadId] =
+    codexThreadStatusChange.status;
+
+  for (const browserWindow of BrowserWindow.getAllWindows()) {
+    browserWindow.webContents.send(
+      "codex:threadStatusChanged",
+      codexThreadStatusChange,
+    );
+  }
+};
+
+const applyCodexThreadStatuses = (dashboardData: DashboardData) => {
+  return {
+    ...dashboardData,
+    threads: dashboardData.threads.map((thread) => {
+      const status = codexThreadStatusOfId[thread.id];
+
+      if (status === undefined) {
+        return thread;
+      }
+
+      return { ...thread, status };
+    }),
+  };
+};
+
+const handleAppServerNotification = (notification: {
+  method: string;
+  params: unknown;
+}) => {
+  switch (notification.method) {
+    case "thread/started":
+    case "thread/status/changed": {
+      const codexThreadStatusChange =
+        readCodexThreadStatusChangeFromAppServerNotification(
+          notification.params,
+        );
+
+      if (codexThreadStatusChange !== null) {
+        sendCodexThreadStatusChange(codexThreadStatusChange);
+      }
+
+      return;
+    }
+    case "turn/started": {
+      const codexThreadStatusChange =
+        readCodexThreadStatusChangeFromAppServerTurnStartedNotification(
+          notification.params,
+        );
+
+      if (codexThreadStatusChange !== null) {
+        sendCodexThreadStatusChange(codexThreadStatusChange);
+      }
+
+      return;
+    }
+    case "turn/completed": {
+      const codexThreadStatusChange =
+        readCodexThreadStatusChangeFromAppServerTurnCompletedNotification(
+          notification.params,
+        );
+
+      if (codexThreadStatusChange !== null) {
+        sendCodexThreadStatusChange(codexThreadStatusChange);
+      }
+
+      return;
+    }
+  }
+};
+
+const readAppServerClient = async () => {
+  if (appServerClient !== null) {
+    return appServerClient;
+  }
+
+  if (appServerClientPromise === null) {
+    appServerClientVersion += 1;
+    const appServerClientVersionForProcess = appServerClientVersion;
+
+    appServerClientPromise = createAppServerClient({
+      connectionKind: "direct",
+      onNotification: handleAppServerNotification,
+      onClose: () => {
+        if (appServerClientVersion !== appServerClientVersionForProcess) {
+          return;
+        }
+
+        appServerClient = null;
+        appServerClientPromise = null;
+      },
+    });
+  }
+
+  const currentAppServerClientPromise = appServerClientPromise;
+
+  try {
+    const nextAppServerClient = await currentAppServerClientPromise;
+
+    if (appServerClientPromise === currentAppServerClientPromise) {
+      appServerClient = nextAppServerClient;
+    }
+
+    return nextAppServerClient;
+  } catch (error) {
+    if (appServerClientPromise === currentAppServerClientPromise) {
+      appServerClientPromise = null;
+    }
+
+    throw error;
+  }
+};
+
+const syncLoadedCodexThreadStatuses = async (
+  appServerClientForStatus: AppServerClient,
+) => {
+  let cursor: string | null = null;
+
+  do {
+    const result = await appServerClientForStatus.request({
+      method: "thread/loaded/list",
+      params: {
+        cursor,
+        limit: APP_SERVER_LOADED_THREAD_PAGE_SIZE,
+      },
+    });
+    const loadedThreadList =
+      readCodexThreadLoadedListFromAppServerResult(result);
+
+    for (const threadId of loadedThreadList.threadIds) {
+      const threadReadResult = await appServerClientForStatus.request({
+        method: "thread/read",
+        params: {
+          threadId,
+          includeTurns: false,
+        },
+      });
+      const thread = readCodexThreadFromAppServerReadResponse(threadReadResult);
+
+      if (thread !== null) {
+        sendCodexThreadStatusChange({
+          threadId: thread.id,
+          status: thread.status,
+        });
+      }
+    }
+
+    cursor = loadedThreadList.nextCursor;
+  } while (cursor !== null);
+};
+
+const readAppServerStatusClient = async () => {
+  if (appServerStatusClient !== null) {
+    return appServerStatusClient;
+  }
+
+  if (appServerStatusClientPromise === null) {
+    appServerStatusClientVersion += 1;
+    const appServerStatusClientVersionForProcess = appServerStatusClientVersion;
+
+    appServerStatusClientPromise = createAppServerClient({
+      connectionKind: "proxy",
+      onNotification: handleAppServerNotification,
+      onClose: () => {
+        if (
+          appServerStatusClientVersion !==
+          appServerStatusClientVersionForProcess
+        ) {
+          return;
+        }
+
+        appServerStatusClient = null;
+        appServerStatusClientPromise = null;
+        queueAppServerStatusClientStart();
+      },
+    })
+      .then(async (nextAppServerStatusClient) => {
+        try {
+          await syncLoadedCodexThreadStatuses(nextAppServerStatusClient);
+        } catch (error) {
+          console.log("[MoltTree Codex app-server loaded statuses]", {
+            error:
+              error instanceof Error
+                ? error.message
+                : "Failed to sync loaded Codex thread statuses.",
+          });
+        }
+
+        return nextAppServerStatusClient;
+      })
+      .catch((error: unknown) => {
+        console.log("[MoltTree Codex app-server proxy]", {
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to connect to Codex app-server proxy.",
+        });
+
+        return null;
+      });
+  }
+
+  const currentAppServerStatusClientPromise = appServerStatusClientPromise;
+  const nextAppServerStatusClient = await appServerStatusClientPromise;
+
+  if (
+    nextAppServerStatusClient !== null &&
+    appServerStatusClientPromise === currentAppServerStatusClientPromise
+  ) {
+    appServerStatusClient = nextAppServerStatusClient;
+  }
+
+  if (
+    nextAppServerStatusClient === null &&
+    appServerStatusClientPromise === currentAppServerStatusClientPromise
+  ) {
+    appServerStatusClientPromise = null;
+  }
+
+  return nextAppServerStatusClient;
+};
+
+const queueAppServerStatusClientStart = () => {
+  if (
+    appServerStatusConnectTimeout !== null ||
+    appServerStatusClient !== null ||
+    appServerStatusClientPromise !== null
+  ) {
+    return;
+  }
+
+  appServerStatusConnectTimeout = setTimeout(() => {
+    appServerStatusConnectTimeout = null;
+    startAppServerStatusClient();
+  }, APP_SERVER_STATUS_CONNECT_RETRY_DELAY_MS);
+};
+
+const startAppServerStatusClient = () => {
+  if (appServerStatusClient !== null || appServerStatusClientPromise !== null) {
+    return;
+  }
+
+  void readAppServerStatusClient()
+    .then((nextAppServerStatusClient) => {
+      if (nextAppServerStatusClient === null) {
+        queueAppServerStatusClientStart();
+      }
+    })
+    .catch((error) => {
+      console.log("[MoltTree Codex app-server proxy]", {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to start Codex app-server proxy.",
+      });
+      queueAppServerStatusClientStart();
+    });
+};
+
 const dashboardRefreshCoordinator = createDashboardRefreshCoordinator({
   readFullDashboardData: async ({ repoRoot }) => {
-    return await readDashboardData({
+    const readResult = await readDashboardData({
+      appServerClient: await readAppServerClient(),
       focusedRepoRoot: repoRoot,
     });
+
+    return {
+      ...readResult,
+      dashboardData: applyCodexThreadStatuses(readResult.dashboardData),
+    };
   },
-  readDashboardDataAfterGitMutation,
+  readDashboardDataAfterGitMutation: async ({
+    previousDashboardData,
+    repoRoots,
+  }) => {
+    return applyCodexThreadStatuses(
+      await readDashboardDataAfterGitMutation({
+        previousDashboardData,
+        repoRoots,
+      }),
+    );
+  },
 });
 
 const runGitMutationForRepoRoot = async <Result>({
@@ -347,6 +662,36 @@ const readGitMoveBranchRequest = (value: unknown) => {
   };
 
   return gitMoveBranchRequest;
+};
+
+const readGitMoveTagRequest = (value: unknown) => {
+  if (!isObject(value)) {
+    throw new Error("gitMoveTagRequest must be an object.");
+  }
+
+  if (
+    typeof value.repoRoot !== "string" ||
+    value.repoRoot.length === 0 ||
+    typeof value.tag !== "string" ||
+    value.tag.length === 0 ||
+    typeof value.oldSha !== "string" ||
+    value.oldSha.length === 0 ||
+    typeof value.newSha !== "string" ||
+    value.newSha.length === 0
+  ) {
+    throw new Error(
+      "gitMoveTagRequest needs a repo root, tag, old sha, and new sha.",
+    );
+  }
+
+  const gitMoveTagRequest: GitMoveTagRequest = {
+    repoRoot: value.repoRoot,
+    tag: value.tag,
+    oldSha: value.oldSha,
+    newSha: value.newSha,
+  };
+
+  return gitMoveTagRequest;
 };
 
 const readGitSwitchBranchRequest = (value: unknown) => {
@@ -582,10 +927,12 @@ ipcMain.handle("codex:openThread", async (_event, threadId: unknown) => {
   }
 
   await shell.openExternal(`codex://threads/${threadId}`);
+  startAppServerStatusClient();
 });
 
 ipcMain.handle("codex:openNewThread", async () => {
   await shell.openExternal("codex://new");
+  startAppServerStatusClient();
 });
 
 ipcMain.handle("external:openUrl", async (_event, value: unknown) => {
@@ -724,6 +1071,17 @@ ipcMain.handle("git:moveBranch", async (_event, value: unknown) => {
   });
 });
 
+ipcMain.handle("git:moveTag", async (_event, value: unknown) => {
+  const gitMoveTagRequest = readGitMoveTagRequest(value);
+
+  await runGitMutationForRepoRoot({
+    repoRoot: gitMoveTagRequest.repoRoot,
+    mutateGit: async () => {
+      await moveGitTag(gitMoveTagRequest);
+    },
+  });
+});
+
 ipcMain.handle("git:switchBranch", async (_event, value: unknown) => {
   const gitSwitchBranchRequest = readGitSwitchBranchRequest(value);
 
@@ -801,8 +1159,10 @@ ipcMain.handle("git:createPullRequest", async (_event, value: unknown) => {
 });
 
 app.whenReady().then(() => {
+  logStartupDiagnostics();
   createMainWindow();
   appUpdateController.start();
+  startAppServerStatusClient();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {

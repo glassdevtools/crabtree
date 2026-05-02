@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { IpcRendererEvent } from "electron";
 import type {
   AppUpdateStatus,
+  CodexThreadStatusChange,
   DashboardData,
   DashboardReadRequest,
   GitBranchSyncChange,
@@ -14,6 +15,7 @@ import type {
   GitDeleteTagRequest,
   GitMergeBranchRequest,
   GitMoveBranchRequest,
+  GitMoveTagRequest,
   GitSwitchBranchRequest,
   MoltTreeApi,
   OpenPathRequest,
@@ -61,6 +63,20 @@ const api: MoltTreeApi = {
 
     return () => {
       ipcRenderer.removeListener("appUpdate:statusChanged", listener);
+    };
+  },
+  watchCodexThreadStatus: (onStatusChange) => {
+    const listener = (
+      _event: IpcRendererEvent,
+      codexThreadStatusChange: CodexThreadStatusChange,
+    ) => {
+      onStatusChange(codexThreadStatusChange);
+    };
+
+    ipcRenderer.on("codex:threadStatusChanged", listener);
+
+    return () => {
+      ipcRenderer.removeListener("codex:threadStatusChanged", listener);
     };
   },
   checkForAppUpdate: async () => {
@@ -112,6 +128,9 @@ const api: MoltTreeApi = {
   },
   moveGitBranch: async (gitMoveBranchRequest: GitMoveBranchRequest) => {
     await ipcRenderer.invoke("git:moveBranch", gitMoveBranchRequest);
+  },
+  moveGitTag: async (gitMoveTagRequest: GitMoveTagRequest) => {
+    await ipcRenderer.invoke("git:moveTag", gitMoveTagRequest);
   },
   switchGitBranch: async (gitSwitchBranchRequest: GitSwitchBranchRequest) => {
     await ipcRenderer.invoke("git:switchBranch", gitSwitchBranchRequest);

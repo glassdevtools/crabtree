@@ -472,6 +472,10 @@ textarea,
   margin-left: 16px;
 }
 
+.repo-action-tooltip-trigger {
+  display: inline-flex;
+}
+
 .repo-action-control {
   min-width: 26px;
   display: inline-flex;
@@ -580,8 +584,8 @@ textarea,
 
 .commit-history {
   --commit-history-grid-template-columns: 300px 260px 340px 420px 84px 150px
-    170px;
-  --commit-history-table-width: 1724px;
+    170px 160px;
+  --commit-history-table-width: 1884px;
   min-height: 0;
   flex: 1;
   overflow: visible;
@@ -931,7 +935,6 @@ textarea,
   border-bottom: 0;
 }
 
-.branch-tag-change-list strong,
 .branch-tag-change-list span,
 .branch-tag-change-list code {
   min-width: 0;
@@ -943,6 +946,17 @@ textarea,
 .branch-tag-change-list code {
   color: #4f5660;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.branch-tag-change-ref {
+  max-width: 100%;
+}
+
+.dialog-description-inline {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .branch-tag-change-list .branch-pointer-change-row {
@@ -1114,7 +1128,7 @@ textarea,
 }
 
 .commit-ref-has-delete {
-  gap: 0;
+  gap: 3px;
 }
 
 .commit-ref-local {
@@ -1129,6 +1143,7 @@ textarea,
 
 /* TODO: AI-PICKED-VALUE: This keeps Git tags distinct from branch and chat title pills. */
 .commit-ref-tag {
+  border-color: #cdb7ef;
   background: #f0e7ff;
   color: #43236f;
 }
@@ -1152,10 +1167,6 @@ textarea,
   transform: rotate(90deg);
 }
 
-.commit-graph-merge-action-icon {
-  transform: scaleX(-1);
-}
-
 .commit-ref-draggable {
   cursor: grab;
 }
@@ -1166,6 +1177,7 @@ textarea,
 
 /* TODO: AI-PICKED-VALUE: This keeps the delete affordance small enough to fit inside compact branch tags. */
 .commit-branch-create-action,
+.commit-branch-push-action,
 .commit-thread-commit-action,
 .commit-graph-merge-action,
 .commit-ref-delete {
@@ -1182,40 +1194,19 @@ textarea,
 }
 
 .commit-ref-delete {
-  width: 0;
+  width: 12px;
   height: 12px;
   margin-left: 0;
-  opacity: 0;
   overflow: hidden;
-  transition:
-    width 120ms ease,
-    margin-left 120ms ease,
-    opacity 120ms ease,
-    color 120ms ease;
-}
-
-.commit-ref-has-delete:hover .commit-ref-delete,
-.commit-ref-has-delete:focus-within .commit-ref-delete {
-  width: 12px;
-  margin-left: 3px;
-  opacity: 1;
-}
-
-.commit-ref-has-delete:hover .commit-ref-delete-blocked,
-.commit-ref-has-delete:focus-within .commit-ref-delete-blocked {
-  opacity: 0.45;
+  transition: color 120ms ease;
 }
 
 .commit-ref-delete:hover {
   color: #c53a13;
 }
 
-.commit-ref-has-delete:hover .commit-ref-delete-blocked:hover,
-.commit-ref-has-delete:focus-within .commit-ref-delete-blocked:focus-visible {
-  opacity: 1;
-}
-
 .commit-branch-create-action:hover,
+.commit-branch-push-action:hover,
 .commit-thread-commit-action:hover,
 .commit-graph-merge-action:hover {
   color: #0a64c9;
@@ -1245,6 +1236,7 @@ textarea,
 }
 
 .commit-thread-group .commit-thread-chat,
+.commit-thread-group .commit-thread-code-location,
 .commit-thread-group .commit-thread-change-count,
 .commit-thread-group .commit-branch-create-action,
 .commit-thread-group .commit-thread-commit-action {
@@ -1270,6 +1262,29 @@ textarea,
   font-size: 10px;
   line-height: 12px;
   font-weight: 720;
+}
+
+.commit-thread-code-location {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid #d4dae3;
+  border-radius: 4px;
+  background: #eef0f3;
+  color: #343a43;
+  flex: 0 0 auto;
+}
+
+.commit-thread-code-location:hover {
+  background: #e3e7ed;
+}
+
+.commit-thread-code-location .path-launcher-icon,
+.commit-thread-code-location .path-launcher-icon-image,
+.commit-thread-code-location .path-launcher-icon svg {
+  width: 11px;
+  height: 11px;
+  flex-basis: 11px;
 }
 
 .commit-thread-chat-icon {

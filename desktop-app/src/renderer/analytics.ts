@@ -20,13 +20,16 @@ type DesktopAnalyticsEventName =
   | "chat_opened"
   | "codex_chats_filter_changed"
   | "github_clicked"
+  | "head_dragged"
   | "head_switched"
   | "path_launcher_changed"
   | "pull_request_created"
   | "repo_opened"
   | "repo_selected"
   | "tag_created"
-  | "tag_deleted";
+  | "tag_deleted"
+  | "tag_dragged"
+  | "tag_moved";
 
 type AnalyticsProperties = { [key: string]: string | number | boolean };
 

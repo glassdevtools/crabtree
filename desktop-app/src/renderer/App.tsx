@@ -1,7 +1,7 @@
 import {
-  CircleArrowLeft,
+  CircleArrowDown,
   CircleArrowUp,
-  ExternalLink,
+  Copy,
   LoaderCircle,
   Settings,
   Tag,
@@ -10,6 +10,7 @@ import {
 import { GoDotFill } from "react-icons/go";
 import {
   LuCheck,
+  LuCornerRightUp,
   LuGitBranchPlus,
   LuGitCommitHorizontal,
   LuGitPullRequestArrow,
@@ -39,6 +40,7 @@ import type { ResizeCallbackData } from "react-resizable";
 import type {
   AppUpdateStatus,
   CodexThread,
+  CodexThreadStatusChange,
   DashboardData,
   GitBranchSyncChange,
   GitChangeSummary,
@@ -117,6 +119,8 @@ const COMMIT_GRAPH_DOT_RADIUS = 4;
 const COMMIT_GRAPH_HEAD_DOT_RADIUS = 4.75;
 // TODO: AI-PICKED-VALUE: This center dot makes the HEAD commit distinct without hiding the commit color.
 const COMMIT_GRAPH_HEAD_CENTER_DOT_RADIUS = 2.25;
+// TODO: AI-PICKED-VALUE: This keeps right-click menus from touching the window edge.
+const CONTEXT_MENU_WINDOW_MARGIN = 8;
 // TODO: AI-PICKED-VALUE: This keeps graph lines readable in compact rows while making them less heavy.
 const COMMIT_GRAPH_SEGMENT_STROKE_WIDTH = 2.25;
 // TODO: AI-PICKED-VALUE: This neutral gray makes changed cwd rows read as working-tree state instead of Git history.
@@ -130,6 +134,7 @@ const TOAST_POSITION = "bottom-center";
 const UNFOCUSED_ERROR_TOAST_DURATION_MS = Infinity;
 const USER_GIT_UPDATE_TOAST_ID_PREFIX = "user-git-update";
 const GITHUB_REPOSITORY_URL = packageInfo.repository.url.replace(/\.git$/, "");
+console.log("[MoltTree renderer]", { version: packageInfo.version });
 const MERGE_BRANCH_BUTTON_TITLE = "Merge this into HEAD";
 const CHECKED_OUT_BY_WORKTREE_MESSAGE =
   "This branch is checked out in a worktree. Delete that worktree or switch its branch first.";
@@ -248,19 +253,21 @@ const readBranchSyncActionText = (
   switch (action) {
     case "push":
       return {
-        title: "Push Tags",
+        title: "Push Branches",
         message: "Push all your local branches and tags to origin?",
         buttonText: "Push",
-        loadingDescription: "Pushing tags",
-        successMessage: "Successfully pushed all tags.",
+        loadingDescription: "Pushing",
+        successMessage:
+          "Successfully pushed all branches and tags to the origin.",
       };
     case "revert":
       return {
-        title: "Revert Branches and Tags",
+        title: "Sync Branches",
         message: "Revert local branches and tags so that they match origin?",
         buttonText: "Revert",
-        loadingDescription: "Reverting branches and tags",
-        successMessage: "Branches and tags reverted.",
+        loadingDescription: "Reverting",
+        successMessage:
+          "Successfully reverted all branches and tags to match origin.",
       };
   }
 };
@@ -276,6 +283,14 @@ const readBranchSyncChangeShaText = ({
     action === "push" ? branchSyncChange.originSha : branchSyncChange.localSha;
   const newSha =
     action === "push" ? branchSyncChange.localSha : branchSyncChange.originSha;
+
+  if (oldSha === null && newSha !== null) {
+    return `create on ${newSha.slice(0, 7)}`;
+  }
+
+  if (oldSha !== null && newSha === null) {
+    return `delete ${oldSha.slice(0, 7)}`;
+  }
 
   return `${oldSha?.slice(0, 7) ?? "none"} -> ${newSha?.slice(0, 7) ?? "none"}`;
 };
@@ -309,6 +324,8 @@ const readGitWarningReasonText = (reasons: string[]) => {
 
   return `${reasons.slice(0, -1).join(", ")}, and ${lastReason}`;
 };
+const TAG_STABILITY_WARNING_REASON =
+  "people and build pipelines often expect tags not to change";
 
 const readBranchPointerOperation = ({
   checkedOutBranchPath,
@@ -333,18 +350,62 @@ const readBranchPointerOperation = ({
   return "blockedCheckedOutByWorktree";
 };
 
+const GitRefModalBadge = ({
+  gitRefType,
+  name,
+}: {
+  gitRefType: "branch" | "tag";
+  name: string;
+}) => {
+  return (
+    <Badge
+      className={cn(
+        "commit-ref",
+        gitRefType === "branch" ? "commit-ref-local" : "commit-ref-tag",
+        "branch-tag-change-ref",
+      )}
+      variant="secondary"
+    >
+      {gitRefType === "tag" ? `tag: ${name}` : name}
+    </Badge>
+  );
+};
+
 const readBranchPointerOperationText = ({
   operation,
-  branch,
+  gitRefType,
+  refName,
 }: {
   operation: BranchPointerOperation;
-  branch: string;
+  gitRefType: "branch" | "tag";
+  refName: string;
 }) => {
+  if (gitRefType === "tag") {
+    return {
+      title: "Move Tag",
+      message: (
+        <span className="dialog-description-inline">
+          Move <GitRefModalBadge gitRefType="tag" name={refName} />?
+        </span>
+      ),
+      description: null,
+      loadingDescription: "Moving tag",
+      successMessage: "Moved tag.",
+      buttonText: "Move",
+      shouldBlock: false,
+    };
+  }
+
   switch (operation) {
     case "moveBranchPointer":
       return {
         title: "Move Branch Pointer",
-        message: `Move the ${branch} branch pointer?`,
+        message: (
+          <span className="dialog-description-inline">
+            Move <GitRefModalBadge gitRefType="branch" name={refName} /> branch
+            pointer?
+          </span>
+        ),
         description: null,
         loadingDescription: "Moving branch",
         successMessage: "Moved branch.",
@@ -354,7 +415,12 @@ const readBranchPointerOperationText = ({
     case "blockedCheckedOutByWorktree":
       return {
         title: "Move Branch Pointer",
-        message: `Move the ${branch} branch pointer?`,
+        message: (
+          <span className="dialog-description-inline">
+            Move <GitRefModalBadge gitRefType="branch" name={refName} /> branch
+            pointer?
+          </span>
+        ),
         description: CHECKED_OUT_BY_WORKTREE_MESSAGE,
         loadingDescription: "Moving branch",
         successMessage: "Moved branch.",
@@ -396,6 +462,23 @@ const TitleTooltip = ({
   );
 };
 
+const BottomTitleTooltip = ({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactElement;
+}) => {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side="bottom">
+        <p>{title}</p>
+      </TooltipContent>
+    </Tooltip>
+  );
+};
+
 const readPathLauncher = (value: string): PathLauncher | null => {
   switch (value) {
     case "vscode":
@@ -406,6 +489,17 @@ const readPathLauncher = (value: string): PathLauncher | null => {
       return "finder";
     default:
       return null;
+  }
+};
+
+const readPathLauncherLabel = (pathLauncher: PathLauncher) => {
+  switch (pathLauncher) {
+    case "vscode":
+      return "VS Code";
+    case "cursor":
+      return "Cursor";
+    case "finder":
+      return "Finder";
   }
 };
 
@@ -469,18 +563,13 @@ const PathLauncherSelectItems = () => {
   );
 };
 
-const copyTextAfterContextMenu = async ({
-  event,
+const copyText = async ({
   text,
   errorMessage,
 }: {
-  event: MouseEvent<Element>;
   text: string;
   errorMessage: string;
 }) => {
-  event.preventDefault();
-  event.stopPropagation();
-
   try {
     await window.molttree.copyText(text);
     toast.success("Copied!", {
@@ -504,51 +593,51 @@ const readRepoFolderName = (repo: RepoGraph) => {
 // TODO: AI-PICKED-VALUE: These column widths match the current table layout closely enough while making drag resizing concrete.
 const COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS = {
   graph: COMMIT_GRAPH_MIN_WIDTH,
-  branchTags: 408,
-  codeLocations: 160,
   actors: 480,
+  branchTags: 408,
   description: 294,
   commit: 84,
   author: 150,
   date: 170,
+  codeLocations: 160,
 };
 // TODO: AI-PICKED-VALUE: These smaller resize limits keep columns usable while allowing the page to compress much further.
 const COMMIT_HISTORY_MIN_COLUMN_WIDTHS = {
-  branchTags: 120,
-  codeLocations: 96,
   actors: 44,
+  branchTags: 120,
   description: 120,
   commit: 52,
   author: 64,
   date: 82,
+  codeLocations: 96,
 };
 const COMMIT_HISTORY_MIN_DETAILS_WIDTH =
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.actors +
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.branchTags +
-  COMMIT_HISTORY_MIN_COLUMN_WIDTHS.codeLocations +
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.description +
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.commit +
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.author +
-  COMMIT_HISTORY_MIN_COLUMN_WIDTHS.date;
+  COMMIT_HISTORY_MIN_COLUMN_WIDTHS.date +
+  COMMIT_HISTORY_MIN_COLUMN_WIDTHS.codeLocations;
 
 type CommitHistoryColumnKey =
-  | "branchTags"
-  | "codeLocations"
   | "actors"
+  | "branchTags"
   | "description"
   | "commit"
   | "author"
-  | "date";
+  | "date"
+  | "codeLocations";
 
 type CommitHistoryColumnWidths = {
   graph: number;
-  branchTags: number;
-  codeLocations: number;
   actors: number;
+  branchTags: number;
   description: number;
   commit: number;
   author: number;
   date: number;
+  codeLocations: number;
 };
 
 type CommitHistoryColumnResize = {
@@ -561,8 +650,9 @@ type CommitHistoryColumnResize = {
 
 type BranchPointerDrag = {
   repoRoot: string;
+  gitRefType: "branch" | "tag" | "head";
+  refName: string;
   sourcePath: string | null;
-  branch: string;
   oldSha: string;
   oldShortSha: string;
   oldSubject: string;
@@ -574,7 +664,8 @@ type BranchPointerOperation =
 
 type BranchPointerMove = {
   repoRoot: string;
-  branch: string;
+  gitRefType: "branch" | "tag";
+  refName: string;
   oldSha: string;
   oldShortSha: string;
   oldSubject: string;
@@ -617,6 +708,23 @@ type GitRefCreateMenuTarget = {
   pullRequestTarget: GitPullRequestCreateTarget | null;
 };
 
+type CopyContextMenuTarget = {
+  text: string;
+  errorMessage: string;
+  x: number;
+  y: number;
+};
+
+type GitRefContextMenuTarget = {
+  gitRefType: "branch" | "tag";
+  name: string;
+  oldSha: string;
+  warningMessage: string | null;
+  shouldBlockDelete: boolean;
+  x: number;
+  y: number;
+};
+
 type GitRefCreateTarget = {
   gitRefType: "branch" | "tag";
   sha: string;
@@ -652,6 +760,11 @@ type BranchMergeConfirmation = {
   preview: GitMergePreview;
 };
 
+type HeadMoveConfirmation = {
+  row: CommitGraphRow;
+  targetText: string;
+};
+
 type BranchSyncAction = "push" | "revert";
 
 type BranchSyncActionText = {
@@ -665,6 +778,10 @@ type BranchSyncActionText = {
 type BranchSyncConfirmation = {
   action: BranchSyncAction;
   repoRoot: string;
+};
+
+type BranchPushConfirmation = {
+  branchSyncChange: GitBranchSyncChange;
 };
 
 type CommitGraphRow = {
@@ -767,7 +884,7 @@ const readCommitGraphWidth = ({ laneCount }: { laneCount: number }) => {
 const readCommitGridTemplateColumns = (
   columnWidths: CommitHistoryColumnWidths,
 ) => {
-  return `${columnWidths.graph}px ${columnWidths.actors}px ${columnWidths.branchTags}px ${columnWidths.codeLocations}px ${columnWidths.description}px ${columnWidths.commit}px ${columnWidths.author}px ${columnWidths.date}px`;
+  return `${columnWidths.graph}px ${columnWidths.actors}px ${columnWidths.branchTags}px ${columnWidths.description}px ${columnWidths.commit}px ${columnWidths.author}px ${columnWidths.date}px ${columnWidths.codeLocations}px`;
 };
 
 const readCommitHistoryTableWidth = (
@@ -775,13 +892,13 @@ const readCommitHistoryTableWidth = (
 ) => {
   return (
     columnWidths.graph +
-    columnWidths.branchTags +
-    columnWidths.codeLocations +
     columnWidths.actors +
+    columnWidths.branchTags +
     columnWidths.description +
     columnWidths.commit +
     columnWidths.author +
-    columnWidths.date
+    columnWidths.date +
+    columnWidths.codeLocations
   );
 };
 
@@ -1485,6 +1602,8 @@ const BranchTags = ({
   deleteWarningMessageOfBranch,
   deleteWarningMessageOfTag,
   shouldBlockDeleteOfBranch,
+  openCopyContextMenu,
+  openGitRefContextMenu,
   openGitRefDeleteModal,
   startBranchPointerDrag,
   finishBranchPointerDrag,
@@ -1498,8 +1617,17 @@ const BranchTags = ({
   deleteWarningMessageOfBranch: { [branch: string]: string };
   deleteWarningMessageOfTag: { [tag: string]: string };
   shouldBlockDeleteOfBranch: { [branch: string]: boolean };
+  openCopyContextMenu: (
+    event: MouseEvent<Element>,
+    text: string,
+    errorMessage: string,
+  ) => void;
+  openGitRefContextMenu: (
+    event: MouseEvent<Element>,
+    gitRefContextMenuTarget: Omit<GitRefContextMenuTarget, "x" | "y">,
+  ) => void;
   openGitRefDeleteModal: (
-    event: MouseEvent<HTMLButtonElement>,
+    event: MouseEvent<Element>,
     gitRefType: "branch" | "tag",
     name: string,
     oldSha: string,
@@ -1508,15 +1636,17 @@ const BranchTags = ({
   ) => void;
   startBranchPointerDrag: ({
     event,
+    gitRefType,
+    refName,
     sourcePath,
-    branch,
     oldSha,
     oldShortSha,
     oldSubject,
   }: {
     event: DragEvent<HTMLElement>;
+    gitRefType: "branch" | "tag" | "head";
+    refName: string;
     sourcePath: string | null;
-    branch: string;
     oldSha: string;
     oldShortSha: string;
     oldSubject: string;
@@ -1527,7 +1657,7 @@ const BranchTags = ({
   const isRefOfName: { [name: string]: boolean } = {};
 
   for (const ref of refs) {
-    isRefOfName[cleanRefName(ref)] = true;
+    isRefOfName[readIsHeadRef(ref) ? "HEAD" : cleanRefName(ref)] = true;
   }
 
   for (const localBranch of localBranches) {
@@ -1538,23 +1668,45 @@ const BranchTags = ({
     refsWithLocalBranches.push(localBranch);
   }
 
-  const normalRefs = refsWithLocalBranches.filter((ref) => ref !== "HEAD");
+  const isLocalBranchOfName: { [name: string]: boolean } = {};
+  const isRowLocalBranchOfName: { [name: string]: boolean } = {};
+
+  for (const localBranch of localBranches) {
+    isLocalBranchOfName[localBranch] = true;
+    isRowLocalBranchOfName[localBranch] = true;
+  }
+
+  for (const ref of refsWithLocalBranches) {
+    const refName = cleanRefName(ref);
+
+    if (ref.startsWith("tag: ")) {
+      isRefOfName[refName] = true;
+    }
+  }
+
+  const normalRefs = refsWithLocalBranches.filter((ref) => !readIsHeadRef(ref));
+  const headRefs = refsWithLocalBranches.filter((ref) => readIsHeadRef(ref));
   const orderedRefs = [
+    ...headRefs,
     ...normalRefs.filter(
       (ref) =>
         !ref.startsWith("tag: ") && !cleanRefName(ref).startsWith("origin/"),
     ),
-    ...normalRefs.filter(
-      (ref) =>
-        !ref.startsWith("tag: ") && cleanRefName(ref).startsWith("origin/"),
-    ),
     ...normalRefs.filter((ref) => ref.startsWith("tag: ")),
-  ];
-  const isLocalBranchOfName: { [name: string]: boolean } = {};
+    ...normalRefs.filter((ref) => {
+      const refName = cleanRefName(ref);
+      const originPrefix = "origin/";
 
-  for (const localBranch of localBranches) {
-    isLocalBranchOfName[localBranch] = true;
-  }
+      if (ref.startsWith("tag: ") || !refName.startsWith(originPrefix)) {
+        return false;
+      }
+
+      return (
+        isRowLocalBranchOfName[refName.slice(originPrefix.length)] !== true &&
+        isRefOfName[refName.slice(originPrefix.length)] !== true
+      );
+    }),
+  ];
 
   if (orderedRefs.length === 0) {
     return null;
@@ -1563,17 +1715,29 @@ const BranchTags = ({
   return (
     <div className="commit-label-list">
       {orderedRefs.map((ref) => {
-        const refName = cleanRefName(ref);
+        const isHead = readIsHeadRef(ref);
+        const refName = isHead ? "HEAD" : cleanRefName(ref);
+        const cleanName = cleanRefName(ref);
         const isLocalBranch = isLocalBranchOfName[refName] === true;
         const isTag = ref.startsWith("tag: ");
         const isOriginBranch = refName.startsWith("origin/");
+        const shouldDragRef = isHead || isLocalBranch || isTag;
         let refClassName = "commit-ref commit-ref-local";
-        const shouldShowDeleteButton = isTag || isLocalBranch;
+        const originBranchName =
+          isOriginBranch && refName !== "origin/HEAD"
+            ? refName.slice("origin/".length)
+            : null;
+        const originBranchTooltip =
+          originBranchName === null
+            ? null
+            : `${originBranchName} is here on origin. It's somewhere else locally. Push to update origin.`;
         const deleteWarningMessage = isTag
-          ? (deleteWarningMessageOfTag[refName] ?? null)
+          ? (deleteWarningMessageOfTag[cleanName] ?? null)
           : (deleteWarningMessageOfBranch[refName] ?? null);
         const shouldBlockDelete =
           !isTag && shouldBlockDeleteOfBranch[refName] === true;
+        const shouldShowDeleteButton =
+          (isTag || isLocalBranch) && !shouldBlockDelete;
 
         if (isOriginBranch) {
           refClassName = "commit-ref commit-ref-origin";
@@ -1583,35 +1747,51 @@ const BranchTags = ({
           refClassName = "commit-ref commit-ref-tag";
         }
 
-        return (
+        if (isHead) {
+          refClassName = "commit-ref commit-ref-head";
+        }
+
+        const refBadge = (
           <Badge
             className={cn(
               refClassName,
-              isLocalBranch && "commit-ref-draggable",
+              shouldDragRef && "commit-ref-draggable",
               shouldShowDeleteButton && "commit-ref-has-delete",
             )}
             variant="secondary"
-            draggable={isLocalBranch}
+            draggable={shouldDragRef}
             key={ref}
             onDoubleClick={(event) => event.stopPropagation()}
             onContextMenu={(event) => {
-              void copyTextAfterContextMenu({
+              if (isTag || isLocalBranch) {
+                openGitRefContextMenu(event, {
+                  gitRefType: isTag ? "tag" : "branch",
+                  name: isTag ? cleanName : refName,
+                  oldSha: commitSha,
+                  warningMessage: deleteWarningMessage,
+                  shouldBlockDelete,
+                });
+                return;
+              }
+
+              openCopyContextMenu(
                 event,
-                text: refName,
-                errorMessage: isTag
+                refName,
+                isTag
                   ? "Failed to copy tag name."
                   : "Failed to copy branch name.",
-              });
+              );
             }}
             onDragStart={(event) => {
-              if (!isLocalBranch) {
+              if (!shouldDragRef) {
                 return;
               }
 
               startBranchPointerDrag({
                 event,
-                sourcePath: branchPointerSourcePath,
-                branch: refName,
+                gitRefType: isHead ? "head" : isTag ? "tag" : "branch",
+                refName,
+                sourcePath: isTag ? null : branchPointerSourcePath,
                 oldSha: commitSha,
                 oldShortSha: commitShortSha,
                 oldSubject: commitSubject,
@@ -1623,10 +1803,7 @@ const BranchTags = ({
             {shouldShowDeleteButton ? (
               <TitleTooltip title={`Delete ${refName}`}>
                 <Button
-                  className={cn(
-                    "commit-ref-delete",
-                    shouldBlockDelete && "commit-ref-delete-blocked",
-                  )}
+                  className="commit-ref-delete"
                   variant="ghost"
                   size="icon-xs"
                   type="button"
@@ -1637,7 +1814,7 @@ const BranchTags = ({
                     openGitRefDeleteModal(
                       event,
                       isTag ? "tag" : "branch",
-                      refName,
+                      cleanName,
                       commitSha,
                       deleteWarningMessage,
                       shouldBlockDelete,
@@ -1650,6 +1827,16 @@ const BranchTags = ({
             ) : null}
           </Badge>
         );
+
+        if (originBranchTooltip !== null) {
+          return (
+            <TitleTooltip title={originBranchTooltip} key={ref}>
+              <span className="title-tooltip-trigger">{refBadge}</span>
+            </TitleTooltip>
+          );
+        }
+
+        return refBadge;
       })}
     </div>
   );
@@ -1659,14 +1846,23 @@ const CodeLocations = ({
   refs,
   worktreesForRow,
   mainWorktreePath,
+  pathLauncher,
+  openCopyContextMenu,
   openCodePath,
 }: {
   refs: string[];
   worktreesForRow: GitWorktree[];
   mainWorktreePath: string;
+  pathLauncher: PathLauncher;
+  openCopyContextMenu: (
+    event: MouseEvent<Element>,
+    text: string,
+    errorMessage: string,
+  ) => void;
   openCodePath: (path: string) => Promise<void>;
 }) => {
   const hasHead = refs.some((ref) => readIsHeadRef(ref));
+  const pathLauncherLabel = readPathLauncherLabel(pathLauncher);
 
   if (!hasHead && worktreesForRow.length === 0) {
     return null;
@@ -1675,23 +1871,20 @@ const CodeLocations = ({
   return (
     <div className="commit-label-list">
       {hasHead ? (
-        <Badge
-          asChild
-          className="commit-ref commit-ref-head commit-ref-clickable"
-          variant="secondary"
-        >
+        <TitleTooltip title={`Open in ${pathLauncherLabel}`}>
           <Button
+            className="commit-ref commit-ref-head commit-ref-clickable"
             variant="ghost"
             size="xs"
             type="button"
             onMouseDown={(event) => event.stopPropagation()}
             onDoubleClick={(event) => event.stopPropagation()}
             onContextMenu={(event) => {
-              void copyTextAfterContextMenu({
+              openCopyContextMenu(
                 event,
-                text: mainWorktreePath,
-                errorMessage: "Failed to copy path.",
-              });
+                mainWorktreePath,
+                "Failed to copy path.",
+              );
             }}
             onClick={(event) => {
               event.preventDefault();
@@ -1699,30 +1892,25 @@ const CodeLocations = ({
               void openCodePath(mainWorktreePath);
             }}
           >
-            <ExternalLink aria-hidden="true" size={10} />
             <span>HEAD</span>
+            <GoDotFill aria-hidden="true" size={9} />
           </Button>
-        </Badge>
+        </TitleTooltip>
       ) : null}
       {worktreesForRow.map((worktree) => (
-        <Badge
-          asChild
-          className="commit-ref commit-ref-head commit-ref-clickable commit-ref-worktree"
-          variant="secondary"
+        <TitleTooltip
+          title={`Open in ${pathLauncherLabel}`}
           key={worktree.path}
         >
           <Button
+            className="commit-ref commit-ref-head commit-ref-clickable commit-ref-worktree"
             variant="ghost"
             size="xs"
             type="button"
             onMouseDown={(event) => event.stopPropagation()}
             onDoubleClick={(event) => event.stopPropagation()}
             onContextMenu={(event) => {
-              void copyTextAfterContextMenu({
-                event,
-                text: worktree.path,
-                errorMessage: "Failed to copy path.",
-              });
+              openCopyContextMenu(event, worktree.path, "Failed to copy path.");
             }}
             onClick={(event) => {
               event.preventDefault();
@@ -1730,14 +1918,14 @@ const CodeLocations = ({
               void openCodePath(worktree.path);
             }}
           >
+            <span>Worktree</span>
             <MdOutlineCallSplit
               aria-hidden="true"
               className="commit-ref-worktree-icon"
               size={10}
             />
-            <span>Worktree</span>
           </Button>
-        </Badge>
+        </TitleTooltip>
       ))}
     </div>
   );
@@ -1746,10 +1934,20 @@ const CodeLocations = ({
 const ChatRobotTags = ({
   threadGroups,
   worktrees,
+  pathLauncher,
+  openCopyContextMenu,
+  openCodePath,
   showErrorMessage,
 }: {
   threadGroups: ThreadGroup[];
   worktrees: GitWorktree[];
+  pathLauncher: PathLauncher;
+  openCopyContextMenu: (
+    event: MouseEvent<Element>,
+    text: string,
+    errorMessage: string,
+  ) => void;
+  openCodePath: (path: string) => Promise<void>;
   showErrorMessage: (message: string) => void;
 }) => {
   if (threadGroups.length === 0) {
@@ -1767,6 +1965,8 @@ const ChatRobotTags = ({
     }
   };
 
+  const pathLauncherLabel = readPathLauncherLabel(pathLauncher);
+
   return (
     <div className="commit-label-list commit-thread-group-list">
       {threadGroups.map((threadGroup) => {
@@ -1777,50 +1977,78 @@ const ChatRobotTags = ({
 
         return (
           <span className="commit-thread-group" key={threadGroup.key}>
+            {threadGroup.cwd.length === 0 ? null : (
+              <TitleTooltip title={`Open in ${pathLauncherLabel}`}>
+                <Button
+                  aria-label={`Open ${threadGroup.cwd}`}
+                  className="commit-thread-code-location"
+                  variant="ghost"
+                  size="icon-xs"
+                  type="button"
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onDoubleClick={(event) => event.stopPropagation()}
+                  onContextMenu={(event) => {
+                    openCopyContextMenu(
+                      event,
+                      threadGroup.cwd,
+                      "Failed to copy path.",
+                    );
+                  }}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    void openCodePath(threadGroup.cwd);
+                  }}
+                >
+                  <PathLauncherIcon pathLauncher={pathLauncher} />
+                </Button>
+              </TitleTooltip>
+            )}
             {threadGroup.threads.map((thread) => {
               const title = threadTitle(thread);
               const isThreadActive = readIsThreadActive(thread);
 
               return (
-                <Button
-                  aria-label={
-                    isThreadActive ? `${title} is loading` : `Open ${title}`
-                  }
-                  className="commit-thread-chat"
-                  variant="ghost"
-                  size="xs"
-                  type="button"
-                  key={thread.id}
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onDoubleClick={(event) => event.stopPropagation()}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    void openThread(thread.id);
-                  }}
-                >
-                  {isThreadActive ? (
-                    <LoaderCircle
-                      aria-hidden="true"
-                      className="commit-thread-chat-loading-icon"
-                      size={10}
-                    />
-                  ) : null}
-                  <span className="commit-thread-chat-title">{title}</span>
-                  {isThreadGroupWorktree ? (
-                    <MdOutlineCallSplit
-                      aria-hidden="true"
-                      className="commit-thread-chat-icon commit-ref-worktree-icon"
-                      size={10}
-                    />
-                  ) : (
-                    <GoDotFill
-                      aria-hidden="true"
-                      className="commit-thread-chat-icon"
-                      size={9}
-                    />
-                  )}
-                </Button>
+                <TitleTooltip title="Open in Codex" key={thread.id}>
+                  <Button
+                    aria-label={
+                      isThreadActive ? `${title} is loading` : `Open ${title}`
+                    }
+                    className="commit-thread-chat"
+                    variant="ghost"
+                    size="xs"
+                    type="button"
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      void openThread(thread.id);
+                    }}
+                  >
+                    {isThreadActive ? (
+                      <LoaderCircle
+                        aria-hidden="true"
+                        className="commit-thread-chat-loading-icon"
+                        size={10}
+                      />
+                    ) : null}
+                    <span className="commit-thread-chat-title">{title}</span>
+                    {isThreadGroupWorktree ? (
+                      <MdOutlineCallSplit
+                        aria-hidden="true"
+                        className="commit-thread-chat-icon commit-ref-worktree-icon"
+                        size={10}
+                      />
+                    ) : (
+                      <GoDotFill
+                        aria-hidden="true"
+                        className="commit-thread-chat-icon"
+                        size={9}
+                      />
+                    )}
+                  </Button>
+                </TitleTooltip>
               );
             })}
           </span>
@@ -1918,6 +2146,7 @@ const CommitGraphSvg = ({
 
 const CommitHistoryRow = ({
   row,
+  branchSyncChanges,
   repoRoot,
   mainWorktreePath,
   worktrees,
@@ -1925,6 +2154,7 @@ const CommitHistoryRow = ({
   isHeadClean,
   threadOfId,
   gitChangesOfCwd,
+  pathLauncher,
   isBranchPointerDropTarget,
   shouldOwnMainWorktreeHead,
   isBranchMergeableOfBranch,
@@ -1942,12 +2172,16 @@ const CommitHistoryRow = ({
   openCommitMessageModal,
   openChangeSummaryModal,
   openBranchMergeModal,
+  openBranchPushModal,
+  openCopyContextMenu,
+  openGitRefContextMenu,
   openCodePath,
   showErrorMessage,
   startBranchPointerDrag,
   finishBranchPointerDrag,
 }: {
   row: CommitGraphRow;
+  branchSyncChanges: GitBranchSyncChange[];
   repoRoot: string;
   mainWorktreePath: string;
   worktrees: GitWorktree[];
@@ -1955,6 +2189,7 @@ const CommitHistoryRow = ({
   isHeadClean: boolean;
   threadOfId: { [id: string]: CodexThread };
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
+  pathLauncher: PathLauncher;
   isBranchPointerDropTarget: boolean;
   shouldOwnMainWorktreeHead: boolean;
   isBranchMergeableOfBranch: { [branch: string]: boolean };
@@ -1971,7 +2206,7 @@ const CommitHistoryRow = ({
   ) => void;
   openRowAfterDoubleClick: () => void;
   openGitRefDeleteModal: (
-    event: MouseEvent<HTMLButtonElement>,
+    event: MouseEvent<Element>,
     gitRefType: "branch" | "tag",
     name: string,
     oldSha: string,
@@ -1994,19 +2229,34 @@ const CommitHistoryRow = ({
     event: MouseEvent<HTMLButtonElement>,
     branch: string,
   ) => void;
+  openBranchPushModal: (
+    event: MouseEvent<HTMLButtonElement>,
+    branchSyncChange: GitBranchSyncChange,
+  ) => void;
+  openCopyContextMenu: (
+    event: MouseEvent<Element>,
+    text: string,
+    errorMessage: string,
+  ) => void;
+  openGitRefContextMenu: (
+    event: MouseEvent<Element>,
+    gitRefContextMenuTarget: Omit<GitRefContextMenuTarget, "x" | "y">,
+  ) => void;
   openCodePath: (path: string) => Promise<void>;
   showErrorMessage: (message: string) => void;
   startBranchPointerDrag: ({
     event,
+    gitRefType,
+    refName,
     sourcePath,
-    branch,
     oldSha,
     oldShortSha,
     oldSubject,
   }: {
     event: DragEvent<HTMLElement>;
+    gitRefType: "branch" | "tag" | "head";
+    refName: string;
     sourcePath: string | null;
-    branch: string;
     oldSha: string;
     oldShortSha: string;
     oldSubject: string;
@@ -2276,6 +2526,14 @@ const CommitHistoryRow = ({
           title: actionThreadGroup.cwd,
         }
       : null;
+  const pushableBranchSyncChange =
+    branchSyncChanges.find(
+      (branchSyncChange) =>
+        branchSyncChange.gitRefType === "branch" &&
+        branchSyncChange.localSha === commit.sha &&
+        branchSyncChange.localSha !== branchSyncChange.originSha &&
+        rowLocalBranches.includes(branchSyncChange.name),
+    ) ?? null;
   const mergeBranch =
     currentBranch === null || !row.isCommitRow || isHeadRow
       ? null
@@ -2314,6 +2572,7 @@ const CommitHistoryRow = ({
     shouldShowGraphThreadActions ||
     (row.isCommitRow &&
       (mergeBranch !== null ||
+        pushableBranchSyncChange !== null ||
         createBranchToMergeTarget !== null ||
         isHeadRow));
   const commitDateText = formatCommitDate(commit.date);
@@ -2389,7 +2648,7 @@ const CommitHistoryRow = ({
                     </Button>
                   </TitleTooltip>
                 ) : actionBranchCreateTarget === null ? null : (
-                  <TitleTooltip title="Add branch tag here">
+                  <TitleTooltip title="Add branch here">
                     <Button
                       className="commit-branch-create-action"
                       variant="ghost"
@@ -2410,8 +2669,29 @@ const CommitHistoryRow = ({
                 )}
               </div>
             ) : null}
-            {mergeBranch === null && createBranchToMergeTarget !== null ? (
-              <TitleTooltip title="Add branch tag here">
+            {pushableBranchSyncChange !== null ? (
+              <TitleTooltip
+                title={`Push ${pushableBranchSyncChange.name} to origin`}
+              >
+                <Button
+                  className="commit-branch-push-action"
+                  variant="ghost"
+                  size="icon-xs"
+                  type="button"
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onDoubleClick={(event) => event.stopPropagation()}
+                  onClick={(event) =>
+                    openBranchPushModal(event, pushableBranchSyncChange)
+                  }
+                >
+                  <CircleArrowUp
+                    size={COMMIT_GRAPH_ACTION_ICON_SIZE}
+                    strokeWidth={COMMIT_GRAPH_ACTION_ICON_STROKE_WIDTH}
+                  />
+                </Button>
+              </TitleTooltip>
+            ) : mergeBranch === null && createBranchToMergeTarget !== null ? (
+              <TitleTooltip title="Add branch here">
                 <Button
                   className="commit-branch-create-action"
                   variant="ghost"
@@ -2451,8 +2731,7 @@ const CommitHistoryRow = ({
                       openBranchMergeModal(event, mergeBranch)
                     }
                   >
-                    <LuGitPullRequestArrow
-                      className="commit-graph-merge-action-icon"
+                    <LuCornerRightUp
                       size={COMMIT_GRAPH_ACTION_ICON_SIZE}
                       strokeWidth={COMMIT_GRAPH_ACTION_ICON_STROKE_WIDTH}
                     />
@@ -2467,6 +2746,9 @@ const CommitHistoryRow = ({
         <ChatRobotTags
           threadGroups={threadGroups}
           worktrees={worktrees}
+          pathLauncher={pathLauncher}
+          openCopyContextMenu={openCopyContextMenu}
+          openCodePath={openCodePath}
           showErrorMessage={showErrorMessage}
         />
       </div>
@@ -2486,19 +2768,11 @@ const CommitHistoryRow = ({
             deleteWarningMessageOfBranch={deleteWarningMessageOfBranch}
             deleteWarningMessageOfTag={deleteWarningMessageOfTag}
             shouldBlockDeleteOfBranch={shouldBlockDeleteOfBranch}
+            openCopyContextMenu={openCopyContextMenu}
+            openGitRefContextMenu={openGitRefContextMenu}
             openGitRefDeleteModal={openGitRefDeleteModal}
             startBranchPointerDrag={startBranchPointerDrag}
             finishBranchPointerDrag={finishBranchPointerDrag}
-          />
-        ) : null}
-      </div>
-      <div className="commit-code-locations-cell">
-        {shouldShowCodeLocations ? (
-          <CodeLocations
-            refs={rowRefs}
-            worktreesForRow={worktreesForRow}
-            mainWorktreePath={mainWorktreePath}
-            openCodePath={openCodePath}
           />
         ) : null}
       </div>
@@ -2507,11 +2781,11 @@ const CommitHistoryRow = ({
         onContextMenu={
           row.isCommitRow
             ? (event) => {
-                void copyTextAfterContextMenu({
+                openCopyContextMenu(
                   event,
-                  text: commit.subject,
-                  errorMessage: "Failed to copy description.",
-                });
+                  commit.subject,
+                  "Failed to copy description.",
+                );
               }
             : undefined
         }
@@ -2525,11 +2799,11 @@ const CommitHistoryRow = ({
         onContextMenu={
           row.isCommitRow
             ? (event) => {
-                void copyTextAfterContextMenu({
+                openCopyContextMenu(
                   event,
-                  text: commit.sha,
-                  errorMessage: "Failed to copy commit.",
-                });
+                  commit.sha,
+                  "Failed to copy commit.",
+                );
               }
             : undefined
         }
@@ -2541,11 +2815,11 @@ const CommitHistoryRow = ({
         onContextMenu={
           row.isCommitRow
             ? (event) => {
-                void copyTextAfterContextMenu({
+                openCopyContextMenu(
                   event,
-                  text: commit.author,
-                  errorMessage: "Failed to copy author.",
-                });
+                  commit.author,
+                  "Failed to copy author.",
+                );
               }
             : undefined
         }
@@ -2557,16 +2831,28 @@ const CommitHistoryRow = ({
         onContextMenu={
           row.isCommitRow
             ? (event) => {
-                void copyTextAfterContextMenu({
+                openCopyContextMenu(
                   event,
-                  text: commitDateText,
-                  errorMessage: "Failed to copy date.",
-                });
+                  commitDateText,
+                  "Failed to copy date.",
+                );
               }
             : undefined
         }
       >
         {row.isCommitRow ? commitDateText : null}
+      </div>
+      <div className="commit-code-locations-cell">
+        {shouldShowCodeLocations ? (
+          <CodeLocations
+            refs={rowRefs}
+            worktreesForRow={worktreesForRow}
+            mainWorktreePath={mainWorktreePath}
+            pathLauncher={pathLauncher}
+            openCopyContextMenu={openCopyContextMenu}
+            openCodePath={openCodePath}
+          />
+        ) : null}
       </div>
     </div>
   );
@@ -2718,7 +3004,7 @@ const BranchCreateDialog = ({
             <DialogHeader>
               <DialogTitle>Create Branch</DialogTitle>
               <DialogDescription>
-                Create a branch tag for this commit.
+                Create a branch for this commit.
               </DialogDescription>
             </DialogHeader>
             <Input
@@ -3132,6 +3418,7 @@ const GitPullRequestCreateDialog = ({
 
 const CommitHistory = ({
   commits,
+  branchSyncChanges,
   worktrees,
   threadOfId,
   repoRoot,
@@ -3147,6 +3434,7 @@ const CommitHistory = ({
   showErrorMessage,
 }: {
   commits: GitCommit[];
+  branchSyncChanges: GitBranchSyncChange[];
   worktrees: GitWorktree[];
   threadOfId: { [id: string]: CodexThread };
   repoRoot: string;
@@ -3168,6 +3456,7 @@ const CommitHistory = ({
 }) => {
   const commitHistoryRef = useRef<HTMLDivElement | null>(null);
   const commitHistoryHeaderScrollRef = useRef<HTMLDivElement | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const columnResizeRef = useRef<CommitHistoryColumnResize | null>(null);
   const [columnWidths, setColumnWidths] = useState<CommitHistoryColumnWidths>(
     COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS,
@@ -3179,6 +3468,10 @@ const CommitHistory = ({
     useState<BranchCreateTarget | null>(null);
   const [gitRefCreateMenuTarget, setGitRefCreateMenuTarget] =
     useState<GitRefCreateMenuTarget | null>(null);
+  const [copyContextMenuTarget, setCopyContextMenuTarget] =
+    useState<CopyContextMenuTarget | null>(null);
+  const [gitRefContextMenuTarget, setGitRefContextMenuTarget] =
+    useState<GitRefContextMenuTarget | null>(null);
   const [gitRefCreateTarget, setGitRefCreateTarget] =
     useState<GitRefCreateTarget | null>(null);
   const [gitPullRequestCreateTarget, setGitPullRequestCreateTarget] =
@@ -3191,34 +3484,67 @@ const CommitHistory = ({
     useState<GitRefDeleteTarget | null>(null);
   const [branchMergeConfirmation, setBranchMergeConfirmation] =
     useState<BranchMergeConfirmation | null>(null);
+  const [branchPushConfirmation, setBranchPushConfirmation] =
+    useState<BranchPushConfirmation | null>(null);
+  const [headMoveConfirmation, setHeadMoveConfirmation] =
+    useState<HeadMoveConfirmation | null>(null);
   const [branchPointerMove, setBranchPointerMove] =
     useState<BranchPointerMove | null>(null);
   const [branchPointerDropTargetRowId, setBranchPointerDropTargetRowId] =
     useState<string | null>(null);
   useEffect(() => {
-    if (gitRefCreateMenuTarget === null) {
+    if (
+      gitRefCreateMenuTarget === null &&
+      copyContextMenuTarget === null &&
+      gitRefContextMenuTarget === null
+    ) {
       return;
     }
 
-    const closeGitRefCreateMenu = () => {
+    const closeContextMenus = () => {
       setGitRefCreateMenuTarget(null);
+      setCopyContextMenuTarget(null);
+      setGitRefContextMenuTarget(null);
     };
-    const closeGitRefCreateMenuAfterEscape = (event: KeyboardEvent) => {
+    const closeContextMenusAfterEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") {
         return;
       }
 
-      closeGitRefCreateMenu();
+      closeContextMenus();
     };
 
-    window.addEventListener("mousedown", closeGitRefCreateMenu);
-    window.addEventListener("keydown", closeGitRefCreateMenuAfterEscape);
+    window.addEventListener("mousedown", closeContextMenus);
+    window.addEventListener("keydown", closeContextMenusAfterEscape);
 
     return () => {
-      window.removeEventListener("mousedown", closeGitRefCreateMenu);
-      window.removeEventListener("keydown", closeGitRefCreateMenuAfterEscape);
+      window.removeEventListener("mousedown", closeContextMenus);
+      window.removeEventListener("keydown", closeContextMenusAfterEscape);
     };
-  }, [gitRefCreateMenuTarget]);
+  }, [copyContextMenuTarget, gitRefContextMenuTarget, gitRefCreateMenuTarget]);
+  useLayoutEffect(() => {
+    const contextMenu = contextMenuRef.current;
+    if (contextMenu === null) {
+      return;
+    }
+
+    // Keep the right-click menu inside the Electron window after React renders its real size.
+    const contextMenuRect = contextMenu.getBoundingClientRect();
+    const maxLeft =
+      window.innerWidth - contextMenuRect.width - CONTEXT_MENU_WINDOW_MARGIN;
+    const maxTop =
+      window.innerHeight - contextMenuRect.height - CONTEXT_MENU_WINDOW_MARGIN;
+    const left = Math.max(
+      CONTEXT_MENU_WINDOW_MARGIN,
+      Math.min(contextMenuRect.left, maxLeft),
+    );
+    const top = Math.max(
+      CONTEXT_MENU_WINDOW_MARGIN,
+      Math.min(contextMenuRect.top, maxTop),
+    );
+    contextMenu.style.left = `${left}px`;
+    contextMenu.style.top = `${top}px`;
+  }, [copyContextMenuTarget, gitRefContextMenuTarget, gitRefCreateMenuTarget]);
   const graph = useMemo(
     () =>
       createCommitGraph({
@@ -3484,9 +3810,7 @@ const CommitHistory = ({
     }
 
     for (const tag of Object.keys(tagShaOfTag)) {
-      const reasons = [
-        "people and build pipelines often expect tags not to change",
-      ];
+      const reasons = [TAG_STABILITY_WARNING_REASON];
       const warningMessage = readWarningMessage(reasons);
 
       if (warningMessage !== null) {
@@ -3620,6 +3944,15 @@ const CommitHistory = ({
           : `Uncommitted changes in ${row.threadGroup.cwd}`,
       path: readBranchPointerRowPath({ row, repoRoot, worktrees }),
     };
+  };
+  const readHeadMoveTargetText = ({ row }: { row: CommitGraphRow }) => {
+    const branch = row.commit.localBranches[0];
+
+    if (branch !== undefined) {
+      return branch;
+    }
+
+    return row.commit.shortSha;
   };
   const visibleGraph = useMemo(() => {
     if (!shouldShowChatOnly) {
@@ -3825,23 +4158,26 @@ const CommitHistory = ({
   };
   const startBranchPointerDrag = ({
     event,
+    gitRefType,
+    refName,
     sourcePath,
-    branch,
     oldSha,
     oldShortSha,
     oldSubject,
   }: {
     event: DragEvent<HTMLElement>;
+    gitRefType: "branch" | "tag" | "head";
+    refName: string;
     sourcePath: string | null;
-    branch: string;
     oldSha: string;
     oldShortSha: string;
     oldSubject: string;
   }) => {
     const nextBranchPointerDrag = {
       repoRoot,
+      gitRefType,
+      refName,
       sourcePath,
-      branch,
       oldSha,
       oldShortSha,
       oldSubject,
@@ -3849,10 +4185,18 @@ const CommitHistory = ({
 
     event.stopPropagation();
     event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", branch);
+    event.dataTransfer.setData("text/plain", refName);
     branchPointerDragRef.current = nextBranchPointerDrag;
     setBranchPointerDropTargetRowId(null);
-    trackDesktopAction({ eventName: "branch_dragged", properties: {} });
+    trackDesktopAction({
+      eventName:
+        gitRefType === "head"
+          ? "head_dragged"
+          : gitRefType === "branch"
+            ? "branch_dragged"
+            : "tag_dragged",
+      properties: {},
+    });
   };
   const finishBranchPointerDrag = () => {
     branchPointerDragRef.current = null;
@@ -3871,12 +4215,25 @@ const CommitHistory = ({
       return;
     }
 
+    if (activeBranchPointerDrag.gitRefType === "head") {
+      if (activeBranchPointerDrag.repoRoot !== repoRoot || !row.isCommitRow) {
+        setBranchPointerDropTargetRowId(null);
+        return;
+      }
+
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      setBranchPointerDropTargetRowId(row.id);
+      return;
+    }
+
     const branchPointerTarget = readBranchPointerTarget({ row });
     const isDirtyWorktreeTarget =
       !row.isCommitRow && branchPointerTarget.path !== null;
     const isSameBranchPointerPlace =
       activeBranchPointerDrag.oldSha === branchPointerTarget.sha &&
-      activeBranchPointerDrag.sourcePath === branchPointerTarget.path;
+      (activeBranchPointerDrag.gitRefType === "tag" ||
+        activeBranchPointerDrag.sourcePath === branchPointerTarget.path);
 
     if (
       activeBranchPointerDrag.repoRoot !== repoRoot ||
@@ -3918,12 +4275,27 @@ const CommitHistory = ({
       return;
     }
 
+    if (activeBranchPointerDrag.gitRefType === "head") {
+      if (activeBranchPointerDrag.repoRoot !== repoRoot || !row.isCommitRow) {
+        finishBranchPointerDrag();
+        return;
+      }
+
+      finishBranchPointerDrag();
+      setHeadMoveConfirmation({
+        row,
+        targetText: readHeadMoveTargetText({ row }),
+      });
+      return;
+    }
+
     const branchPointerTarget = readBranchPointerTarget({ row });
     const isDirtyWorktreeTarget =
       !row.isCommitRow && branchPointerTarget.path !== null;
     const isSameBranchPointerPlace =
       activeBranchPointerDrag.oldSha === branchPointerTarget.sha &&
-      activeBranchPointerDrag.sourcePath === branchPointerTarget.path;
+      (activeBranchPointerDrag.gitRefType === "tag" ||
+        activeBranchPointerDrag.sourcePath === branchPointerTarget.path);
 
     if (
       activeBranchPointerDrag.repoRoot !== repoRoot ||
@@ -3935,12 +4307,31 @@ const CommitHistory = ({
     }
 
     const checkedOutBranchPath =
-      readCheckedOutBranchPath(activeBranchPointerDrag.branch) ??
-      activeBranchPointerDrag.sourcePath;
+      activeBranchPointerDrag.gitRefType === "branch"
+        ? (readCheckedOutBranchPath(activeBranchPointerDrag.refName) ??
+          activeBranchPointerDrag.sourcePath)
+        : null;
+    const branchPointerOperation =
+      activeBranchPointerDrag.gitRefType === "branch"
+        ? readBranchPointerOperation({
+            checkedOutBranchPath,
+            sourcePath: activeBranchPointerDrag.sourcePath,
+            targetPath: isDirtyWorktreeTarget ? branchPointerTarget.path : null,
+          })
+        : "moveBranchPointer";
+    const warningMessage =
+      activeBranchPointerDrag.gitRefType === "tag"
+        ? `We don't recommend moving this because ${TAG_STABILITY_WARNING_REASON}.`
+        : readBranchPointerMoveWarningMessage({
+            branch: activeBranchPointerDrag.refName,
+            oldSha: activeBranchPointerDrag.oldSha,
+            newSha: branchPointerTarget.sha,
+          });
 
     setBranchPointerMove({
       repoRoot,
-      branch: activeBranchPointerDrag.branch,
+      gitRefType: activeBranchPointerDrag.gitRefType,
+      refName: activeBranchPointerDrag.refName,
       oldSha: activeBranchPointerDrag.oldSha,
       oldShortSha: activeBranchPointerDrag.oldShortSha,
       oldSubject: activeBranchPointerDrag.oldSubject,
@@ -3949,16 +4340,8 @@ const CommitHistory = ({
       newSubject: branchPointerTarget.subject,
       sourcePath: activeBranchPointerDrag.sourcePath,
       targetPath: isDirtyWorktreeTarget ? branchPointerTarget.path : null,
-      operation: readBranchPointerOperation({
-        checkedOutBranchPath,
-        sourcePath: activeBranchPointerDrag.sourcePath,
-        targetPath: isDirtyWorktreeTarget ? branchPointerTarget.path : null,
-      }),
-      warningMessage: readBranchPointerMoveWarningMessage({
-        branch: activeBranchPointerDrag.branch,
-        oldSha: activeBranchPointerDrag.oldSha,
-        newSha: branchPointerTarget.sha,
-      }),
+      operation: branchPointerOperation,
+      warningMessage,
     });
     finishBranchPointerDrag();
   };
@@ -3987,7 +4370,7 @@ const CommitHistory = ({
     );
   };
   const openGitRefDeleteModal = (
-    event: MouseEvent<HTMLButtonElement>,
+    event: MouseEvent<Element>,
     gitRefType: "branch" | "tag",
     name: string,
     oldSha: string,
@@ -3996,6 +4379,7 @@ const CommitHistory = ({
   ) => {
     event.preventDefault();
     event.stopPropagation();
+    setGitRefContextMenuTarget(null);
     setGitRefDeleteTarget({
       gitRefType,
       name,
@@ -4024,6 +4408,8 @@ const CommitHistory = ({
   ) => {
     event.preventDefault();
     event.stopPropagation();
+    setCopyContextMenuTarget(null);
+    setGitRefContextMenuTarget(null);
     setGitRefCreateMenuTarget({
       sha: row.isCommitRow ? row.commit.sha : null,
       isEnabled: row.isCommitRow,
@@ -4038,6 +4424,53 @@ const CommitHistory = ({
         : null,
       x: event.clientX,
       y: event.clientY,
+    });
+  };
+  const openCopyContextMenu = (
+    event: MouseEvent<Element>,
+    text: string,
+    errorMessage: string,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setGitRefCreateMenuTarget(null);
+    setGitRefContextMenuTarget(null);
+    setCopyContextMenuTarget({
+      text,
+      errorMessage,
+      x: event.clientX,
+      y: event.clientY,
+    });
+  };
+  const openGitRefContextMenu = (
+    event: MouseEvent<Element>,
+    gitRefContextMenuTarget: Omit<GitRefContextMenuTarget, "x" | "y">,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setGitRefCreateMenuTarget(null);
+    setCopyContextMenuTarget(null);
+    setGitRefContextMenuTarget({
+      ...gitRefContextMenuTarget,
+      x: event.clientX,
+      y: event.clientY,
+    });
+  };
+  const copyContextMenuText = async (target: CopyContextMenuTarget) => {
+    setCopyContextMenuTarget(null);
+    await copyText({
+      text: target.text,
+      errorMessage: target.errorMessage,
+    });
+  };
+  const copyGitRefContextMenuText = async (target: GitRefContextMenuTarget) => {
+    setGitRefContextMenuTarget(null);
+    await copyText({
+      text: target.name,
+      errorMessage:
+        target.gitRefType === "branch"
+          ? "Failed to copy branch name."
+          : "Failed to copy tag name.",
     });
   };
   const openGitRefCreateModal = (gitRefType: "branch" | "tag") => {
@@ -4099,6 +4532,9 @@ const CommitHistory = ({
   };
   const closeBranchMergeConfirmationModal = () => {
     setBranchMergeConfirmation(null);
+  };
+  const closeHeadMoveConfirmationModal = () => {
+    setHeadMoveConfirmation(null);
   };
   const closeBranchPointerMoveModal = () => {
     setBranchPointerMove(null);
@@ -4410,6 +4846,45 @@ const CommitHistory = ({
       },
     );
   };
+  const openBranchPushModal = (
+    event: MouseEvent<HTMLButtonElement>,
+    branchSyncChange: GitBranchSyncChange,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setBranchPushConfirmation({ branchSyncChange });
+  };
+  const closeBranchPushModal = () => {
+    setBranchPushConfirmation(null);
+  };
+  const confirmBranchPushChange = async () => {
+    if (branchPushConfirmation === null) {
+      return;
+    }
+
+    const { branchSyncChange } = branchPushConfirmation;
+    closeBranchPushModal();
+
+    await runUserGitUpdateThenRefreshDashboard(
+      "Pushing branch",
+      "Pushed branch.",
+      async () => {
+        try {
+          await window.molttree.pushGitBranchSyncChanges([branchSyncChange]);
+          trackDesktopAction({
+            eventName: "branches_pushed",
+            properties: { change_count: 1, source: "commit_graph" },
+          });
+        } catch (error) {
+          return error instanceof Error
+            ? error.message
+            : "Failed to push branch.";
+        }
+
+        return null;
+      },
+    );
+  };
   const moveBranchPointer = async () => {
     if (branchPointerMove === null) {
       return;
@@ -4418,7 +4893,8 @@ const CommitHistory = ({
     const request = branchPointerMove;
     const branchPointerOperationText = readBranchPointerOperationText({
       operation: request.operation,
-      branch: request.branch,
+      gitRefType: request.gitRefType,
+      refName: request.refName,
     });
 
     if (branchPointerOperationText.shouldBlock) {
@@ -4434,16 +4910,28 @@ const CommitHistory = ({
         try {
           switch (request.operation) {
             case "moveBranchPointer":
-              await window.molttree.moveGitBranch({
-                repoRoot: request.repoRoot,
-                branch: request.branch,
-                oldSha: request.oldSha,
-                newSha: request.newSha,
-                sourcePath: request.sourcePath,
-                targetPath: request.targetPath,
-              });
+              if (request.gitRefType === "branch") {
+                await window.molttree.moveGitBranch({
+                  repoRoot: request.repoRoot,
+                  branch: request.refName,
+                  oldSha: request.oldSha,
+                  newSha: request.newSha,
+                  sourcePath: request.sourcePath,
+                  targetPath: request.targetPath,
+                });
+              } else {
+                await window.molttree.moveGitTag({
+                  repoRoot: request.repoRoot,
+                  tag: request.refName,
+                  oldSha: request.oldSha,
+                  newSha: request.newSha,
+                });
+              }
               trackDesktopAction({
-                eventName: "branch_moved",
+                eventName:
+                  request.gitRefType === "branch"
+                    ? "branch_moved"
+                    : "tag_moved",
                 properties: { had_warning: request.warningMessage !== null },
               });
               break;
@@ -4453,7 +4941,9 @@ const CommitHistory = ({
         } catch (error) {
           return error instanceof Error
             ? error.message
-            : "Failed to update branch.";
+            : request.gitRefType === "branch"
+              ? "Failed to update branch."
+              : "Failed to update tag.";
         }
 
         return null;
@@ -4496,18 +4986,36 @@ const CommitHistory = ({
       },
     );
   };
+  const moveHeadToConfirmationTarget = async () => {
+    if (headMoveConfirmation === null) {
+      return;
+    }
+
+    const request = headMoveConfirmation;
+    closeHeadMoveConfirmationModal();
+    await openRowAfterDoubleClick(request.row);
+  };
 
   const branchPointerOperationText =
     branchPointerMove === null
       ? null
       : readBranchPointerOperationText({
           operation: branchPointerMove.operation,
-          branch: branchPointerMove.branch,
+          gitRefType: branchPointerMove.gitRefType,
+          refName: branchPointerMove.refName,
+        });
+  const branchPushWarningMessages =
+    branchPushConfirmation === null
+      ? []
+      : readBranchSyncPushWarningMessages({
+          branchSyncChanges: [branchPushConfirmation.branchSyncChange],
+          commits,
         });
   return (
     <>
       {gitRefCreateMenuTarget === null ? null : (
         <div
+          ref={contextMenuRef}
           className="git-ref-create-menu"
           style={{
             left: gitRefCreateMenuTarget.x,
@@ -4551,6 +5059,81 @@ const CommitHistory = ({
           >
             <LuGitPullRequestArrow size={10} strokeWidth={1.75} />
             <span>Add pull request</span>
+          </Button>
+        </div>
+      )}
+      {copyContextMenuTarget === null ? null : (
+        <div
+          ref={contextMenuRef}
+          className="git-ref-create-menu"
+          style={{
+            left: copyContextMenuTarget.x,
+            top: copyContextMenuTarget.y,
+          }}
+          onMouseDown={(event) => event.stopPropagation()}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+        >
+          <Button
+            className="git-ref-create-menu-item"
+            variant="ghost"
+            size="sm"
+            type="button"
+            onClick={() => {
+              void copyContextMenuText(copyContextMenuTarget);
+            }}
+          >
+            <Copy size={10} strokeWidth={1.75} />
+            <span>Copy</span>
+          </Button>
+        </div>
+      )}
+      {gitRefContextMenuTarget === null ? null : (
+        <div
+          ref={contextMenuRef}
+          className="git-ref-create-menu"
+          style={{
+            left: gitRefContextMenuTarget.x,
+            top: gitRefContextMenuTarget.y,
+          }}
+          onMouseDown={(event) => event.stopPropagation()}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+        >
+          <Button
+            className="git-ref-create-menu-item"
+            variant="ghost"
+            size="sm"
+            type="button"
+            onClick={() => {
+              void copyGitRefContextMenuText(gitRefContextMenuTarget);
+            }}
+          >
+            <Copy size={10} strokeWidth={1.75} />
+            <span>Copy</span>
+          </Button>
+          <Button
+            className="git-ref-create-menu-item"
+            variant="ghost"
+            size="sm"
+            type="button"
+            onClick={(event) =>
+              openGitRefDeleteModal(
+                event,
+                gitRefContextMenuTarget.gitRefType,
+                gitRefContextMenuTarget.name,
+                gitRefContextMenuTarget.oldSha,
+                gitRefContextMenuTarget.warningMessage,
+                gitRefContextMenuTarget.shouldBlockDelete,
+              )
+            }
+          >
+            <Trash2 size={10} strokeWidth={1.75} />
+            <span>Delete</span>
           </Button>
         </div>
       )}
@@ -4612,18 +5195,9 @@ const CommitHistory = ({
               />
             </div>
             <div className="commit-history-header-cell">
-              <span>Branch Tags</span>
+              <span>Branches</span>
               <CommitHistoryColumnResizeHandle
                 columnKey="branchTags"
-                startColumnResize={startColumnResize}
-                updateColumnResize={updateColumnResize}
-                finishColumnResize={finishColumnResize}
-              />
-            </div>
-            <div className="commit-history-header-cell">
-              <span>Code Locations</span>
-              <CommitHistoryColumnResizeHandle
-                columnKey="codeLocations"
                 startColumnResize={startColumnResize}
                 updateColumnResize={updateColumnResize}
                 finishColumnResize={finishColumnResize}
@@ -4665,6 +5239,15 @@ const CommitHistory = ({
                 finishColumnResize={finishColumnResize}
               />
             </div>
+            <div className="commit-history-header-cell">
+              <span>Code Locations</span>
+              <CommitHistoryColumnResizeHandle
+                columnKey="codeLocations"
+                startColumnResize={startColumnResize}
+                updateColumnResize={updateColumnResize}
+                finishColumnResize={finishColumnResize}
+              />
+            </div>
           </div>
         </div>
         <div
@@ -4685,6 +5268,7 @@ const CommitHistory = ({
               <CommitHistoryRow
                 key={row.id}
                 row={row}
+                branchSyncChanges={branchSyncChanges}
                 repoRoot={repoRoot}
                 mainWorktreePath={mainWorktreePath}
                 worktrees={worktrees}
@@ -4692,6 +5276,7 @@ const CommitHistory = ({
                 isHeadClean={isHeadClean}
                 threadOfId={threadOfId}
                 gitChangesOfCwd={gitChangesOfCwd}
+                pathLauncher={pathLauncher}
                 isBranchPointerDropTarget={
                   branchPointerDropTargetRowId === row.id
                 }
@@ -4723,6 +5308,9 @@ const CommitHistory = ({
                 openCommitMessageModal={openCommitMessageModal}
                 openChangeSummaryModal={openChangeSummaryModal}
                 openBranchMergeModal={openBranchMergeModal}
+                openBranchPushModal={openBranchPushModal}
+                openCopyContextMenu={openCopyContextMenu}
+                openGitRefContextMenu={openGitRefContextMenu}
                 openCodePath={openCodePath}
                 showErrorMessage={showErrorMessage}
                 startBranchPointerDrag={startBranchPointerDrag}
@@ -4820,17 +5408,22 @@ const CommitHistory = ({
             gitRefDeleteTarget === null
               ? ""
               : gitRefDeleteTarget.gitRefType === "branch"
-                ? "Delete Branch Tag"
+                ? "Delete Branch"
                 : "Delete Tag"
           }
           description={
-            gitRefDeleteTarget === null
-              ? ""
-              : `Are you sure you want to delete the ${gitRefDeleteTarget.name} ${
-                  gitRefDeleteTarget.gitRefType === "branch"
-                    ? "branch tag"
-                    : "tag"
-                }?`
+            gitRefDeleteTarget === null ? (
+              ""
+            ) : (
+              <span className="dialog-description-inline">
+                Are you sure you want to delete{" "}
+                <GitRefModalBadge
+                  gitRefType={gitRefDeleteTarget.gitRefType}
+                  name={gitRefDeleteTarget.name}
+                />
+                ?
+              </span>
+            )
           }
           confirmButtonText="Delete"
           confirmButtonVariant="default"
@@ -4851,9 +5444,18 @@ const CommitHistory = ({
           closeConfirmationDialog={closeBranchMergeConfirmationModal}
           title="Merge Branch"
           description={
-            branchMergeConfirmation === null
-              ? ""
-              : `Merge ${branchMergeConfirmation.branch} into HEAD?`
+            branchMergeConfirmation === null ? (
+              ""
+            ) : (
+              <span className="dialog-description-inline">
+                Merge{" "}
+                <GitRefModalBadge
+                  gitRefType="branch"
+                  name={branchMergeConfirmation.branch}
+                />{" "}
+                into HEAD?
+              </span>
+            )
           }
           confirmButtonText="Merge"
           confirmButtonVariant="default"
@@ -4884,6 +5486,77 @@ const CommitHistory = ({
             </div>
           )}
         </ConfirmationDialog>
+        <ConfirmationDialog
+          isOpen={branchPushConfirmation !== null}
+          closeConfirmationDialog={closeBranchPushModal}
+          title="Push Branch"
+          description={
+            branchPushConfirmation === null ? (
+              ""
+            ) : (
+              <span className="dialog-description-inline">
+                Push{" "}
+                <GitRefModalBadge
+                  gitRefType="branch"
+                  name={branchPushConfirmation.branchSyncChange.name}
+                />{" "}
+                to origin?
+              </span>
+            )
+          }
+          confirmButtonText="Push"
+          confirmButtonVariant="default"
+          isConfirmDisabled={false}
+          confirmButtonAction={confirmBranchPushChange}
+        >
+          {branchPushConfirmation === null ? undefined : (
+            <>
+              <ul className="branch-tag-change-list">
+                <li
+                  key={`${branchPushConfirmation.branchSyncChange.repoRoot}:${branchPushConfirmation.branchSyncChange.gitRefType}:${branchPushConfirmation.branchSyncChange.name}`}
+                >
+                  <GitRefModalBadge
+                    gitRefType={
+                      branchPushConfirmation.branchSyncChange.gitRefType
+                    }
+                    name={branchPushConfirmation.branchSyncChange.name}
+                  />
+                  <code>
+                    {readBranchSyncChangeShaText({
+                      action: "push",
+                      branchSyncChange: branchPushConfirmation.branchSyncChange,
+                    })}
+                  </code>
+                </li>
+              </ul>
+              {branchPushWarningMessages.length === 0 ? null : (
+                <Alert className="git-action-warning" variant="destructive">
+                  <AlertTitle>Warnings:</AlertTitle>
+                  {branchPushWarningMessages.map((warningMessage) => (
+                    <AlertDescription key={warningMessage}>
+                      {warningMessage}
+                    </AlertDescription>
+                  ))}
+                </Alert>
+              )}
+            </>
+          )}
+        </ConfirmationDialog>
+        <ConfirmationDialog
+          isOpen={headMoveConfirmation !== null}
+          closeConfirmationDialog={closeHeadMoveConfirmationModal}
+          title="Move HEAD"
+          description={
+            headMoveConfirmation === null
+              ? ""
+              : `Are you sure you want to move HEAD to checkout to ${headMoveConfirmation.targetText}?`
+          }
+          confirmButtonText="Move HEAD"
+          confirmButtonVariant="default"
+          isConfirmDisabled={false}
+          confirmButtonAction={moveHeadToConfirmationTarget}
+          children={undefined}
+        />
         <ConfirmationDialog
           isOpen={branchPointerMove !== null}
           closeConfirmationDialog={closeBranchPointerMoveModal}
@@ -4978,6 +5651,7 @@ const RepoSection = ({
       <div className="repo-panel">
         <CommitHistory
           commits={repo.commits}
+          branchSyncChanges={repo.branchSyncChanges}
           worktrees={repo.worktrees}
           threadOfId={threadOfId}
           repoRoot={repo.root}
@@ -5045,6 +5719,9 @@ const MoltTreeDesktopApp = () => {
   const pendingDashboardRefreshRepoRootRef = useRef<string | null>(null);
   const dashboardRefreshPromiseRef = useRef<Promise<void> | null>(null);
   const dashboardPaintResolversRef = useRef<(() => void)[]>([]);
+  const codexThreadStatusOfIdRef = useRef<{
+    [threadId: string]: CodexThreadStatusChange["status"];
+  }>({});
 
   const threadOfId = useMemo(() => {
     if (dashboardData === null) {
@@ -5085,24 +5762,54 @@ const MoltTreeDesktopApp = () => {
       setSelectedRepoRootState(nextSelectedRepoRoot);
     }
 
+    for (const thread of nextDashboardData.threads) {
+      if (thread.status.type !== "notLoaded") {
+        codexThreadStatusOfIdRef.current[thread.id] = thread.status;
+      }
+    }
+
     setDashboardData((currentDashboardData) => {
       if (currentDashboardData === null) {
-        return nextDashboardData;
+        return {
+          ...nextDashboardData,
+          threads: nextDashboardData.threads.map((thread) => {
+            const notificationStatus =
+              codexThreadStatusOfIdRef.current[thread.id];
+
+            if (
+              notificationStatus === undefined ||
+              thread.status.type !== "notLoaded"
+            ) {
+              return thread;
+            }
+
+            return { ...thread, status: notificationStatus };
+          }),
+        };
       }
 
-      const statusOfThreadId: { [threadId: string]: CodexThread["status"] } =
-        {};
+      const threadOfId: { [threadId: string]: CodexThread } = {};
 
       for (const thread of currentDashboardData.threads) {
-        statusOfThreadId[thread.id] = thread.status;
+        threadOfId[thread.id] = thread;
       }
 
       return {
         ...nextDashboardData,
-        threads: nextDashboardData.threads.map((thread) => ({
-          ...thread,
-          status: statusOfThreadId[thread.id] ?? thread.status,
-        })),
+        threads: nextDashboardData.threads.map((thread) => {
+          const currentThread = threadOfId[thread.id];
+          const notificationStatus =
+            codexThreadStatusOfIdRef.current[thread.id];
+          const status =
+            thread.status.type !== "notLoaded"
+              ? thread.status
+              : (notificationStatus ??
+                (currentThread !== undefined
+                  ? currentThread.status
+                  : thread.status));
+
+          return { ...thread, status };
+        }),
       };
     });
 
@@ -5315,6 +6022,41 @@ const MoltTreeDesktopApp = () => {
     return () => {
       didCancel = true;
       stopWatchingAppUpdateStatus();
+    };
+  }, []);
+  useEffect(() => {
+    const stopWatchingCodexThreadStatus =
+      window.molttree.watchCodexThreadStatus(
+        (codexThreadStatusChange: CodexThreadStatusChange) => {
+          codexThreadStatusOfIdRef.current[codexThreadStatusChange.threadId] =
+            codexThreadStatusChange.status;
+
+          setDashboardData((currentDashboardData) => {
+            if (currentDashboardData === null) {
+              return currentDashboardData;
+            }
+
+            let didUpdateThread = false;
+            const threads = currentDashboardData.threads.map((thread) => {
+              if (thread.id !== codexThreadStatusChange.threadId) {
+                return thread;
+              }
+
+              didUpdateThread = true;
+              return { ...thread, status: codexThreadStatusChange.status };
+            });
+
+            if (!didUpdateThread) {
+              return currentDashboardData;
+            }
+
+            return { ...currentDashboardData, threads };
+          });
+        },
+      );
+
+    return () => {
+      stopWatchingCodexThreadStatus();
     };
   }, []);
   const showSuccessMessage = useCallback((message: string) => {
@@ -5701,34 +6443,50 @@ const MoltTreeDesktopApp = () => {
         <div className="repo-actions">
           {selectedRepo === null ? null : (
             <>
-              <button
-                className="repo-action-control"
-                type="button"
-                aria-label="Revert branches"
-                onClick={() => openBranchSyncModal("revert", selectedRepo.root)}
-                disabled={selectedRepoRevertableBranchSyncChanges.length === 0}
-              >
-                <CircleArrowLeft
-                  aria-hidden="true"
-                  size={18}
-                  strokeWidth={1.75}
-                />
-                <span>Revert</span>
-              </button>
-              <button
-                className="repo-action-control"
-                type="button"
-                aria-label="Push branches"
-                onClick={() => openBranchSyncModal("push", selectedRepo.root)}
-                disabled={selectedRepoPushableBranchSyncChanges.length === 0}
-              >
-                <CircleArrowUp
-                  aria-hidden="true"
-                  size={18}
-                  strokeWidth={1.75}
-                />
-                <span>Push</span>
-              </button>
+              <BottomTitleTooltip title="Move all branches to match origin">
+                <span className="repo-action-tooltip-trigger">
+                  <button
+                    className="repo-action-control"
+                    type="button"
+                    aria-label="Sync branches"
+                    onClick={() =>
+                      openBranchSyncModal("revert", selectedRepo.root)
+                    }
+                    disabled={
+                      selectedRepoRevertableBranchSyncChanges.length === 0
+                    }
+                  >
+                    <CircleArrowDown
+                      aria-hidden="true"
+                      size={18}
+                      strokeWidth={1.75}
+                    />
+                    <span>Sync</span>
+                  </button>
+                </span>
+              </BottomTitleTooltip>
+              <BottomTitleTooltip title="Push all branches">
+                <span className="repo-action-tooltip-trigger">
+                  <button
+                    className="repo-action-control"
+                    type="button"
+                    aria-label="Push branches"
+                    onClick={() =>
+                      openBranchSyncModal("push", selectedRepo.root)
+                    }
+                    disabled={
+                      selectedRepoPushableBranchSyncChanges.length === 0
+                    }
+                  >
+                    <CircleArrowUp
+                      aria-hidden="true"
+                      size={18}
+                      strokeWidth={1.75}
+                    />
+                    <span>Push</span>
+                  </button>
+                </span>
+              </BottomTitleTooltip>
             </>
           )}
           <button
@@ -5765,11 +6523,10 @@ const MoltTreeDesktopApp = () => {
                   <li
                     key={`${branchSyncChange.repoRoot}:${branchSyncChange.gitRefType}:${branchSyncChange.name}`}
                   >
-                    <strong>
-                      {branchSyncChange.gitRefType === "tag"
-                        ? `tag: ${branchSyncChange.name}`
-                        : branchSyncChange.name}
-                    </strong>
+                    <GitRefModalBadge
+                      gitRefType={branchSyncChange.gitRefType}
+                      name={branchSyncChange.name}
+                    />
                     <code>
                       {readBranchSyncChangeShaText({
                         action: branchSyncConfirmation.action,
