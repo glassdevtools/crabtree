@@ -1882,6 +1882,45 @@ test("moves the current branch and leaves HEAD detached at the old commit", asyn
   });
 });
 
+test("moves a branch onto a clean HEAD row and attaches HEAD without changing files", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    const oldSha = await commitRepoFile({
+      repoRoot,
+      filePath: "file.txt",
+      content: "base\n",
+      message: "base",
+    });
+    await runGit({ cwd: repoRoot, args: ["branch", "topic", oldSha] });
+    const targetSha = await commitRepoFile({
+      repoRoot,
+      filePath: "file.txt",
+      content: "base\nmain\n",
+      message: "main",
+    });
+
+    await moveGitBranch({
+      repoRoot,
+      branch: "topic",
+      oldSha,
+      newSha: targetSha,
+      sourcePath: null,
+      targetPath: repoRoot,
+    });
+
+    assert.equal(
+      await runGit({ cwd: repoRoot, args: ["branch", "--show-current"] }),
+      "topic",
+    );
+    assert.equal(await readSha({ cwd: repoRoot, ref: "HEAD" }), targetSha);
+    assert.equal(await readSha({ cwd: repoRoot, ref: "main" }), targetSha);
+    assert.equal(await readSha({ cwd: repoRoot, ref: "topic" }), targetSha);
+    assert.equal(
+      await readRepoFile({ repoRoot, filePath: "file.txt" }),
+      "base\nmain\n",
+    );
+  });
+});
+
 test("moves a branch onto a dirty HEAD row and attaches HEAD without changing files", async () => {
   await withOriginRepo(async ({ repoRoot, mainSha }) => {
     await runGit({ cwd: repoRoot, args: ["switch", "-c", "topic", mainSha] });

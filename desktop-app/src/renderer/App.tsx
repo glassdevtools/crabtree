@@ -4282,10 +4282,15 @@ const CommitHistory = ({
     const branchPointerTarget = readBranchPointerTarget({ row });
     const isDirtyWorktreeTarget =
       !row.isCommitRow && branchPointerTarget.path !== null;
+    const branchPointerTargetPath = isDirtyWorktreeTarget
+      ? branchPointerTarget.path
+      : row.shouldShowHeadDot
+        ? mainWorktreePath
+        : null;
     const isSameBranchPointerPlace =
       activeBranchPointerDrag.oldSha === branchPointerTarget.sha &&
       (activeBranchPointerDrag.gitRefType === "tag" ||
-        activeBranchPointerDrag.sourcePath === branchPointerTarget.path);
+        activeBranchPointerDrag.sourcePath === branchPointerTargetPath);
 
     if (
       activeBranchPointerDrag.repoRoot !== repoRoot ||
@@ -4344,10 +4349,15 @@ const CommitHistory = ({
     const branchPointerTarget = readBranchPointerTarget({ row });
     const isDirtyWorktreeTarget =
       !row.isCommitRow && branchPointerTarget.path !== null;
+    const branchPointerTargetPath = isDirtyWorktreeTarget
+      ? branchPointerTarget.path
+      : row.shouldShowHeadDot
+        ? mainWorktreePath
+        : null;
     const isSameBranchPointerPlace =
       activeBranchPointerDrag.oldSha === branchPointerTarget.sha &&
       (activeBranchPointerDrag.gitRefType === "tag" ||
-        activeBranchPointerDrag.sourcePath === branchPointerTarget.path);
+        activeBranchPointerDrag.sourcePath === branchPointerTargetPath);
 
     if (
       activeBranchPointerDrag.repoRoot !== repoRoot ||
@@ -4368,7 +4378,7 @@ const CommitHistory = ({
         ? readBranchPointerOperation({
             checkedOutBranchPath,
             sourcePath: activeBranchPointerDrag.sourcePath,
-            targetPath: isDirtyWorktreeTarget ? branchPointerTarget.path : null,
+            targetPath: branchPointerTargetPath,
           })
         : "moveBranchPointer";
     const warningMessage =
@@ -4391,7 +4401,7 @@ const CommitHistory = ({
       newShortSha: branchPointerTarget.shortSha,
       newSubject: branchPointerTarget.subject,
       sourcePath: activeBranchPointerDrag.sourcePath,
-      targetPath: isDirtyWorktreeTarget ? branchPointerTarget.path : null,
+      targetPath: branchPointerTargetPath,
       operation: branchPointerOperation,
       warningMessage,
     });
