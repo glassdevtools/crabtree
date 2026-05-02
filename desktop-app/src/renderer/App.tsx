@@ -2,6 +2,7 @@ import {
   CircleArrowDown,
   CircleArrowUp,
   Copy,
+  ExternalLink,
   LoaderCircle,
   Settings,
   Tag,
@@ -10,7 +11,7 @@ import {
 import { GoDotFill } from "react-icons/go";
 import {
   LuCheck,
-  LuCornerRightUp,
+  LuCircleArrowUp,
   LuGitBranchPlus,
   LuGitCommitHorizontal,
   LuGitPullRequestArrow,
@@ -137,7 +138,7 @@ const GITHUB_REPOSITORY_URL = packageInfo.repository.url.replace(/\.git$/, "");
 console.log("[MoltTree renderer]", { version: packageInfo.version });
 const MERGE_BRANCH_BUTTON_TITLE = "Merge this into HEAD";
 const CHECKED_OUT_BY_WORKTREE_MESSAGE =
-  "This branch is checked out in a worktree. Delete that worktree or switch its branch first.";
+  "This branch is checked out in a worktree. Delete the worktree or switch its branch first.";
 const COMMIT_GRAPH_ACTION_ICON_SIZE = 10;
 // TODO: AI-PICKED-VALUE: A light stroke makes the graph actions read as buttons instead of status markers.
 const COMMIT_GRAPH_ACTION_ICON_STROKE_WIDTH = 2;
@@ -285,11 +286,11 @@ const readBranchSyncChangeShaText = ({
     action === "push" ? branchSyncChange.localSha : branchSyncChange.originSha;
 
   if (oldSha === null && newSha !== null) {
-    return `create on ${newSha.slice(0, 7)}`;
+    return "created";
   }
 
   if (oldSha !== null && newSha === null) {
-    return `delete ${oldSha.slice(0, 7)}`;
+    return "deleted";
   }
 
   return `${oldSha?.slice(0, 7) ?? "none"} -> ${newSha?.slice(0, 7) ?? "none"}`;
@@ -325,7 +326,7 @@ const readGitWarningReasonText = (reasons: string[]) => {
   return `${reasons.slice(0, -1).join(", ")}, and ${lastReason}`;
 };
 const TAG_STABILITY_WARNING_REASON =
-  "people and build pipelines often expect tags not to change";
+  "people and build pipelines often expect tags not to move";
 
 const readBranchPointerOperation = ({
   checkedOutBranchPath,
@@ -366,7 +367,7 @@ const GitRefModalBadge = ({
       )}
       variant="secondary"
     >
-      {gitRefType === "tag" ? `tag: ${name}` : name}
+      {name}
     </Badge>
   );
 };
@@ -688,17 +689,17 @@ type GitRefDeleteTarget = {
 
 type BranchCreateTarget =
   | {
-      type: "path";
-      path: string;
-      sha: string;
-      title: string;
-    }
+    type: "path";
+    path: string;
+    sha: string;
+    title: string;
+  }
   | {
-      type: "commit";
-      repoRoot: string;
-      sha: string;
-      title: string;
-    };
+    type: "commit";
+    repoRoot: string;
+    sha: string;
+    title: string;
+  };
 
 type GitRefCreateMenuTarget = {
   x: number;
@@ -781,7 +782,7 @@ type BranchSyncConfirmation = {
 };
 
 type BranchPushConfirmation = {
-  branchSyncChange: GitBranchSyncChange;
+  branchSyncChanges: GitBranchSyncChange[];
 };
 
 type CommitGraphRow = {
@@ -1736,8 +1737,7 @@ const BranchTags = ({
           : (deleteWarningMessageOfBranch[refName] ?? null);
         const shouldBlockDelete =
           !isTag && shouldBlockDeleteOfBranch[refName] === true;
-        const shouldShowDeleteButton =
-          (isTag || isLocalBranch) && !shouldBlockDelete;
+        const shouldShowDeleteButton = isLocalBranch && !shouldBlockDelete;
 
         if (isOriginBranch) {
           refClassName = "commit-ref commit-ref-origin";
@@ -1892,8 +1892,8 @@ const CodeLocations = ({
               void openCodePath(mainWorktreePath);
             }}
           >
+            <ExternalLink aria-hidden="true" size={10} strokeWidth={1.75} />
             <span>HEAD</span>
-            <GoDotFill aria-hidden="true" size={9} />
           </Button>
         </TitleTooltip>
       ) : null}
@@ -1918,12 +1918,12 @@ const CodeLocations = ({
               void openCodePath(worktree.path);
             }}
           >
-            <span>Worktree</span>
             <MdOutlineCallSplit
               aria-hidden="true"
               className="commit-ref-worktree-icon"
               size={10}
             />
+            <span>Worktree</span>
           </Button>
         </TitleTooltip>
       ))}
@@ -2092,7 +2092,7 @@ const CommitGraphSvg = ({
         const toY = readSegmentY(segment.toRowIndex);
         const rowTopConnectionY = Math.min(
           segment.toRowIndex * COMMIT_GRAPH_ROW_HEIGHT +
-            COMMIT_GRAPH_ROW_HEIGHT * COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO,
+          COMMIT_GRAPH_ROW_HEIGHT * COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO,
           toY,
         );
         const path =
@@ -2231,7 +2231,7 @@ const CommitHistoryRow = ({
   ) => void;
   openBranchPushModal: (
     event: MouseEvent<HTMLButtonElement>,
-    branchSyncChange: GitBranchSyncChange,
+    branchSyncChanges: GitBranchSyncChange[],
   ) => void;
   openCopyContextMenu: (
     event: MouseEvent<Element>,
@@ -2270,10 +2270,10 @@ const CommitHistoryRow = ({
   const threadGroups =
     row.threadGroup === null
       ? readDisplayedThreadGroups({
-          threads,
-          worktrees,
-          gitChangesOfCwd,
-        })
+        threads,
+        worktrees,
+        gitChangesOfCwd,
+      })
       : [row.threadGroup];
   const rowThreadIdOfId: { [threadId: string]: boolean } = {};
 
@@ -2444,20 +2444,20 @@ const CommitHistoryRow = ({
   const rowCommitRefs =
     row.threadGroup === null
       ? commit.refs.filter((ref) => {
-          const refName = cleanRefName(ref);
+        const refName = cleanRefName(ref);
 
-          if (hasChangedMainWorktreeThreadGroup && readIsHeadRef(ref)) {
-            return false;
-          }
+        if (hasChangedMainWorktreeThreadGroup && readIsHeadRef(ref)) {
+          return false;
+        }
 
-          return (
-            excludedLocalBranchOfName[refName] !== true ||
-            !readIsLocalBranch({
-              branch: refName,
-              localBranches: commit.localBranches,
-            })
-          );
-        })
+        return (
+          excludedLocalBranchOfName[refName] !== true ||
+          !readIsLocalBranch({
+            branch: refName,
+            localBranches: commit.localBranches,
+          })
+        );
+      })
       : [];
   const rowRefNameOfName: { [name: string]: boolean } = {};
 
@@ -2468,11 +2468,11 @@ const CommitHistoryRow = ({
   const rowRefs =
     row.threadGroup === null
       ? [
-          ...rowCommitRefs,
-          ...rowLocalBranches.filter(
-            (localBranch) => rowRefNameOfName[localBranch] !== true,
-          ),
-        ]
+        ...rowCommitRefs,
+        ...rowLocalBranches.filter(
+          (localBranch) => rowRefNameOfName[localBranch] !== true,
+        ),
+      ]
       : isMainWorktreeThreadGroupRow
         ? shouldOwnMainWorktreeHead
           ? currentBranch === null
@@ -2501,13 +2501,13 @@ const CommitHistoryRow = ({
     actionThreadGroup === null
       ? null
       : readCommitBranchTarget({
-          cwd: actionThreadGroup.cwd,
-          groupThreads: actionThreadGroup.threads,
-          repoRoot,
-          currentBranch: rowCurrentBranch,
-          localBranches: rowLocalBranches,
-          commitSha: commit.sha,
-        });
+        cwd: actionThreadGroup.cwd,
+        groupThreads: actionThreadGroup.threads,
+        repoRoot,
+        currentBranch: rowCurrentBranch,
+        localBranches: rowLocalBranches,
+        commitSha: commit.sha,
+      });
   const shouldShowActionCommit =
     actionThreadGroup !== null &&
     actionThreadGroup.cwd.length > 0 &&
@@ -2516,32 +2516,40 @@ const CommitHistoryRow = ({
   const shouldShowBranchCreateActions = rowLocalBranches.length === 0;
   const actionBranchCreateTarget: BranchCreateTarget | null =
     actionThreadGroup !== null &&
-    shouldShowBranchCreateActions &&
-    actionThreadGroup.cwd.length > 0 &&
-    shouldShowActionChangeCount
+      shouldShowBranchCreateActions &&
+      actionThreadGroup.cwd.length > 0 &&
+      shouldShowActionChangeCount
       ? {
-          type: "path",
-          path: actionThreadGroup.cwd,
-          sha: commit.sha,
-          title: actionThreadGroup.cwd,
-        }
+        type: "path",
+        path: actionThreadGroup.cwd,
+        sha: commit.sha,
+        title: actionThreadGroup.cwd,
+      }
       : null;
-  const pushableBranchSyncChange =
-    branchSyncChanges.find(
+  const localOnlyBranchSyncChanges = branchSyncChanges.filter(
+    (branchSyncChange) =>
+      branchSyncChange.gitRefType === "branch" &&
+      branchSyncChange.localSha !== null &&
+      branchSyncChange.originSha === null,
+  );
+  const shouldShowBranchPushAction = localOnlyBranchSyncChanges.some(
       (branchSyncChange) =>
-        branchSyncChange.gitRefType === "branch" &&
         branchSyncChange.localSha === commit.sha &&
-        branchSyncChange.localSha !== branchSyncChange.originSha &&
         rowLocalBranches.includes(branchSyncChange.name),
-    ) ?? null;
+  );
+  const branchPushActionTitle =
+    localOnlyBranchSyncChanges.length === 1 &&
+    localOnlyBranchSyncChanges[0] !== undefined
+      ? `Push ${localOnlyBranchSyncChanges[0].name} to origin`
+      : `Push ${localOnlyBranchSyncChanges.length} branches to origin`;
   const mergeBranch =
     currentBranch === null || !row.isCommitRow || isHeadRow
       ? null
       : (rowLocalBranches.find(
-          (localBranch) =>
-            localBranch !== currentBranch &&
-            isBranchMergeableOfBranch[localBranch] === true,
-        ) ?? null);
+        (localBranch) =>
+          localBranch !== currentBranch &&
+          isBranchMergeableOfBranch[localBranch] === true,
+      ) ?? null);
   const shouldShowCreateBranchToMerge =
     currentBranch !== null &&
     row.isCommitRow &&
@@ -2552,18 +2560,18 @@ const CommitHistoryRow = ({
   const createBranchToMergeTarget: BranchCreateTarget | null =
     shouldShowCreateBranchToMerge
       ? {
-          type: "commit",
-          repoRoot,
-          sha: commit.sha,
-          title: commit.subject,
-        }
+        type: "commit",
+        repoRoot,
+        sha: commit.sha,
+        title: commit.subject,
+      }
       : null;
   let mergeDisabledReason: string | null = null;
   let rowClassName = "commit-history-row";
 
   if (mergeBranch !== null && isHeadClean === false) {
     mergeDisabledReason =
-      "Before merging this into HEAD, make sure HEAD has no changes.";
+      "Resolve your changes before merging this in";
   }
 
   const shouldShowGraphThreadActions =
@@ -2572,7 +2580,7 @@ const CommitHistoryRow = ({
     shouldShowGraphThreadActions ||
     (row.isCommitRow &&
       (mergeBranch !== null ||
-        pushableBranchSyncChange !== null ||
+        shouldShowBranchPushAction ||
         createBranchToMergeTarget !== null ||
         isHeadRow));
   const commitDateText = formatCommitDate(commit.date);
@@ -2602,28 +2610,30 @@ const CommitHistoryRow = ({
           <div className="commit-graph-actions">
             {shouldShowGraphThreadActions ? (
               <div className="commit-graph-thread-actions">
-                <Button
-                  className="commit-thread-change-count"
-                  variant="ghost"
-                  size="xs"
-                  type="button"
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onDoubleClick={(event) => event.stopPropagation()}
-                  onClick={(event) =>
-                    openChangeSummaryModal(event, {
-                      path: actionThreadGroup.cwd,
-                      title: actionThreadGroup.cwd,
-                      changeSummary: actionChangeSummary,
-                    })
-                  }
-                >
-                  <span className="commit-thread-change-added">
-                    +{actionTotalChangeSummary.added}
-                  </span>
-                  <span className="commit-thread-change-removed">
-                    -{actionTotalChangeSummary.removed}
-                  </span>
-                </Button>
+                <TitleTooltip title="Changes">
+                  <Button
+                    className="commit-thread-change-count"
+                    variant="ghost"
+                    size="xs"
+                    type="button"
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                    onClick={(event) =>
+                      openChangeSummaryModal(event, {
+                        path: actionThreadGroup.cwd,
+                        title: actionThreadGroup.cwd,
+                        changeSummary: actionChangeSummary,
+                      })
+                    }
+                  >
+                    <span className="commit-thread-change-added">
+                      +{actionTotalChangeSummary.added}
+                    </span>
+                    <span className="commit-thread-change-removed">
+                      -{actionTotalChangeSummary.removed}
+                    </span>
+                  </Button>
+                </TitleTooltip>
                 {shouldShowActionCommit && actionCommitBranchTarget !== null ? (
                   <TitleTooltip title="Commit">
                     <Button
@@ -2669,10 +2679,8 @@ const CommitHistoryRow = ({
                 )}
               </div>
             ) : null}
-            {pushableBranchSyncChange !== null ? (
-              <TitleTooltip
-                title={`Push ${pushableBranchSyncChange.name} to origin`}
-              >
+            {shouldShowBranchPushAction ? (
+              <TitleTooltip title={branchPushActionTitle}>
                 <Button
                   className="commit-branch-push-action"
                   variant="ghost"
@@ -2681,7 +2689,7 @@ const CommitHistoryRow = ({
                   onMouseDown={(event) => event.stopPropagation()}
                   onDoubleClick={(event) => event.stopPropagation()}
                   onClick={(event) =>
-                    openBranchPushModal(event, pushableBranchSyncChange)
+                    openBranchPushModal(event, localOnlyBranchSyncChanges)
                   }
                 >
                   <CircleArrowUp
@@ -2731,7 +2739,8 @@ const CommitHistoryRow = ({
                       openBranchMergeModal(event, mergeBranch)
                     }
                   >
-                    <LuCornerRightUp
+                    <LuCircleArrowUp
+                      className="commit-graph-merge-icon"
                       size={COMMIT_GRAPH_ACTION_ICON_SIZE}
                       strokeWidth={COMMIT_GRAPH_ACTION_ICON_STROKE_WIDTH}
                     />
@@ -2781,12 +2790,12 @@ const CommitHistoryRow = ({
         onContextMenu={
           row.isCommitRow
             ? (event) => {
-                openCopyContextMenu(
-                  event,
-                  commit.subject,
-                  "Failed to copy description.",
-                );
-              }
+              openCopyContextMenu(
+                event,
+                commit.subject,
+                "Failed to copy description.",
+              );
+            }
             : undefined
         }
       >
@@ -2799,12 +2808,12 @@ const CommitHistoryRow = ({
         onContextMenu={
           row.isCommitRow
             ? (event) => {
-                openCopyContextMenu(
-                  event,
-                  commit.sha,
-                  "Failed to copy commit.",
-                );
-              }
+              openCopyContextMenu(
+                event,
+                commit.sha,
+                "Failed to copy commit.",
+              );
+            }
             : undefined
         }
       >
@@ -2815,12 +2824,12 @@ const CommitHistoryRow = ({
         onContextMenu={
           row.isCommitRow
             ? (event) => {
-                openCopyContextMenu(
-                  event,
-                  commit.author,
-                  "Failed to copy author.",
-                );
-              }
+              openCopyContextMenu(
+                event,
+                commit.author,
+                "Failed to copy author.",
+              );
+            }
             : undefined
         }
       >
@@ -2831,12 +2840,12 @@ const CommitHistoryRow = ({
         onContextMenu={
           row.isCommitRow
             ? (event) => {
-                openCopyContextMenu(
-                  event,
-                  commitDateText,
-                  "Failed to copy date.",
-                );
-              }
+              openCopyContextMenu(
+                event,
+                commitDateText,
+                "Failed to copy date.",
+              );
+            }
             : undefined
         }
       >
@@ -4314,19 +4323,19 @@ const CommitHistory = ({
     const branchPointerOperation =
       activeBranchPointerDrag.gitRefType === "branch"
         ? readBranchPointerOperation({
-            checkedOutBranchPath,
-            sourcePath: activeBranchPointerDrag.sourcePath,
-            targetPath: isDirtyWorktreeTarget ? branchPointerTarget.path : null,
-          })
+          checkedOutBranchPath,
+          sourcePath: activeBranchPointerDrag.sourcePath,
+          targetPath: isDirtyWorktreeTarget ? branchPointerTarget.path : null,
+        })
         : "moveBranchPointer";
     const warningMessage =
       activeBranchPointerDrag.gitRefType === "tag"
         ? `We don't recommend moving this because ${TAG_STABILITY_WARNING_REASON}.`
         : readBranchPointerMoveWarningMessage({
-            branch: activeBranchPointerDrag.refName,
-            oldSha: activeBranchPointerDrag.oldSha,
-            newSha: branchPointerTarget.sha,
-          });
+          branch: activeBranchPointerDrag.refName,
+          oldSha: activeBranchPointerDrag.oldSha,
+          newSha: branchPointerTarget.sha,
+        });
 
     setBranchPointerMove({
       repoRoot,
@@ -4415,12 +4424,12 @@ const CommitHistory = ({
       isEnabled: row.isCommitRow,
       pullRequestTarget: row.isCommitRow
         ? {
-            sha: row.commit.sha,
-            subject: row.commit.subject,
-            baseBranches: pullRequestBaseBranches,
-            headBranches: readPushedBranchNamesForCommit(row.commit),
-            defaultBaseBranch: defaultBranch,
-          }
+          sha: row.commit.sha,
+          subject: row.commit.subject,
+          baseBranches: pullRequestBaseBranches,
+          headBranches: readPushedBranchNamesForCommit(row.commit),
+          defaultBaseBranch: defaultBranch,
+        }
         : null,
       x: event.clientX,
       y: event.clientY,
@@ -4848,11 +4857,16 @@ const CommitHistory = ({
   };
   const openBranchPushModal = (
     event: MouseEvent<HTMLButtonElement>,
-    branchSyncChange: GitBranchSyncChange,
+    branchSyncChanges: GitBranchSyncChange[],
   ) => {
     event.preventDefault();
     event.stopPropagation();
-    setBranchPushConfirmation({ branchSyncChange });
+
+    if (branchSyncChanges.length === 0) {
+      return;
+    }
+
+    setBranchPushConfirmation({ branchSyncChanges });
   };
   const closeBranchPushModal = () => {
     setBranchPushConfirmation(null);
@@ -4862,23 +4876,26 @@ const CommitHistory = ({
       return;
     }
 
-    const { branchSyncChange } = branchPushConfirmation;
+    const { branchSyncChanges } = branchPushConfirmation;
     closeBranchPushModal();
 
     await runUserGitUpdateThenRefreshDashboard(
-      "Pushing branch",
-      "Pushed branch.",
+      "Pushing branches",
+      "Pushed branches.",
       async () => {
         try {
-          await window.molttree.pushGitBranchSyncChanges([branchSyncChange]);
+          await window.molttree.pushGitBranchSyncChanges(branchSyncChanges);
           trackDesktopAction({
             eventName: "branches_pushed",
-            properties: { change_count: 1, source: "commit_graph" },
+            properties: {
+              change_count: branchSyncChanges.length,
+              source: "commit_graph",
+            },
           });
         } catch (error) {
           return error instanceof Error
             ? error.message
-            : "Failed to push branch.";
+            : "Failed to push branches.";
         }
 
         return null;
@@ -5000,17 +5017,37 @@ const CommitHistory = ({
     branchPointerMove === null
       ? null
       : readBranchPointerOperationText({
-          operation: branchPointerMove.operation,
-          gitRefType: branchPointerMove.gitRefType,
-          refName: branchPointerMove.refName,
-        });
+        operation: branchPointerMove.operation,
+        gitRefType: branchPointerMove.gitRefType,
+        refName: branchPointerMove.refName,
+      });
   const branchPushWarningMessages =
     branchPushConfirmation === null
       ? []
       : readBranchSyncPushWarningMessages({
-          branchSyncChanges: [branchPushConfirmation.branchSyncChange],
-          commits,
-        });
+        branchSyncChanges: branchPushConfirmation.branchSyncChanges,
+        commits,
+      });
+  let branchPushConfirmationDescription: ReactNode = "";
+
+  if (branchPushConfirmation !== null) {
+    const [branchSyncChange] = branchPushConfirmation.branchSyncChanges;
+
+    branchPushConfirmationDescription =
+      branchPushConfirmation.branchSyncChanges.length === 1 &&
+      branchSyncChange !== undefined ? (
+        <span className="dialog-description-inline">
+          Push{" "}
+          <GitRefModalBadge
+            gitRefType={branchSyncChange.gitRefType}
+            name={branchSyncChange.name}
+          />{" "}
+          to origin?
+        </span>
+      ) : (
+        `Push ${branchPushConfirmation.branchSyncChanges.length} branches to origin?`
+      );
+  }
   return (
     <>
       {gitRefCreateMenuTarget === null ? null : (
@@ -5358,7 +5395,7 @@ const CommitHistory = ({
                 <div
                   className={
                     changeSummaryTarget.changeSummary.staged.added === 0 &&
-                    changeSummaryTarget.changeSummary.staged.removed === 0
+                      changeSummaryTarget.changeSummary.staged.removed === 0
                       ? "change-summary-row change-summary-row-empty"
                       : "change-summary-row"
                   }
@@ -5374,7 +5411,7 @@ const CommitHistory = ({
                 <div
                   className={
                     changeSummaryTarget.changeSummary.unstaged.added === 0 &&
-                    changeSummaryTarget.changeSummary.unstaged.removed === 0
+                      changeSummaryTarget.changeSummary.unstaged.removed === 0
                       ? "change-summary-row change-summary-row-empty"
                       : "change-summary-row"
                   }
@@ -5431,7 +5468,7 @@ const CommitHistory = ({
           confirmButtonAction={deleteSelectedGitRef}
         >
           {gitRefDeleteTarget === null ||
-          gitRefDeleteTarget.warningMessage === null ? undefined : (
+            gitRefDeleteTarget.warningMessage === null ? undefined : (
             <Alert className="git-action-warning" variant="destructive">
               <AlertDescription>
                 {gitRefDeleteTarget.warningMessage}
@@ -5489,21 +5526,12 @@ const CommitHistory = ({
         <ConfirmationDialog
           isOpen={branchPushConfirmation !== null}
           closeConfirmationDialog={closeBranchPushModal}
-          title="Push Branch"
-          description={
-            branchPushConfirmation === null ? (
-              ""
-            ) : (
-              <span className="dialog-description-inline">
-                Push{" "}
-                <GitRefModalBadge
-                  gitRefType="branch"
-                  name={branchPushConfirmation.branchSyncChange.name}
-                />{" "}
-                to origin?
-              </span>
-            )
+          title={
+            branchPushConfirmation?.branchSyncChanges.length === 1
+              ? "Push Branch"
+              : "Push Branches"
           }
+          description={branchPushConfirmationDescription}
           confirmButtonText="Push"
           confirmButtonVariant="default"
           isConfirmDisabled={false}
@@ -5512,22 +5540,24 @@ const CommitHistory = ({
           {branchPushConfirmation === null ? undefined : (
             <>
               <ul className="branch-tag-change-list">
-                <li
-                  key={`${branchPushConfirmation.branchSyncChange.repoRoot}:${branchPushConfirmation.branchSyncChange.gitRefType}:${branchPushConfirmation.branchSyncChange.name}`}
-                >
-                  <GitRefModalBadge
-                    gitRefType={
-                      branchPushConfirmation.branchSyncChange.gitRefType
-                    }
-                    name={branchPushConfirmation.branchSyncChange.name}
-                  />
-                  <code>
-                    {readBranchSyncChangeShaText({
-                      action: "push",
-                      branchSyncChange: branchPushConfirmation.branchSyncChange,
-                    })}
-                  </code>
-                </li>
+                {branchPushConfirmation.branchSyncChanges.map(
+                  (branchSyncChange) => (
+                    <li
+                      key={`${branchSyncChange.repoRoot}:${branchSyncChange.gitRefType}:${branchSyncChange.name}`}
+                    >
+                      <GitRefModalBadge
+                        gitRefType={branchSyncChange.gitRefType}
+                        name={branchSyncChange.name}
+                      />
+                      <code>
+                        {readBranchSyncChangeShaText({
+                          action: "push",
+                          branchSyncChange,
+                        })}
+                      </code>
+                    </li>
+                  ),
+                )}
               </ul>
               {branchPushWarningMessages.length === 0 ? null : (
                 <Alert className="git-action-warning" variant="destructive">
@@ -5590,13 +5620,13 @@ const CommitHistory = ({
                 </li>
               </ul>
               {branchPointerOperationText?.description ===
-              null ? null : branchPointerOperationText?.shouldBlock ? (
-                <Alert className="git-action-warning" variant="destructive">
-                  <AlertDescription>
-                    {branchPointerOperationText?.description}
-                  </AlertDescription>
-                </Alert>
-              ) : (
+                null ? null : branchPointerOperationText?.shouldBlock ? (
+                  <Alert className="git-action-warning" variant="destructive">
+                    <AlertDescription>
+                      {branchPointerOperationText?.description}
+                    </AlertDescription>
+                  </Alert>
+                ) : (
                 <DialogDescription>
                   {branchPointerOperationText?.description}
                 </DialogDescription>
@@ -6158,8 +6188,8 @@ const MoltTreeDesktopApp = () => {
       dashboardData === null
         ? undefined
         : dashboardData.repos.find(
-            (dashboardRepo) => dashboardRepo.root === repoRoot,
-          );
+          (dashboardRepo) => dashboardRepo.root === repoRoot,
+        );
 
     return repo === undefined ? [] : repo.branchSyncChanges;
   };
@@ -6244,24 +6274,24 @@ const MoltTreeDesktopApp = () => {
     branchSyncConfirmation === null
       ? []
       : readActionableBranchSyncChanges({
-          action: branchSyncConfirmation.action,
-          branchSyncChanges: readVisibleBranchSyncChangesForRepo(
-            branchSyncConfirmation.repoRoot,
-          ),
-        });
+        action: branchSyncConfirmation.action,
+        branchSyncChanges: readVisibleBranchSyncChangesForRepo(
+          branchSyncConfirmation.repoRoot,
+        ),
+      });
   const branchSyncConfirmationRepo =
     branchSyncConfirmation === null || dashboardData === null
       ? null
       : (dashboardData.repos.find(
-          (repo) => repo.root === branchSyncConfirmation.repoRoot,
-        ) ?? null);
+        (repo) => repo.root === branchSyncConfirmation.repoRoot,
+      ) ?? null);
   const branchSyncPushWarningMessages =
     branchSyncConfirmation?.action === "push" &&
-    branchSyncConfirmationRepo !== null
+      branchSyncConfirmationRepo !== null
       ? readBranchSyncPushWarningMessages({
-          branchSyncChanges: branchSyncChangesInConfirmation,
-          commits: branchSyncConfirmationRepo.commits,
-        })
+        branchSyncChanges: branchSyncChangesInConfirmation,
+        commits: branchSyncConfirmationRepo.commits,
+      })
       : [];
   const branchSyncActionText =
     branchSyncConfirmation === null

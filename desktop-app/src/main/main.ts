@@ -67,17 +67,11 @@ const MAIN_WINDOW_MIN_HEIGHT = 640;
 let appServerClient: AppServerClient | null = null;
 let appServerClientPromise: Promise<AppServerClient> | null = null;
 let appServerClientVersion = 0;
-let appServerStatusClient: AppServerClient | null = null;
-let appServerStatusClientPromise: Promise<AppServerClient | null> | null = null;
-let appServerStatusClientVersion = 0;
-let appServerStatusConnectTimeout: ReturnType<typeof setTimeout> | null = null;
 const codexThreadStatusOfId: {
   [threadId: string]: CodexThreadStatusChange["status"];
 } = {};
-// TODO: AI-PICKED-VALUE: This is large enough for normal loaded Codex thread counts without making one proxy request too large.
+// TODO: AI-PICKED-VALUE: This is large enough for normal loaded Codex thread counts without making one app-server request too large.
 const APP_SERVER_LOADED_THREAD_PAGE_SIZE = 200;
-// TODO: AI-PICKED-VALUE: This retries soon after Codex opens its app-server socket without spamming process starts.
-const APP_SERVER_STATUS_CONNECT_RETRY_DELAY_MS = 2000;
 const { autoUpdater } = electronUpdater;
 const appUpdateController = createAppUpdateController({ app, autoUpdater });
 
@@ -265,7 +259,6 @@ const readAppServerClient = async () => {
     const appServerClientVersionForProcess = appServerClientVersion;
 
     appServerClientPromise = createAppServerClient({
-      connectionKind: "direct",
       onNotification: handleAppServerNotification,
       onClose: () => {
         if (appServerClientVersion !== appServerClientVersionForProcess) {
@@ -335,111 +328,18 @@ const syncLoadedCodexThreadStatuses = async (
   } while (cursor !== null);
 };
 
-const readAppServerStatusClient = async () => {
-  if (appServerStatusClient !== null) {
-    return appServerStatusClient;
-  }
-
-  if (appServerStatusClientPromise === null) {
-    appServerStatusClientVersion += 1;
-    const appServerStatusClientVersionForProcess = appServerStatusClientVersion;
-
-    appServerStatusClientPromise = createAppServerClient({
-      connectionKind: "proxy",
-      onNotification: handleAppServerNotification,
-      onClose: () => {
-        if (
-          appServerStatusClientVersion !==
-          appServerStatusClientVersionForProcess
-        ) {
-          return;
-        }
-
-        appServerStatusClient = null;
-        appServerStatusClientPromise = null;
-        queueAppServerStatusClientStart();
-      },
-    })
-      .then(async (nextAppServerStatusClient) => {
-        try {
-          await syncLoadedCodexThreadStatuses(nextAppServerStatusClient);
-        } catch (error) {
-          console.log("[MoltTree Codex app-server loaded statuses]", {
-            error:
-              error instanceof Error
-                ? error.message
-                : "Failed to sync loaded Codex thread statuses.",
-          });
-        }
-
-        return nextAppServerStatusClient;
-      })
-      .catch((error: unknown) => {
-        console.log("[MoltTree Codex app-server proxy]", {
-          error:
-            error instanceof Error
-              ? error.message
-              : "Failed to connect to Codex app-server proxy.",
-        });
-
-        return null;
-      });
-  }
-
-  const currentAppServerStatusClientPromise = appServerStatusClientPromise;
-  const nextAppServerStatusClient = await appServerStatusClientPromise;
-
-  if (
-    nextAppServerStatusClient !== null &&
-    appServerStatusClientPromise === currentAppServerStatusClientPromise
-  ) {
-    appServerStatusClient = nextAppServerStatusClient;
-  }
-
-  if (
-    nextAppServerStatusClient === null &&
-    appServerStatusClientPromise === currentAppServerStatusClientPromise
-  ) {
-    appServerStatusClientPromise = null;
-  }
-
-  return nextAppServerStatusClient;
-};
-
-const queueAppServerStatusClientStart = () => {
-  if (
-    appServerStatusConnectTimeout !== null ||
-    appServerStatusClient !== null ||
-    appServerStatusClientPromise !== null
-  ) {
-    return;
-  }
-
-  appServerStatusConnectTimeout = setTimeout(() => {
-    appServerStatusConnectTimeout = null;
-    startAppServerStatusClient();
-  }, APP_SERVER_STATUS_CONNECT_RETRY_DELAY_MS);
-};
-
 const startAppServerStatusClient = () => {
-  if (appServerStatusClient !== null || appServerStatusClientPromise !== null) {
-    return;
-  }
-
-  void readAppServerStatusClient()
-    .then((nextAppServerStatusClient) => {
-      if (nextAppServerStatusClient === null) {
-        queueAppServerStatusClientStart();
-      }
+  void readAppServerClient()
+    .then(async (nextAppServerClient) => {
+      await syncLoadedCodexThreadStatuses(nextAppServerClient);
     })
     .catch((error) => {
-      console.log("[MoltTree Codex app-server proxy]", {
+      console.log("[MoltTree Codex app-server statuses]", {
         error:
           error instanceof Error
             ? error.message
-            : "Failed to start Codex app-server proxy.",
+            : "Failed to sync loaded Codex thread statuses.",
       });
-      queueAppServerStatusClientStart();
     });
 };
 

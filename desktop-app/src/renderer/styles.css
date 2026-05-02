@@ -1109,13 +1109,14 @@ textarea,
 }
 
 .commit-ref {
+  --commit-ref-border-color: #aeb9c7;
   height: 16px;
   min-height: 16px;
   display: inline-flex;
   align-items: center;
   gap: 3px;
   padding: 0 4px;
-  border: 1px solid #aeb9c7;
+  border: 1px solid var(--commit-ref-border-color);
   border-radius: 4px;
   background: #e9f8f1;
   color: #102f22;
@@ -1132,18 +1133,20 @@ textarea,
 }
 
 .commit-ref-local {
+  --commit-ref-border-color: #acb9ca;
   background: #eaf1ff;
   color: #162d54;
 }
 
 .commit-ref-origin {
+  --commit-ref-border-color: #adbdbf;
   background: #e9f8f1;
   color: #102f22;
 }
 
 /* TODO: AI-PICKED-VALUE: This keeps Git tags distinct from branch and chat title pills. */
 .commit-ref-tag {
-  border-color: #cdb7ef;
+  --commit-ref-border-color: #cdb7ef;
   background: #f0e7ff;
   color: #43236f;
 }
@@ -1197,6 +1200,7 @@ textarea,
   width: 12px;
   height: 12px;
   margin-left: 0;
+  color: var(--commit-ref-border-color);
   overflow: hidden;
   transition: color 120ms ease;
 }
@@ -1219,6 +1223,10 @@ textarea,
 
 .commit-graph-merge-action:disabled:hover {
   color: #b4bcc8;
+}
+
+.commit-graph-merge-icon {
+  transform: rotate(45deg);
 }
 
 .commit-thread-group {

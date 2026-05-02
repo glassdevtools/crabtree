@@ -25,8 +25,6 @@ export type AppServerClient = {
   close: () => void;
 };
 
-export type AppServerConnectionKind = "direct" | "proxy";
-
 const CODEX_DARWIN_COMMAND_PATH =
   "/Applications/Codex.app/Contents/Resources/codex";
 // TODO: AI-PICKED-VALUE: Ten seconds keeps startup bounded while giving Codex app-server enough time to answer normal requests.
@@ -46,37 +44,23 @@ const readCodexCommand = () => {
   return "codex";
 };
 
-const readAppServerArgs = (connectionKind: AppServerConnectionKind) => {
-  if (connectionKind === "proxy") {
-    return ["app-server", "proxy"];
-  }
-
-  return ["app-server"];
-};
-
 const makeError = (message: string) => {
   return new Error(message);
 };
 
 export const createAppServerClient = async ({
-  connectionKind,
   onNotification,
   onClose,
 }: {
-  connectionKind: AppServerConnectionKind;
   onNotification: (notification: AppServerNotification) => void;
   onClose: () => void;
 }) => {
   let nextRequestId = 1;
   let didClose = false;
   const pendingRequestOfId: { [id: number]: PendingRequest } = {};
-  const appServerProcess = spawn(
-    readCodexCommand(),
-    readAppServerArgs(connectionKind),
-    {
-      stdio: ["pipe", "pipe", "pipe"],
-    },
-  );
+  const appServerProcess = spawn(readCodexCommand(), ["app-server"], {
+    stdio: ["pipe", "pipe", "pipe"],
+  });
   const lineReader = readline.createInterface({
     input: appServerProcess.stdout,
   });

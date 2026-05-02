@@ -22,7 +22,7 @@ import type {
 const FIELD_SEPARATOR = "\u001f";
 const ZERO_SHA = "0000000000000000000000000000000000000000";
 const CHECKED_OUT_BY_WORKTREE_MESSAGE =
-  "This branch is checked out in a worktree. Delete that worktree or switch its branch first.";
+  "This branch is checked out in a worktree. Delete the worktree or switch its branch first.";
 // TODO: AI-PICKED-VALUE: This prevents Git mutations and remote reads from waiting forever on a blocked process.
 const GIT_COMMAND_TIMEOUT_MS = 20_000;
 const execFileAsync = promisify(execFile);
