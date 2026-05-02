@@ -25,8 +25,8 @@ const featureItems = [
       <>
         View all your{" "}
         <span className="featureToken featureTokenWorktree">worktrees</span>,{" "}
-        <span className="featureToken featureTokenBranch">branches</span>,
-        and <span className="featureToken featureTokenChat">chats</span> in one
+        <span className="featureToken featureTokenBranch">branches</span>, and{" "}
+        <span className="featureToken featureTokenChat">chats</span> in one
         place.
       </>,
     ],
@@ -159,7 +159,8 @@ const HomePage = () => {
               <span>MoltTree</span>
             </h1>
             <p className="heroSubtext">
-              Merge your Codex worktrees together with ease. MoltTree gives you power tools to manage your chats, worktrees, and branches.
+              Merge your Codex worktrees together with ease. MoltTree gives you
+              power tools to manage your chats, worktrees, and branches.
             </p>
 
             <div className="hero__actions">

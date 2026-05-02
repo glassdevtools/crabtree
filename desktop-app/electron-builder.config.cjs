@@ -33,6 +33,14 @@ const config = {
       },
     ],
     icon: "packaging/macos/icon.icon",
+    extendInfo: {
+      NSDesktopFolderUsageDescription:
+        "MoltTree needs access to repositories stored on your Desktop so it can read their Git history.",
+      NSDocumentsFolderUsageDescription:
+        "MoltTree needs access to repositories stored in Documents so it can read their Git history.",
+      NSDownloadsFolderUsageDescription:
+        "MoltTree needs access to repositories stored in Downloads so it can read their Git history.",
+    },
     hardenedRuntime: true,
     entitlements: "packaging/macos/entitlements.plist",
     entitlementsInherit: "packaging/macos/entitlements.inherit.plist",

@@ -344,6 +344,26 @@ test("deeply reads only the focused repo graph", async () => {
   });
 });
 
+test("reports Git errors when Codex folders cannot seed any repos", async () => {
+  const parentRoot = await mkdtemp(join(tmpdir(), "molttree-missing-repo-"));
+  const missingRepoRoot = join(parentRoot, "missing");
+
+  try {
+    const { repos, warnings, gitErrors } = await readRepoGraphs({
+      threads: [createThread({ id: "missing-thread", cwd: missingRepoRoot })],
+      focusedRepoRoot: null,
+    });
+
+    assert.equal(repos.length, 0);
+    assert.equal(warnings.length, 0);
+    assert.equal(gitErrors.length, 1);
+    assert.match(gitErrors[0] ?? "", /Failed to read Git repository/);
+    assert.match(gitErrors[0] ?? "", /missing/);
+  } finally {
+    await rm(parentRoot, { recursive: true, force: true });
+  }
+});
+
 test("reads repo graphs when a linked worktree branch is missing", async () => {
   await withOriginRepo(async ({ parentRoot, repoRoot }) => {
     await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });

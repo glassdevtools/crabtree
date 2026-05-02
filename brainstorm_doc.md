@@ -2,7 +2,6 @@ The AI put this together after we talked about the 3 APIs we have access to to i
 
 # MoltTree
 
-
 MoltTree is a local desktop tool for browsing Codex threads alongside their Git history and opening the right context back in Codex Desktop.
 
 ## Repo Layout
