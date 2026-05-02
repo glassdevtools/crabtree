@@ -21,7 +21,7 @@ Feel free to submit an [Issue](https://github.com/glassdevtools/molttree/issues)
 
 
 
-Download MoltTree on our [Website](https://molttree.app).
+Download MoltTree on the [Website](https://molttree.app).
 
 <div align="center">
 	<img
