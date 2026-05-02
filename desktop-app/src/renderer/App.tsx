@@ -383,6 +383,10 @@ const readBranchSyncChangeSummary = ({
   }
 
   if (oldSha !== null && newSha !== null) {
+    if (summaryMode === "rowPush") {
+      return null;
+    }
+
     return `move ${oldSha.slice(0, 7)} to ${newSha.slice(0, 7)}`;
   }
 
@@ -1244,43 +1248,11 @@ const createCommitGraph = ({
     }
   };
 
-  const readNewLaneColorIndex = ({
-    sha,
-    lanesToCheck,
-    parentLanes,
-  }: {
-    sha: string;
-    lanesToCheck: CommitGraphLane[];
-    parentLanes: CommitGraphLane[];
-  }) => {
+  const readNewLaneColorIndex = ({ sha }: { sha: string }) => {
     const colorSeedSha = readEarliestLaneColorSeedSha({ sha });
-    const preferredColorIndex = readCommitGraphColorIndex(colorSeedSha);
-    const isColorIndexUsed: { [colorIndex: number]: boolean } = {};
 
-    for (const laneItem of lanesToCheck) {
-      isColorIndexUsed[laneItem.colorIndex % COMMIT_GRAPH_COLORS.length] = true;
-    }
-
-    for (const laneItem of parentLanes) {
-      isColorIndexUsed[laneItem.colorIndex % COMMIT_GRAPH_COLORS.length] = true;
-    }
-
-    for (
-      let colorOffset = 0;
-      colorOffset < COMMIT_GRAPH_COLORS.length;
-      colorOffset += 1
-    ) {
-      const colorIndex =
-        (preferredColorIndex + colorOffset) % COMMIT_GRAPH_COLORS.length;
-
-      if (isColorIndexUsed[colorIndex] === true) {
-        continue;
-      }
-
-      return colorIndex;
-    }
-
-    return preferredColorIndex;
+    // Colors stay tied to the earliest visible line seed, so new commits do not repaint older graph lines.
+    return readCommitGraphColorIndex(colorSeedSha);
   };
 
   for (const commit of commits) {
@@ -1376,11 +1348,7 @@ const createCommitGraph = ({
       let colorIndex = colorIndexOfSha[graphItem.sha];
 
       if (colorIndex === undefined) {
-        colorIndex = readNewLaneColorIndex({
-          sha: graphItem.sha,
-          lanesToCheck: lanes,
-          parentLanes: [],
-        });
+        colorIndex = readNewLaneColorIndex({ sha: graphItem.sha });
         colorIndexOfSha[graphItem.sha] = colorIndex;
       }
 
@@ -1479,11 +1447,7 @@ const createCommitGraph = ({
         if (parentIndex === 0) {
           parentColorIndex = commitLane.colorIndex;
         } else {
-          parentColorIndex = readNewLaneColorIndex({
-            sha: parent,
-            lanesToCheck: nextLanes,
-            parentLanes,
-          });
+          parentColorIndex = readNewLaneColorIndex({ sha: parent });
         }
 
         colorIndexOfSha[parent] = parentColorIndex;
@@ -1541,6 +1505,8 @@ const createCommitGraph = ({
       }
 
       const parentColorIndex = colorIndexOfSha[parent];
+      const segmentColorIndex =
+        parentIndex === 0 ? commitLane.colorIndex : parentColorIndex;
 
       addSegment({
         fromLane: lane,
@@ -1548,9 +1514,9 @@ const createCommitGraph = ({
         fromRowIndex: rowIndex,
         toRowIndex: rowIndex + 1,
         color: readCommitGraphColor(
-          parentColorIndex === undefined
+          segmentColorIndex === undefined
             ? commitLane.colorIndex
-            : parentColorIndex,
+            : segmentColorIndex,
         ),
         isMergeSegment: parentIndex > 0,
       });
