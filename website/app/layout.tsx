@@ -19,11 +19,6 @@ export const metadata: Metadata = {
     siteName: siteTitle,
     type: "website",
   },
-  twitter: {
-    card: "summary_large_image",
-    title: siteTitle,
-    description: siteDescription,
-  },
 };
 
 type RootLayoutProps = {

@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { FiDownload, FiHeart, FiMessageCircle, FiRepeat } from "react-icons/fi";
+import { FiDownload } from "react-icons/fi";
 import { IoLogoGithub } from "react-icons/io";
 import { ClientDownloadLink } from "./client-download-link";
 import { ClientGithubLink } from "./client-github-link";
@@ -12,49 +12,6 @@ const ctaDownloadButtonClassName = "ctaButton ctaButtonDownload";
 const ctaGithubButtonClassName = "ctaButton ctaButtonGithub";
 const downloadButtonClassName = "downloadButton";
 const githubButtonClassName = "githubButton";
-// TODO: AI-PLACEHOLDER-VALUE: Replace these with real public tweet text and handles before shipping this review row.
-const tweetReviewItems = [
-  {
-    name: "Replace with reviewer",
-    handle: "@replace_with_real_1",
-    dateLabel: "Jan 1, 1970",
-    dateTime: "1970-01-01",
-    initials: "R1",
-    text: "Replace this card with the first real MoltTree tweet before shipping.",
-  },
-  {
-    name: "Replace with reviewer",
-    handle: "@replace_with_real_2",
-    dateLabel: "Jan 1, 1970",
-    dateTime: "1970-01-01",
-    initials: "R2",
-    text: "Replace this card with the second real MoltTree tweet before shipping.",
-  },
-  {
-    name: "Replace with reviewer",
-    handle: "@replace_with_real_3",
-    dateLabel: "Jan 1, 1970",
-    dateTime: "1970-01-01",
-    initials: "R3",
-    text: "Replace this card with the third real MoltTree tweet before shipping.",
-  },
-  {
-    name: "Replace with reviewer",
-    handle: "@replace_with_real_4",
-    dateLabel: "Jan 1, 1970",
-    dateTime: "1970-01-01",
-    initials: "R4",
-    text: "Replace this card with the fourth real MoltTree tweet before shipping.",
-  },
-  {
-    name: "Replace with reviewer",
-    handle: "@replace_with_real_5",
-    dateLabel: "Jan 1, 1970",
-    dateTime: "1970-01-01",
-    initials: "R5",
-    text: "Replace this card with the fifth real MoltTree tweet before shipping.",
-  },
-];
 const featureItems = [
   {
     title: "Easily merge your worktrees",
@@ -218,36 +175,6 @@ const HomePage = () => {
             />
           </figure>
         </div>
-      </section>
-
-      <section className="tweetReviewsSection" aria-label="Twitter reviews">
-        <ul className="tweetReviewList">
-          {tweetReviewItems.map((tweetReviewItem) => (
-            <li className="tweetReviewCard" key={tweetReviewItem.handle}>
-              <div className="tweetReviewCardHeader">
-                <span className="tweetReviewAvatar" aria-hidden="true">
-                  {tweetReviewItem.initials}
-                </span>
-                <div className="tweetReviewAuthor">
-                  <strong>{tweetReviewItem.name}</strong>
-                  <span>{tweetReviewItem.handle}</span>
-                </div>
-                <span className="tweetReviewLogo" aria-hidden="true">
-                  X
-                </span>
-              </div>
-              <p>{tweetReviewItem.text}</p>
-              <time dateTime={tweetReviewItem.dateTime}>
-                {tweetReviewItem.dateLabel}
-              </time>
-              <div className="tweetReviewActions" aria-hidden="true">
-                <FiMessageCircle />
-                <FiRepeat />
-                <FiHeart />
-              </div>
-            </li>
-          ))}
-        </ul>
       </section>
 
       <section
