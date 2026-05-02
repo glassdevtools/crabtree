@@ -104,6 +104,7 @@ import type { ThreadGroup } from "./threadGroups";
 import {
   readIsAnalyticsPrivateMode,
   setAnalyticsPrivateMode,
+  trackDesktopAppOpened,
   trackDesktopAction,
 } from "./analytics";
 import packageInfo from "../../package.json";
@@ -5780,6 +5781,9 @@ const MoltTreeDesktopApp = () => {
   const codexThreadStatusOfIdRef = useRef<{
     [threadId: string]: CodexThreadStatusChange["status"];
   }>({});
+  useEffect(() => {
+    trackDesktopAppOpened();
+  }, []);
 
   const threadOfId = useMemo(() => {
     if (dashboardData === null) {

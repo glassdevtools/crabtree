@@ -19,6 +19,7 @@ type DesktopAnalyticsEventName =
   | "changes_committed"
   | "chat_opened"
   | "codex_chats_filter_changed"
+  | "desktop_app_opened"
   | "github_clicked"
   | "head_dragged"
   | "head_switched"
@@ -34,6 +35,7 @@ type DesktopAnalyticsEventName =
 type AnalyticsProperties = { [key: string]: string | number | boolean };
 
 let didInitializeAnalytics = false;
+let didTrackDesktopAppOpened = false;
 let analyticsIdentityPromise: Promise<void> | null = null;
 
 const applyAnalyticsPrivateMode = (isPrivateMode: boolean) => {
@@ -131,5 +133,27 @@ export const trackDesktopAction = ({
     });
   })().catch((error) => {
     console.error("Failed to track desktop action.", error);
+  });
+};
+
+export const trackDesktopAppOpened = () => {
+  if (didTrackDesktopAppOpened) {
+    return;
+  }
+
+  didTrackDesktopAppOpened = true;
+
+  void (async () => {
+    const desktopRuntimeInfo = await window.molttree.readDesktopRuntimeInfo();
+
+    trackDesktopAction({
+      eventName: "desktop_app_opened",
+      properties: {
+        platform: desktopRuntimeInfo.platform,
+        is_packaged: desktopRuntimeInfo.isPackaged,
+      },
+    });
+  })().catch((error) => {
+    console.error("Failed to track desktop app open.", error);
   });
 };

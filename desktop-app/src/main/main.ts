@@ -793,6 +793,13 @@ ipcMain.handle("analytics:readInstallId", async () => {
   });
 });
 
+ipcMain.handle("desktop:readRuntimeInfo", () => {
+  return {
+    platform: process.platform,
+    isPackaged: app.isPackaged,
+  };
+});
+
 ipcMain.handle("appUpdate:readStatus", () => {
   return appUpdateController.readStatus();
 });

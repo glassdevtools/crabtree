@@ -48,6 +48,9 @@ const api: MoltTreeApi = {
   readAnalyticsInstallId: async () => {
     return await ipcRenderer.invoke("analytics:readInstallId");
   },
+  readDesktopRuntimeInfo: async () => {
+    return await ipcRenderer.invoke("desktop:readRuntimeInfo");
+  },
   readAppUpdateStatus: async () => {
     return await ipcRenderer.invoke("appUpdate:readStatus");
   },

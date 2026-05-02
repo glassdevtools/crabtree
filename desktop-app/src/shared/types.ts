@@ -190,6 +190,11 @@ export type DashboardReadRequest = {
   repoRoot: string | null;
 };
 
+export type DesktopRuntimeInfo = {
+  platform: string;
+  isPackaged: boolean;
+};
+
 export type AppUpdateStatus =
   | { type: "unavailable" }
   | { type: "idle" }
@@ -205,6 +210,7 @@ export type MoltTreeApi = {
   ) => Promise<DashboardData | null>;
   readDashboardAfterGitMutation: () => Promise<DashboardData>;
   readAnalyticsInstallId: () => Promise<string>;
+  readDesktopRuntimeInfo: () => Promise<DesktopRuntimeInfo>;
   readAppUpdateStatus: () => Promise<AppUpdateStatus>;
   watchAppUpdateStatus: (
     onStatusChange: (appUpdateStatus: AppUpdateStatus) => void,
