@@ -77,7 +77,7 @@ const faqItems = [
   {
     question: "What are the core features?",
     answer:
-      "MoltTree is a Git visualizer that shows you where your worktrees are (others don't), suggests actions to take like commit/merge/push, and shows you the commit each chat lives on.",
+      "MoltTree is a Git visualizer that shows you where your worktrees are (others don't), suggests actions to take like commit/merge/push, and shows you the commit that each chat lives on.",
   },
   {
     question: "How should I use it?",
