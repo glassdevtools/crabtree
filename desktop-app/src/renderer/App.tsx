@@ -2643,6 +2643,13 @@ const CommitHistoryRow = ({
     row.isCommitRow ||
     rowRefs.some((ref) => readIsHeadRef(ref)) ||
     worktreesForRow.length > 0;
+  const branchPointerSourcePath = rowRefs.some((ref) => readIsHeadRef(ref))
+    ? mainWorktreePath
+    : readBranchPointerRowPath({
+      row,
+      repoRoot,
+      worktrees,
+    });
 
   return (
     <div
@@ -2813,11 +2820,7 @@ const CommitHistoryRow = ({
             commitSha={commit.sha}
             commitShortSha={commit.shortSha}
             commitSubject={commit.subject}
-            branchPointerSourcePath={readBranchPointerRowPath({
-              row,
-              repoRoot,
-              worktrees,
-            })}
+            branchPointerSourcePath={branchPointerSourcePath}
             deleteWarningMessageOfBranch={deleteWarningMessageOfBranch}
             deleteWarningMessageOfTag={deleteWarningMessageOfTag}
             shouldBlockDeleteOfBranch={shouldBlockDeleteOfBranch}
