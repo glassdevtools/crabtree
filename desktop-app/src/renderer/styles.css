@@ -1225,10 +1225,6 @@ textarea,
   color: #b4bcc8;
 }
 
-.commit-graph-merge-icon {
-  transform: rotate(45deg);
-}
-
 .commit-thread-group {
   position: relative;
   min-height: 18px;

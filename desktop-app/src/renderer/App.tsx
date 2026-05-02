@@ -11,7 +11,7 @@ import {
 import { GoDotFill } from "react-icons/go";
 import {
   LuCheck,
-  LuCircleArrowUp,
+  LuCornerRightUp,
   LuGitBranchPlus,
   LuGitCommitHorizontal,
   LuGitPullRequestArrow,
@@ -2526,22 +2526,17 @@ const CommitHistoryRow = ({
         title: actionThreadGroup.cwd,
       }
       : null;
-  const localOnlyBranchSyncChanges = branchSyncChanges.filter(
+  const pushableBranchSyncChanges = branchSyncChanges.filter(
     (branchSyncChange) =>
       branchSyncChange.gitRefType === "branch" &&
       branchSyncChange.localSha !== null &&
-      branchSyncChange.originSha === null,
+      branchSyncChange.localSha !== branchSyncChange.originSha,
   );
-  const shouldShowBranchPushAction = localOnlyBranchSyncChanges.some(
+  const hasPushableBranchSyncChangeOnRow = pushableBranchSyncChanges.some(
       (branchSyncChange) =>
         branchSyncChange.localSha === commit.sha &&
         rowLocalBranches.includes(branchSyncChange.name),
   );
-  const branchPushActionTitle =
-    localOnlyBranchSyncChanges.length === 1 &&
-    localOnlyBranchSyncChanges[0] !== undefined
-      ? `Push ${localOnlyBranchSyncChanges[0].name} to origin`
-      : `Push ${localOnlyBranchSyncChanges.length} branches to origin`;
   const mergeBranch =
     currentBranch === null || !row.isCommitRow || isHeadRow
       ? null
@@ -2576,6 +2571,12 @@ const CommitHistoryRow = ({
 
   const shouldShowGraphThreadActions =
     actionThreadGroup !== null && shouldShowActionChangeCount;
+  const shouldShowBranchPushAction =
+    hasPushableBranchSyncChangeOnRow &&
+    !shouldShowActionCommit &&
+    actionBranchCreateTarget === null &&
+    mergeBranch === null &&
+    createBranchToMergeTarget === null;
   const shouldShowGraphActions =
     shouldShowGraphThreadActions ||
     (row.isCommitRow &&
@@ -2680,7 +2681,7 @@ const CommitHistoryRow = ({
               </div>
             ) : null}
             {shouldShowBranchPushAction ? (
-              <TitleTooltip title={branchPushActionTitle}>
+              <TitleTooltip title="Push">
                 <Button
                   className="commit-branch-push-action"
                   variant="ghost"
@@ -2689,7 +2690,7 @@ const CommitHistoryRow = ({
                   onMouseDown={(event) => event.stopPropagation()}
                   onDoubleClick={(event) => event.stopPropagation()}
                   onClick={(event) =>
-                    openBranchPushModal(event, localOnlyBranchSyncChanges)
+                    openBranchPushModal(event, pushableBranchSyncChanges)
                   }
                 >
                   <CircleArrowUp
@@ -2739,8 +2740,7 @@ const CommitHistoryRow = ({
                       openBranchMergeModal(event, mergeBranch)
                     }
                   >
-                    <LuCircleArrowUp
-                      className="commit-graph-merge-icon"
+                    <LuCornerRightUp
                       size={COMMIT_GRAPH_ACTION_ICON_SIZE}
                       strokeWidth={COMMIT_GRAPH_ACTION_ICON_STROKE_WIDTH}
                     />
