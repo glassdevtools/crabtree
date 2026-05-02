@@ -31,10 +31,10 @@ export const createSocialImage = async () => {
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        gap: 42,
-        background: "#f7f8f5",
+        gap: 18,
+        background: "#ffffff",
         color: "#101410",
-        padding: "54px 58px",
+        padding: "62px 66px",
         fontFamily:
           'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       }}
@@ -72,51 +72,10 @@ export const createSocialImage = async () => {
             fontWeight: 850,
             lineHeight: 1.02,
             letterSpacing: 0,
+            paddingLeft: 16,
           }}
         >
           Easily merge your Codex worktrees.
-        </div>
-        <div
-          style={{
-            display: "flex",
-            gap: 10,
-            fontSize: 19,
-            fontWeight: 800,
-          }}
-        >
-          <div
-            style={{
-              border: "1px solid #d5b55f",
-              borderRadius: 5,
-              background: "#fff4cf",
-              color: "#101410",
-              padding: "8px 14px",
-            }}
-          >
-            Chats
-          </div>
-          <div
-            style={{
-              border: "1px solid #aeb9c7",
-              borderRadius: 5,
-              background: "#eaf1ff",
-              color: "#101410",
-              padding: "8px 14px",
-            }}
-          >
-            Branches
-          </div>
-          <div
-            style={{
-              border: "1px solid #aeb9c7",
-              borderRadius: 5,
-              background: "#eef0f3",
-              color: "#101410",
-              padding: "8px 14px",
-            }}
-          >
-            Worktrees
-          </div>
         </div>
       </div>
       <img
