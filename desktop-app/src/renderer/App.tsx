@@ -136,7 +136,6 @@ const UNFOCUSED_ERROR_TOAST_DURATION_MS = Infinity;
 const USER_GIT_UPDATE_TOAST_ID_PREFIX = "user-git-update";
 const GITHUB_REPOSITORY_URL = packageInfo.repository.url.replace(/\.git$/, "");
 console.log("[MoltTree renderer]", { version: packageInfo.version });
-const MERGE_BRANCH_BUTTON_TITLE = "Merge this into HEAD";
 const CHECKED_OUT_BY_WORKTREE_MESSAGE =
   "This branch is checked out in a worktree. Delete the worktree or switch its branch first.";
 const COMMIT_GRAPH_ACTION_ICON_SIZE = 10;
@@ -255,7 +254,7 @@ const readBranchSyncActionText = (
     case "push":
       return {
         title: "Push",
-        message: "Push local branch and tag changes to origin?",
+        message: "Push local tag changes to origin?",
         buttonText: "Push",
         loadingDescription: "Pushing",
         successMessage: "Successfully pushed to origin.",
@@ -263,7 +262,7 @@ const readBranchSyncActionText = (
     case "revert":
       return {
         title: "Sync",
-        message: "Revert local branch and tag changes so they match origin?",
+        message: "Revert local tag changes so they match origin?",
         buttonText: "Revert",
         loadingDescription: "Reverting",
         successMessage: "Successfully synced with origin.",
@@ -284,11 +283,11 @@ const readBranchSyncChangeShaText = ({
     action === "push" ? branchSyncChange.localSha : branchSyncChange.originSha;
 
   if (oldSha === null && newSha !== null) {
-    return "created";
+    return "create";
   }
 
   if (oldSha !== null && newSha === null) {
-    return "deleted";
+    return "delete";
   }
 
   return `${oldSha?.slice(0, 7) ?? "none"} -> ${newSha?.slice(0, 7) ?? "none"}`;
@@ -756,6 +755,7 @@ type ChangeSummaryTarget = {
 
 type BranchMergeConfirmation = {
   branch: string;
+  targetBranch: string;
   preview: GitMergePreview;
 };
 
@@ -1720,7 +1720,7 @@ const BranchTags = ({
         const originBranchTooltip =
           originBranchName === null
             ? null
-            : `${originBranchName} is here on origin, and somewhere else locally.`;
+            : `${originBranchName} is here on origin, but not here locally.`;
         const deleteWarningMessage = isTag
           ? (deleteWarningMessageOfTag[cleanName] ?? null)
           : (deleteWarningMessageOfBranch[refName] ?? null);
@@ -2486,9 +2486,9 @@ const CommitHistoryRow = ({
       branchSyncChange.localSha !== branchSyncChange.originSha,
   );
   const hasPushableBranchSyncChangeOnRow = pushableBranchSyncChanges.some(
-      (branchSyncChange) =>
-        branchSyncChange.localSha === commit.sha &&
-        rowLocalBranches.includes(branchSyncChange.name),
+    (branchSyncChange) =>
+      branchSyncChange.localSha === commit.sha &&
+      rowLocalBranches.includes(branchSyncChange.name),
   );
   const mergeBranch =
     currentBranch === null || !row.isCommitRow || isHeadRow
@@ -2522,6 +2522,10 @@ const CommitHistoryRow = ({
       "Before merging, resolve your changes";
   }
 
+  const mergeBranchButtonTitle =
+    mergeBranch === null || currentBranch === null
+      ? ""
+      : `Merge this into ${currentBranch}`;
   const shouldShowGraphThreadActions =
     actionThreadGroup !== null && shouldShowActionChangeCount;
   const shouldShowBranchPushAction =
@@ -2675,7 +2679,7 @@ const CommitHistoryRow = ({
               <TitleTooltip
                 title={
                   mergeDisabledReason === null
-                    ? MERGE_BRANCH_BUTTON_TITLE
+                    ? mergeBranchButtonTitle
                     : mergeDisabledReason
                 }
               >
@@ -2685,7 +2689,7 @@ const CommitHistoryRow = ({
                     variant="ghost"
                     size="icon-xs"
                     type="button"
-                    aria-label={MERGE_BRANCH_BUTTON_TITLE}
+                    aria-label={mergeBranchButtonTitle}
                     disabled={mergeDisabledReason !== null}
                     onMouseDown={(event) => event.stopPropagation()}
                     onDoubleClick={(event) => event.stopPropagation()}
@@ -4758,12 +4762,20 @@ const CommitHistory = ({
     event.preventDefault();
     event.stopPropagation();
 
+    if (currentBranch === null) {
+      return;
+    }
+
     try {
       const preview = await window.molttree.previewGitMerge({
         repoRoot,
         branch,
       });
-      setBranchMergeConfirmation({ branch, preview });
+      setBranchMergeConfirmation({
+        branch,
+        targetBranch: currentBranch,
+        preview,
+      });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to preview merge.";
@@ -4987,7 +4999,7 @@ const CommitHistory = ({
 
     branchPushConfirmationDescription =
       branchPushConfirmation.branchSyncChanges.length === 1 &&
-      branchSyncChange !== undefined ? (
+        branchSyncChange !== undefined ? (
         <span className="dialog-description-inline">
           Push{" "}
           <GitRefModalBadge
@@ -5441,7 +5453,12 @@ const CommitHistory = ({
                   gitRefType="branch"
                   name={branchMergeConfirmation.branch}
                 />{" "}
-                into HEAD?
+                into{" "}
+                <GitRefModalBadge
+                  gitRefType="branch"
+                  name={branchMergeConfirmation.targetBranch}
+                />
+                ?
               </span>
             )
           }
@@ -5533,7 +5550,7 @@ const CommitHistory = ({
           description={
             headMoveConfirmation === null
               ? ""
-              : `Are you sure you want to move HEAD to checkout to ${headMoveConfirmation.targetText}?`
+              : `Are you sure you want to checkout to ${headMoveConfirmation.targetText}?`
           }
           confirmButtonText="Move HEAD"
           confirmButtonVariant="default"
