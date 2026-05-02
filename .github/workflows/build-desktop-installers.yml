@@ -237,11 +237,24 @@ jobs:
             exit 1
           fi
 
+          release_notes_path="$RUNNER_TEMP/release-notes.md"
+          cat > "$release_notes_path" <<EOF
+          MoltTree ${PACKAGE_VERSION}
+
+          Go to our website: [MoltTree.app](https://molttree.app)
+
+          | OS | Download |
+          | --- | --- |
+          | Mac | [Download for Mac](https://github.com/glassdevtools/molttree/releases/download/${RELEASE_TAG}/MoltTree.dmg) |
+          | Windows | Coming soon |
+          | Linux | Coming soon |
+          EOF
+
           gh release create "$RELEASE_TAG" "${release_assets[@]}" \
             --verify-tag \
             --target "$GITHUB_SHA" \
             --title "$RELEASE_TAG" \
-            --notes "MoltTree ${PACKAGE_VERSION}"
+            --notes-file "$release_notes_path"
         env:
           GH_TOKEN: ${{ github.token }}
           PACKAGE_VERSION: ${{ needs.read-package-release-status.outputs.package_version }}
