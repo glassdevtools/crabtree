@@ -1,6 +1,14 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
-import { platform } from "node:os";
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  renameSync,
+  statSync,
+} from "node:fs";
+import { platform, tmpdir } from "node:os";
+import { join } from "node:path";
 import readline from "node:readline";
 
 type PendingRequest = {
@@ -27,6 +35,8 @@ export type AppServerClient = {
 
 const CODEX_DARWIN_COMMAND_PATH =
   "/Applications/Codex.app/Contents/Resources/codex";
+// TODO: AI-PICKED-VALUE: The temp cache directory lets dev and packaged builds reuse one copied Codex binary per installed app version.
+const CODEX_DARWIN_COMMAND_CACHE_DIR = join(tmpdir(), "molttree-codex-cli");
 // TODO: AI-PICKED-VALUE: Ten seconds keeps startup bounded while giving Codex app-server enough time to answer normal requests.
 const APP_SERVER_REQUEST_TIMEOUT_MS = 10000;
 
@@ -38,7 +48,23 @@ const isObject = (value: unknown): value is { [key: string]: unknown } => {
 
 const readCodexCommand = () => {
   if (platform() === "darwin" && existsSync(CODEX_DARWIN_COMMAND_PATH)) {
-    return CODEX_DARWIN_COMMAND_PATH;
+    const codexCommandStat = statSync(CODEX_DARWIN_COMMAND_PATH);
+    const codexCommandCopyPath = join(
+      CODEX_DARWIN_COMMAND_CACHE_DIR,
+      `codex-${codexCommandStat.size}-${Math.trunc(codexCommandStat.mtimeMs)}`,
+    );
+
+    if (!existsSync(codexCommandCopyPath)) {
+      const codexCommandCopyPathForProcess = `${codexCommandCopyPath}.${process.pid}.tmp`;
+
+      // Some macOS installs can hang before the bundled Codex CLI reaches its own startup code when it runs from inside the app bundle.
+      mkdirSync(CODEX_DARWIN_COMMAND_CACHE_DIR, { recursive: true });
+      copyFileSync(CODEX_DARWIN_COMMAND_PATH, codexCommandCopyPathForProcess);
+      chmodSync(codexCommandCopyPathForProcess, 0o755);
+      renameSync(codexCommandCopyPathForProcess, codexCommandCopyPath);
+    }
+
+    return codexCommandCopyPath;
   }
 
   return "codex";
