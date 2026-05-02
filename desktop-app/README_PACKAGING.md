@@ -5,7 +5,7 @@
 MoltTree uses Electron Builder for macOS packaging. The packaging flow is:
 
 1. Build the Electron app into `out/`.
-2. Regenerate the legacy DMG icon and DMG background assets.
+2. Regenerate the legacy DMG assets from checked-in packaging assets.
 3. Build universal macOS `dist/MoltTree-<version>-universal.dmg` and `dist/MoltTree-<version>-universal.zip`.
 4. Code sign and notarize when signing and Apple credentials are available.
 
@@ -38,10 +38,10 @@ The first Windows target is x64. Add more Windows architectures only after decid
 
 ## Icons
 
-Keep the checked-in macOS icon source image here:
+Keep the checked-in macOS app icon package here:
 
 ```text
-packaging/icons/app-icon-source.png
+packaging/macos/icon.icon
 ```
 
 Regenerate icons with:
