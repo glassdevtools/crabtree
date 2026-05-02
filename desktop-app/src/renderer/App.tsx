@@ -339,7 +339,7 @@ const readBranchSyncChangeSummary = ({
     return (
       <>
         <strong className="branch-tag-change-action-delete">deleted</strong>{" "}
-        from here
+        here
       </>
     );
   }
