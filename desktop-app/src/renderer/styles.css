@@ -1381,20 +1381,6 @@ textarea,
   font-size: 11px;
 }
 
-.warning-band {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 9px 18px;
-  border-bottom: 1px solid #d9dee6;
-  font-size: 13px;
-}
-
-.warning-band {
-  background: #fff4cf;
-  color: #624a00;
-}
-
 .empty-state {
   min-height: 160px;
   display: flex;

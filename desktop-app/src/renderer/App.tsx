@@ -136,6 +136,7 @@ const DASHBOARD_REFRESH_INTERVAL_MS = 1000;
 const TOAST_POSITION = "bottom-center";
 const UNFOCUSED_ERROR_TOAST_DURATION_MS = Infinity;
 const USER_GIT_UPDATE_TOAST_ID_PREFIX = "user-git-update";
+const DASHBOARD_WARNING_TOAST_ID_PREFIX = "dashboard-warning";
 const GITHUB_REPOSITORY_URL = packageInfo.repository.url.replace(/\.git$/, "");
 console.log("[MoltTree renderer]", { version: packageInfo.version });
 const CHECKED_OUT_BY_WORKTREE_MESSAGE =
@@ -5781,6 +5782,15 @@ const MoltTreeDesktopApp = () => {
   const pendingDashboardRefreshRepoRootRef = useRef<string | null>(null);
   const dashboardRefreshPromiseRef = useRef<Promise<void> | null>(null);
   const dashboardPaintResolversRef = useRef<(() => void)[]>([]);
+  const dashboardWarningToastIdOfWarningRef = useRef<{
+    [warning: string]: string | number;
+  }>({});
+  const isCurrentDashboardWarningOfWarningRef = useRef<{
+    [warning: string]: boolean;
+  }>({});
+  const isDismissedDashboardWarningOfWarningRef = useRef<{
+    [warning: string]: boolean;
+  }>({});
   const codexThreadStatusOfIdRef = useRef<{
     [threadId: string]: CodexThreadStatusChange["status"];
   }>({});
@@ -5812,6 +5822,8 @@ const MoltTreeDesktopApp = () => {
 
     return dashboardData.repos[0] ?? null;
   }, [dashboardData, selectedRepoRoot]);
+  const dashboardWarnings = dashboardData === null ? [] : dashboardData.warnings;
+  const dashboardWarningsKey = dashboardWarnings.join("\n");
 
   const applyDashboardData = useCallback((nextDashboardData: DashboardData) => {
     let nextSelectedRepoRoot = selectedRepoRootRef.current;
@@ -6217,6 +6229,73 @@ const MoltTreeDesktopApp = () => {
       description: dashboardErrorMessage,
     });
   }, [dashboardErrorMessage]);
+  useEffect(() => {
+    const dashboardWarningToastIdOfWarning =
+      dashboardWarningToastIdOfWarningRef.current;
+    const isDismissedDashboardWarningOfWarning =
+      isDismissedDashboardWarningOfWarningRef.current;
+    const isCurrentDashboardWarningOfWarning: { [warning: string]: boolean } =
+      {};
+
+    for (const warning of dashboardWarnings) {
+      isCurrentDashboardWarningOfWarning[warning] = true;
+    }
+
+    isCurrentDashboardWarningOfWarningRef.current =
+      isCurrentDashboardWarningOfWarning;
+
+    for (const warning of Object.keys(dashboardWarningToastIdOfWarning)) {
+      if (isCurrentDashboardWarningOfWarning[warning] === true) {
+        continue;
+      }
+
+      toast.dismiss(dashboardWarningToastIdOfWarning[warning]);
+      delete dashboardWarningToastIdOfWarning[warning];
+    }
+
+    for (const warning of Object.keys(isDismissedDashboardWarningOfWarning)) {
+      if (isCurrentDashboardWarningOfWarning[warning] === true) {
+        continue;
+      }
+
+      delete isDismissedDashboardWarningOfWarning[warning];
+    }
+
+    for (const warning of dashboardWarnings) {
+      if (
+        dashboardWarningToastIdOfWarning[warning] !== undefined ||
+        isDismissedDashboardWarningOfWarning[warning] === true
+      ) {
+        continue;
+      }
+
+      const toastId = `${DASHBOARD_WARNING_TOAST_ID_PREFIX}:${warning}`;
+      dashboardWarningToastIdOfWarning[warning] = toast.warning(
+        "Dashboard warning",
+        {
+          closeButton: true,
+          description: warning,
+          duration: Infinity,
+          id: toastId,
+          onDismiss: () => {
+            delete dashboardWarningToastIdOfWarning[warning];
+
+            if (
+              isCurrentDashboardWarningOfWarningRef.current[warning] !== true
+            ) {
+              return;
+            }
+
+            isDismissedDashboardWarningOfWarning[warning] = true;
+          },
+          onAutoClose: () => {
+            delete dashboardWarningToastIdOfWarning[warning];
+          },
+          position: TOAST_POSITION,
+        },
+      );
+    }
+  }, [dashboardWarningsKey]);
 
   const readVisibleBranchSyncChangesForRepo = (repoRoot: string) => {
     const repo =
@@ -6696,14 +6775,6 @@ const MoltTreeDesktopApp = () => {
             </dl>
           </DialogContent>
         </Dialog>
-
-        {dashboardData.warnings.length > 0 && (
-          <Alert className="warning-band">
-            {dashboardData.warnings.map((warning) => (
-              <AlertDescription key={warning}>{warning}</AlertDescription>
-            ))}
-          </Alert>
-        )}
 
         <div className="content-shell">
           <div className="repo-list">
