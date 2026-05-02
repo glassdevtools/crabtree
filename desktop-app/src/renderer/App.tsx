@@ -352,7 +352,7 @@ const readBranchSyncChangeSummary = ({
     if (summaryMode === "default") {
       return (
         <>
-          <strong className="branch-tag-change-action-create">created</strong>{" "}
+          <strong className="branch-tag-change-action-create">create</strong>{" "}
           on {newSha.slice(0, 7)}
         </>
       );
@@ -360,7 +360,7 @@ const readBranchSyncChangeSummary = ({
 
     return (
       <>
-        <strong className="branch-tag-change-action-create">created</strong>
+        <strong className="branch-tag-change-action-create">create</strong>
       </>
     );
   }
@@ -369,7 +369,7 @@ const readBranchSyncChangeSummary = ({
     if (summaryMode === "default") {
       return (
         <>
-          <strong className="branch-tag-change-action-delete">deleted</strong>{" "}
+          <strong className="branch-tag-change-action-delete">delete</strong>{" "}
           from {oldSha.slice(0, 7)}
         </>
       );
@@ -377,16 +377,16 @@ const readBranchSyncChangeSummary = ({
 
     return (
       <>
-        <strong className="branch-tag-change-action-delete">deleted</strong>
+        <strong className="branch-tag-change-action-delete">delete</strong>
       </>
     );
   }
 
-  if (summaryMode === "rowPush") {
-    return "moved here";
+  if (oldSha !== null && newSha !== null) {
+    return `move ${oldSha.slice(0, 7)} to ${newSha.slice(0, 7)}`;
   }
 
-  return `moved to ${newSha?.slice(0, 7) ?? "none"}`;
+  return null;
 };
 
 const readAppUpdateButtonText = (appUpdateStatus: AppUpdateStatus) => {
