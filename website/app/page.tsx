@@ -16,7 +16,7 @@ const featureItems = [
   {
     title: "Easily merge your worktrees",
     descriptionLines: [
-      "Codex makes it easy to spin up 100 worktrees, but merging them back together is hard. MoltTree was built to fix that. Commit, branch, merge, update main, and push without leaving the app.",
+      "Codex lets you easily spin up 100 worktrees, but merging them back together is hard. MoltTree was built to fix that. Commit, branch, merge, update main, and push without leaving the app.",
     ],
   },
   {
@@ -82,7 +82,7 @@ const faqItems = [
   {
     question: "How should I use it?",
     answer: [
-      "Start a bunch of Codex worktrees. When you're ready to merge them, open MoltTree and switch to a branch by double clicking. Follow the suggestions in the Graph column to branch, commit, merge, and push.",
+      "Start a bunch of chats on worktrees in Codex. When you're ready to merge them, open MoltTree and switch to a branch by double clicking. Follow the suggestions in the Graph column to branch, commit, merge, and push.",
     ],
   },
   {
