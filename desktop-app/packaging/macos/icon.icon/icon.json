@@ -1,8 +1,8 @@
 {
   "fill" : {
     "linear-gradient" : [
-      "srgb:1.00000,1.00000,1.00000,1.00000",
-      "srgb:1.00000,1.00000,1.00000,1.00000"
+      "extended-gray:1.00000,1.00000",
+      "extended-gray:1.00000,1.00000"
     ],
     "orientation" : {
       "start" : {
@@ -19,8 +19,15 @@
     {
       "layers" : [
         {
-          "image-name" : "default-app-icon.png",
-          "name" : "default-app-icon"
+          "image-name" : "77d361df-b486-4c7a-ba2c-534dd6441763.png",
+          "name" : "77d361df-b486-4c7a-ba2c-534dd6441763",
+          "position" : {
+            "scale" : 0.83,
+            "translation-in-points" : [
+              0.8299999999999272,
+              -1.6599999999999682
+            ]
+          }
         }
       ],
       "shadow" : {

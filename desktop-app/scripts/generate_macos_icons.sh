@@ -4,7 +4,8 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-DMG_ICON_SOURCE_PATH="packaging/macos/icon.icon/Assets/default-app-icon.png"
+DMG_ICON_IMAGE_NAME="$(node -e 'process.stdout.write(require("./packaging/macos/icon.icon/icon.json").groups[0].layers[0]["image-name"])')"
+DMG_ICON_SOURCE_PATH="packaging/macos/icon.icon/Assets/$DMG_ICON_IMAGE_NAME"
 DMG_BACKGROUND_SOURCE_PATH="packaging/macos/assets/dmg-background.svg"
 GENERATED_ICON_DIR="packaging/macos/generated-icons"
 ICONSET_DIR="$GENERATED_ICON_DIR/icon.iconset"
