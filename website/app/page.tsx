@@ -159,7 +159,7 @@ const HomePage = () => {
               <span>MoltTree</span>
             </h1>
             <p className="heroSubtext">
-              Merge your Codex worktrees together with ease. MoltTree gives you
+              Easily merge your Codex worktrees together. MoltTree gives you
               power tools to manage your chats, worktrees, and branches.
             </p>
 

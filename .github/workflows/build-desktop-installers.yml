@@ -239,15 +239,15 @@ jobs:
 
           release_notes_path="$RUNNER_TEMP/release-notes.md"
           cat > "$release_notes_path" <<EOF
-          MoltTree ${PACKAGE_VERSION}
+          MoltTree ${PACKAGE_VERSION}.
 
-          Go to our website: [MoltTree.app](https://molttree.app)
+          Website: [MoltTree](https://molttree.app)
 
           | OS | Download |
           | --- | --- |
           | Mac | [Download for Mac](https://github.com/glassdevtools/molttree/releases/download/${RELEASE_TAG}/MoltTree.dmg) |
-          | Windows | Coming soon |
-          | Linux | Coming soon |
+          | Windows | Coming soon... |
+          | Linux | Coming soon... |
           EOF
 
           gh release create "$RELEASE_TAG" "${release_assets[@]}" \
