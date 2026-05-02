@@ -16,7 +16,7 @@ const featureItems = [
   {
     title: "Easily merge your worktrees",
     descriptionLines: [
-      "Codex lets you easily spin up 100 worktrees, but merging them back together is hard. MoltTree was built to fix that. Commit, branch, merge, update main, and push without leaving the app.",
+      "Codex lets you spin up 100 worktrees easily, but merging them back together is hard. MoltTree was built to fix that. Commit, branch, merge, update main, and push without leaving the app.",
     ],
   },
   {
