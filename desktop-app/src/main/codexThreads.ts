@@ -1,3 +1,4 @@
+import { openSync, readSync, statSync, closeSync, readFileSync } from "node:fs";
 import type {
   CodexGitInfo,
   CodexThread,
@@ -12,6 +13,16 @@ const MAX_THREAD_COUNT = 1000;
 const THREAD_PAGE_SIZE = 200;
 
 // Codex app-server is the only thread source because it owns current titles, cwd values, and running statuses.
+// Rollout task markers fill the gap where another Codex process owns the running turn and app-server reports the thread as not loaded.
+
+// The rollout reader scans each file once, then only reads appended bytes while the dashboard polls.
+type RolloutTaskStatusCache = {
+  readSize: number;
+  status: CodexThreadStatus | null;
+};
+
+const rolloutTaskStatusCacheOfPath: { [path: string]: RolloutTaskStatusCache } =
+  {};
 
 const isObject = (value: unknown): value is { [key: string]: unknown } => {
   return typeof value === "object" && value !== null;
@@ -37,6 +48,170 @@ const readNullableString = (value: unknown) => {
   }
 
   return null;
+};
+
+const readCompleteRolloutText = ({
+  path,
+  start,
+  end,
+}: {
+  path: string;
+  start: number;
+  end: number;
+}) => {
+  if (start === 0) {
+    const text = readFileSync(path, "utf8");
+    const lastNewlineIndex = text.lastIndexOf("\n");
+
+    if (lastNewlineIndex === -1) {
+      return { readSize: 0, text: "" };
+    }
+
+    const completeText = text.slice(0, lastNewlineIndex + 1);
+
+    return {
+      readSize: Buffer.byteLength(completeText),
+      text: completeText,
+    };
+  }
+
+  const fileSize = end - start;
+  const buffer = Buffer.alloc(fileSize);
+  const file = openSync(path, "r");
+
+  try {
+    const bytesRead = readSync(file, buffer, 0, fileSize, start);
+    const text = buffer.subarray(0, bytesRead).toString("utf8");
+    const lastNewlineIndex = text.lastIndexOf("\n");
+
+    if (lastNewlineIndex === -1) {
+      return { readSize: start, text: "" };
+    }
+
+    const completeText = text.slice(0, lastNewlineIndex + 1);
+
+    return {
+      readSize: start + Buffer.byteLength(completeText),
+      text: completeText,
+    };
+  } finally {
+    closeSync(file);
+  }
+};
+
+const readCodexThreadStatusFromRolloutLine = (
+  line: string,
+): CodexThreadStatus | null => {
+  let value: unknown;
+
+  try {
+    value = JSON.parse(line);
+  } catch {
+    return null;
+  }
+
+  if (!isObject(value) || value.type !== "event_msg") {
+    return null;
+  }
+
+  const payload = value.payload;
+
+  if (!isObject(payload)) {
+    return null;
+  }
+
+  switch (payload.type) {
+    case "task_started":
+      return { type: "active", activeFlags: [] };
+    case "task_complete":
+      return { type: "idle" };
+    default:
+      return null;
+  }
+};
+
+const readLatestCodexThreadStatusFromRolloutText = ({
+  text,
+  currentStatus,
+}: {
+  text: string;
+  currentStatus: CodexThreadStatus | null;
+}) => {
+  let status = currentStatus;
+
+  for (const line of text.split("\n")) {
+    if (line.length === 0) {
+      continue;
+    }
+
+    const lineStatus = readCodexThreadStatusFromRolloutLine(line);
+
+    if (lineStatus !== null) {
+      status = lineStatus;
+    }
+  }
+
+  return status;
+};
+
+const readLatestCodexThreadStatusFromRolloutPath = (path: string | null) => {
+  if (path === null) {
+    return null;
+  }
+
+  try {
+    const stat = statSync(path);
+    const cachedStatus = rolloutTaskStatusCacheOfPath[path];
+    const start =
+      cachedStatus !== undefined && cachedStatus.readSize <= stat.size
+        ? cachedStatus.readSize
+        : 0;
+    const currentStatus = start === 0 ? null : (cachedStatus?.status ?? null);
+    const rolloutText = readCompleteRolloutText({
+      path,
+      start,
+      end: stat.size,
+    });
+    const status = readLatestCodexThreadStatusFromRolloutText({
+      text: rolloutText.text,
+      currentStatus,
+    });
+
+    rolloutTaskStatusCacheOfPath[path] = {
+      readSize: rolloutText.readSize,
+      status,
+    };
+
+    return status;
+  } catch {
+    return null;
+  }
+};
+
+const mergeCodexThreadStatusWithRolloutStatus = ({
+  appServerStatus,
+  rolloutStatus,
+}: {
+  appServerStatus: CodexThreadStatus;
+  rolloutStatus: CodexThreadStatus | null;
+}) => {
+  if (appServerStatus.type === "active") {
+    return appServerStatus;
+  }
+
+  if (rolloutStatus === null) {
+    return appServerStatus;
+  }
+
+  if (rolloutStatus.type === "active") {
+    return rolloutStatus;
+  }
+
+  if (appServerStatus.type === "systemError") {
+    return appServerStatus;
+  }
+
+  return rolloutStatus;
 };
 
 const readUnixTime = ({
@@ -229,12 +404,14 @@ export const readCodexThreadFromAppServerValue = (value: unknown) => {
     return null;
   }
 
+  const path = readNullableString(value.path);
+  const appServerStatus = convertCodexThreadStatus(value.status);
   const thread: CodexThread = {
     id: value.id,
     name: readNullableString(value.name),
     preview: readString({ value: value.preview, fallback: "" }),
     cwd: readString({ value: value.cwd, fallback: "" }),
-    path: readNullableString(value.path),
+    path,
     source: readString({ value: value.source, fallback: "unknown" }),
     modelProvider: readString({
       value: value.modelProvider,
@@ -246,7 +423,10 @@ export const readCodexThreadFromAppServerValue = (value: unknown) => {
     createdAt: readUnixTime({ value: value.createdAt, fallback: 0 }),
     updatedAt: readUnixTime({ value: value.updatedAt, fallback: 0 }),
     archived: value.archived === true,
-    status: convertCodexThreadStatus(value.status),
+    status: mergeCodexThreadStatusWithRolloutStatus({
+      appServerStatus,
+      rolloutStatus: readLatestCodexThreadStatusFromRolloutPath(path),
+    }),
     gitInfo: convertGitInfo(value.gitInfo ?? value.git),
   };
 

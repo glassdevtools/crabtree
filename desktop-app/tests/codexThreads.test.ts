@@ -1,10 +1,30 @@
 import assert from "node:assert/strict";
+import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import {
   convertCodexThreadStatus,
   readCodexThreadFromAppServerValue,
   readCodexThreadStatusChangeFromAppServerNotification,
 } from "../src/main/codexThreads";
+
+const createTempRolloutFile = (text: string) => {
+  const dir = mkdtempSync(join(tmpdir(), "molttree-codex-rollout-"));
+  const path = join(dir, "rollout.jsonl");
+
+  writeFileSync(path, text);
+
+  return { dir, path };
+};
+
+const removeTempRolloutDir = (dir: string) => {
+  rmSync(dir, { recursive: true, force: true });
+};
+
+const createRolloutLine = (value: unknown) => {
+  return `${JSON.stringify(value)}\n`;
+};
 
 test("converts active codex app-server status variants", () => {
   assert.deepEqual(convertCodexThreadStatus("running"), {
@@ -46,6 +66,133 @@ test("reads codex app-server status change notifications", () => {
       status: { type: "idle" },
     },
   );
+});
+
+test("reads active codex rollout task markers", () => {
+  const rolloutFile = createTempRolloutFile(
+    createRolloutLine({ type: "session_meta", payload: {} }) +
+      createRolloutLine({
+        type: "event_msg",
+        payload: { type: "task_started", turn_id: "turn-1" },
+      }) +
+      createRolloutLine({
+        type: "event_msg",
+        payload: { type: "token_count" },
+      }),
+  );
+
+  try {
+    const thread = readCodexThreadFromAppServerValue({
+      id: "active-rollout-thread",
+      preview: "active prompt",
+      cwd: "/repo/active-rollout",
+      path: rolloutFile.path,
+      modelProvider: "openai",
+      status: { type: "notLoaded" },
+    });
+
+    assert.notEqual(thread, null);
+
+    if (thread === null) {
+      return;
+    }
+
+    assert.deepEqual(thread.status, {
+      type: "active",
+      activeFlags: [],
+    });
+  } finally {
+    removeTempRolloutDir(rolloutFile.dir);
+  }
+});
+
+test("updates codex rollout task marker cache when a task completes", () => {
+  const rolloutFile = createTempRolloutFile(
+    createRolloutLine({
+      type: "event_msg",
+      payload: { type: "task_started", turn_id: "turn-1" },
+    }),
+  );
+
+  try {
+    const activeThread = readCodexThreadFromAppServerValue({
+      id: "cached-rollout-thread",
+      preview: "cached prompt",
+      cwd: "/repo/cached-rollout",
+      path: rolloutFile.path,
+      modelProvider: "openai",
+      status: { type: "notLoaded" },
+    });
+
+    appendFileSync(
+      rolloutFile.path,
+      createRolloutLine({
+        type: "event_msg",
+        payload: { type: "task_complete", turn_id: "turn-1" },
+      }),
+    );
+
+    const idleThread = readCodexThreadFromAppServerValue({
+      id: "cached-rollout-thread",
+      preview: "cached prompt",
+      cwd: "/repo/cached-rollout",
+      path: rolloutFile.path,
+      modelProvider: "openai",
+      status: { type: "notLoaded" },
+    });
+
+    assert.notEqual(activeThread, null);
+    assert.notEqual(idleThread, null);
+
+    if (activeThread === null || idleThread === null) {
+      return;
+    }
+
+    assert.deepEqual(activeThread.status, {
+      type: "active",
+      activeFlags: [],
+    });
+    assert.deepEqual(idleThread.status, { type: "idle" });
+  } finally {
+    removeTempRolloutDir(rolloutFile.dir);
+  }
+});
+
+test("keeps active app-server status ahead of completed rollout markers", () => {
+  const rolloutFile = createTempRolloutFile(
+    createRolloutLine({
+      type: "event_msg",
+      payload: { type: "task_started", turn_id: "turn-1" },
+    }) +
+      createRolloutLine({
+        type: "event_msg",
+        payload: { type: "task_complete", turn_id: "turn-1" },
+      }),
+  );
+
+  try {
+    const thread = readCodexThreadFromAppServerValue({
+      id: "app-server-active-thread",
+      preview: "app-server prompt",
+      cwd: "/repo/app-server-active",
+      path: rolloutFile.path,
+      modelProvider: "openai",
+      status: { type: "active", activeFlags: ["waitingOnApproval"] },
+    });
+
+    assert.notEqual(thread, null);
+
+    if (thread === null) {
+      return;
+    }
+
+    assert.deepEqual(thread.status, {
+      type: "active",
+      activeFlags: ["waitingOnApproval"],
+    });
+  } finally {
+    removeTempRolloutDir(rolloutFile.dir);
+  }
 });
 
 test("reads active codex app-server thread values", () => {
