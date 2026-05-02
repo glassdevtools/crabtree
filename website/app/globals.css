@@ -442,6 +442,10 @@ h1.heroTitle {
   background: #ffffff;
 }
 
+.faqSection {
+  background: #f8faf7;
+}
+
 .sectionInner {
   display: grid;
   grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
@@ -537,6 +541,46 @@ h1.heroTitle {
 .questionList li:last-child {
   border-bottom: 0;
   padding-bottom: 0;
+}
+
+/* FAQ list */
+.faqList {
+  display: grid;
+  gap: 20px;
+  max-width: 68ch;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.faqList li {
+  border-bottom: 1px solid #dce4d7;
+  padding-bottom: 20px;
+}
+
+.faqList li:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.faqList details {
+  display: grid;
+  gap: 8px;
+}
+
+.faqList summary {
+  cursor: pointer;
+  color: #101410;
+  font-size: 1.08rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.faqList p {
+  margin: 0;
+  color: #4b5347;
+  font-size: 0.98rem;
+  line-height: 1.55;
 }
 
 /* Feature tokens */

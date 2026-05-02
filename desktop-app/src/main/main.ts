@@ -166,15 +166,6 @@ const readDashboardReadRequest = (value: unknown): DashboardReadRequest => {
   return { repoRoot: value.repoRoot };
 };
 
-const logStartupDiagnostics = () => {
-  console.log("[MoltTree startup]", {
-    version: app.getVersion(),
-    isPackaged: app.isPackaged,
-    execPath: process.execPath,
-    appPath: app.getAppPath(),
-  });
-};
-
 const sendCodexThreadStatusChange = (
   codexThreadStatusChange: CodexThreadStatusChange,
 ) => {
@@ -333,14 +324,7 @@ const startAppServerStatusClient = () => {
     .then(async (nextAppServerClient) => {
       await syncLoadedCodexThreadStatuses(nextAppServerClient);
     })
-    .catch((error) => {
-      console.log("[MoltTree Codex app-server statuses]", {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to sync loaded Codex thread statuses.",
-      });
-    });
+    .catch(() => {});
 };
 
 const dashboardRefreshCoordinator = createDashboardRefreshCoordinator({
@@ -1059,7 +1043,6 @@ ipcMain.handle("git:createPullRequest", async (_event, value: unknown) => {
 });
 
 app.whenReady().then(() => {
-  logStartupDiagnostics();
   createMainWindow();
   appUpdateController.start();
   startAppServerStatusClient();

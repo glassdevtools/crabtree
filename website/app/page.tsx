@@ -73,6 +73,24 @@ const questionItems = [
   </>,
   "And more...",
 ];
+const faqItems = [
+  {
+    question: "What are the core features?",
+    answer:
+      "MoltTree is a Git visualizer that shows you where your worktrees are (others don't), suggests actions to take like commit/merge/push, and shows you the commit that each chat lives on.",
+  },
+  {
+    question: "How should I use it?",
+    answer: [
+      "Start a bunch of Codex worktrees. When you're ready to merge them, open MoltTree and switch to a branch by double clicking. Follow the suggestions in the Graph column to branch, commit, merge, and push.",
+    ],
+  },
+  {
+    question: "Does it only support Codex?",
+    answer:
+      "Yes, right now it relies on Codex to know about your repositories. In the future we may change this and show your chats from other tools.",
+  },
+];
 
 const HomePage = () => {
   return (
@@ -221,6 +239,32 @@ const HomePage = () => {
                 key={`question-${index}`}
               >
                 {questionItem}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      <section
+        className="contentSection faqSection"
+        aria-labelledby="faq-title"
+      >
+        <div className="sectionInner">
+          <div className="sectionHeader">
+            <h2 id="faq-title">FAQs</h2>
+          </div>
+          <ul className="faqList">
+            {faqItems.map((faqItem) => (
+              <li key={faqItem.question}>
+                <details>
+                  <summary>{faqItem.question}</summary>
+                  {(typeof faqItem.answer === "string"
+                    ? [faqItem.answer]
+                    : faqItem.answer
+                  ).map((answerParagraph) => (
+                    <p key={answerParagraph}>{answerParagraph}</p>
+                  ))}
+                </details>
               </li>
             ))}
           </ul>

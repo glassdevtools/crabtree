@@ -260,13 +260,8 @@ const readRepoSeeds = async ({ threads }: { threads: CodexThread[] }) => {
   const repoSeedOfKey: { [key: string]: RepoSeed } = {};
   const threadsOfCwd: { [cwd: string]: CodexThread[] } = {};
   const cwds: string[] = [];
-  let threadsWithCwdCount = 0;
 
   for (const thread of threads) {
-    if (thread.cwd.length > 0) {
-      threadsWithCwdCount += 1;
-    }
-
     let threadsForCwd = threadsOfCwd[thread.cwd];
 
     if (threadsForCwd === undefined) {
@@ -285,48 +280,19 @@ const readRepoSeeds = async ({ threads }: { threads: CodexThread[] }) => {
       const thread = threadsForCwd?.[0];
 
       if (thread === undefined) {
-        return { cwd, threadCount: 0, didCwdExist: false, repoSeed: null };
+        return { cwd, repoSeed: null };
       }
-
-      const didCwdExist = cwd.length > 0 && (await readIsDirectory(cwd));
 
       return {
         cwd,
-        threadCount: threadsForCwd.length,
-        didCwdExist,
         repoSeed: await readRepoSeedForThread({ thread }),
       };
     },
   });
-  let existingCwdCount = 0;
-  let missingCwdCount = 0;
-  let gitRepoCwdCount = 0;
-  let existingNonGitCwdCount = 0;
-  const failedCwdSamples: string[] = [];
 
   for (const repoSeedResult of repoSeedResults) {
     const repoSeed = repoSeedResult.repoSeed;
     const threadsForCwd = threadsOfCwd[repoSeedResult.cwd];
-
-    if (repoSeedResult.didCwdExist) {
-      existingCwdCount += 1;
-    } else if (repoSeedResult.cwd.length > 0) {
-      missingCwdCount += 1;
-    }
-
-    if (repoSeed !== null) {
-      gitRepoCwdCount += 1;
-    } else if (repoSeedResult.didCwdExist) {
-      existingNonGitCwdCount += 1;
-    }
-
-    if (
-      repoSeed === null &&
-      failedCwdSamples.length < 10 &&
-      repoSeedResult.cwd.length > 0
-    ) {
-      failedCwdSamples.push(repoSeedResult.cwd);
-    }
 
     if (repoSeed === null || threadsForCwd === undefined) {
       continue;
@@ -343,18 +309,6 @@ const readRepoSeeds = async ({ threads }: { threads: CodexThread[] }) => {
 
     existingRepoSeed.threadIds.push(...threadIds);
   }
-
-  console.log("[MoltTree diagnostics] repo discovery", {
-    threadCount: threads.length,
-    threadsWithCwdCount,
-    uniqueCwdCount: cwds.length,
-    existingCwdCount,
-    missingCwdCount,
-    gitRepoCwdCount,
-    existingNonGitCwdCount,
-    repoCount: Object.keys(repoSeedOfKey).length,
-    failedCwdSamples,
-  });
 
   return Object.values(repoSeedOfKey);
 };

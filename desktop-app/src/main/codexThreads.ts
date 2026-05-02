@@ -522,22 +522,5 @@ export const readCodexThreads = async (appServerClient: AppServerClient) => {
     }
   }
 
-  console.log("[MoltTree diagnostics] Codex thread source", {
-    source: "app-server",
-    threadCount: threads.length,
-    threadsWithCwdCount: threads.filter((thread) => thread.cwd.length > 0)
-      .length,
-    activeThreadCount: threads.filter(
-      (thread) => thread.status.type === "active",
-    ).length,
-    threadSamples: threads.slice(0, 5).map((thread) => ({
-      id: thread.id,
-      name: thread.name,
-      preview: thread.preview,
-      cwd: thread.cwd,
-      source: thread.source,
-      status: thread.status.type,
-    })),
-  });
   return threads;
 };
