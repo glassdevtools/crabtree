@@ -1128,10 +1128,6 @@ textarea,
   user-select: none;
 }
 
-.commit-ref-has-delete {
-  gap: 3px;
-}
-
 .commit-ref-local {
   --commit-ref-border-color: #acb9ca;
   background: #eaf1ff;
@@ -1182,8 +1178,7 @@ textarea,
 .commit-branch-create-action,
 .commit-branch-push-action,
 .commit-thread-commit-action,
-.commit-graph-merge-action,
-.commit-ref-delete {
+.commit-graph-merge-action {
   width: 14px;
   height: 14px;
   display: inline-flex;
@@ -1194,19 +1189,6 @@ textarea,
   background: transparent;
   color: #8b929c;
   cursor: pointer;
-}
-
-.commit-ref-delete {
-  width: 12px;
-  height: 12px;
-  margin-left: 0;
-  color: var(--commit-ref-border-color);
-  overflow: hidden;
-  transition: color 120ms ease;
-}
-
-.commit-ref-delete:hover {
-  color: #c53a13;
 }
 
 .commit-branch-create-action:hover,

@@ -254,21 +254,19 @@ const readBranchSyncActionText = (
   switch (action) {
     case "push":
       return {
-        title: "Push Branches",
-        message: "Push all your local branches and tags to origin?",
+        title: "Push",
+        message: "Push local branch and tag changes to origin?",
         buttonText: "Push",
         loadingDescription: "Pushing",
-        successMessage:
-          "Successfully pushed all branches and tags to the origin.",
+        successMessage: "Successfully pushed to origin.",
       };
     case "revert":
       return {
-        title: "Sync Branches",
-        message: "Revert local branches and tags so that they match origin?",
+        title: "Sync",
+        message: "Revert local branch and tag changes so they match origin?",
         buttonText: "Revert",
         loadingDescription: "Reverting",
-        successMessage:
-          "Successfully reverted all branches and tags to match origin.",
+        successMessage: "Successfully synced with origin.",
       };
   }
 };
@@ -1605,7 +1603,6 @@ const BranchTags = ({
   shouldBlockDeleteOfBranch,
   openCopyContextMenu,
   openGitRefContextMenu,
-  openGitRefDeleteModal,
   startBranchPointerDrag,
   finishBranchPointerDrag,
 }: {
@@ -1626,14 +1623,6 @@ const BranchTags = ({
   openGitRefContextMenu: (
     event: MouseEvent<Element>,
     gitRefContextMenuTarget: Omit<GitRefContextMenuTarget, "x" | "y">,
-  ) => void;
-  openGitRefDeleteModal: (
-    event: MouseEvent<Element>,
-    gitRefType: "branch" | "tag",
-    name: string,
-    oldSha: string,
-    warningMessage: string | null,
-    shouldBlockDelete: boolean,
   ) => void;
   startBranchPointerDrag: ({
     event,
@@ -1731,13 +1720,12 @@ const BranchTags = ({
         const originBranchTooltip =
           originBranchName === null
             ? null
-            : `${originBranchName} is here on origin. It's somewhere else locally. Push to update origin.`;
+            : `${originBranchName} is here on origin, and somewhere else locally.`;
         const deleteWarningMessage = isTag
           ? (deleteWarningMessageOfTag[cleanName] ?? null)
           : (deleteWarningMessageOfBranch[refName] ?? null);
         const shouldBlockDelete =
           !isTag && shouldBlockDeleteOfBranch[refName] === true;
-        const shouldShowDeleteButton = isLocalBranch && !shouldBlockDelete;
 
         if (isOriginBranch) {
           refClassName = "commit-ref commit-ref-origin";
@@ -1756,7 +1744,6 @@ const BranchTags = ({
             className={cn(
               refClassName,
               shouldDragRef && "commit-ref-draggable",
-              shouldShowDeleteButton && "commit-ref-has-delete",
             )}
             variant="secondary"
             draggable={shouldDragRef}
@@ -1800,31 +1787,6 @@ const BranchTags = ({
             onDragEnd={finishBranchPointerDrag}
           >
             <span>{refName}</span>
-            {shouldShowDeleteButton ? (
-              <TitleTooltip title={`Delete ${refName}`}>
-                <Button
-                  className="commit-ref-delete"
-                  variant="ghost"
-                  size="icon-xs"
-                  type="button"
-                  draggable={false}
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onDoubleClick={(event) => event.stopPropagation()}
-                  onClick={(event) =>
-                    openGitRefDeleteModal(
-                      event,
-                      isTag ? "tag" : "branch",
-                      cleanName,
-                      commitSha,
-                      deleteWarningMessage,
-                      shouldBlockDelete,
-                    )
-                  }
-                >
-                  <Trash2 size={9} />
-                </Button>
-              </TitleTooltip>
-            ) : null}
           </Badge>
         );
 
@@ -2167,7 +2129,6 @@ const CommitHistoryRow = ({
   finishBranchPointerDrop,
   openGitRefCreateMenu,
   openRowAfterDoubleClick,
-  openGitRefDeleteModal,
   openBranchCreateModal,
   openCommitMessageModal,
   openChangeSummaryModal,
@@ -2205,14 +2166,6 @@ const CommitHistoryRow = ({
     row: CommitGraphRow,
   ) => void;
   openRowAfterDoubleClick: () => void;
-  openGitRefDeleteModal: (
-    event: MouseEvent<Element>,
-    gitRefType: "branch" | "tag",
-    name: string,
-    oldSha: string,
-    warningMessage: string | null,
-    shouldBlockDelete: boolean,
-  ) => void;
   openBranchCreateModal: (
     event: MouseEvent<HTMLButtonElement>,
     branchCreateTarget: BranchCreateTarget,
@@ -2566,7 +2519,7 @@ const CommitHistoryRow = ({
 
   if (mergeBranch !== null && isHeadClean === false) {
     mergeDisabledReason =
-      "Resolve your changes before merging this in";
+      "Before merging, resolve your changes";
   }
 
   const shouldShowGraphThreadActions =
@@ -2779,7 +2732,6 @@ const CommitHistoryRow = ({
             shouldBlockDeleteOfBranch={shouldBlockDeleteOfBranch}
             openCopyContextMenu={openCopyContextMenu}
             openGitRefContextMenu={openGitRefContextMenu}
-            openGitRefDeleteModal={openGitRefDeleteModal}
             startBranchPointerDrag={startBranchPointerDrag}
             finishBranchPointerDrag={finishBranchPointerDrag}
           />
@@ -4880,8 +4832,8 @@ const CommitHistory = ({
     closeBranchPushModal();
 
     await runUserGitUpdateThenRefreshDashboard(
-      "Pushing branches",
-      "Pushed branches.",
+      "Pushing",
+      "Pushed.",
       async () => {
         try {
           await window.molttree.pushGitBranchSyncChanges(branchSyncChanges);
@@ -4895,7 +4847,7 @@ const CommitHistory = ({
         } catch (error) {
           return error instanceof Error
             ? error.message
-            : "Failed to push branches.";
+            : "Failed to push.";
         }
 
         return null;
@@ -5340,7 +5292,6 @@ const CommitHistory = ({
                 }
                 openGitRefCreateMenu={openGitRefCreateMenu}
                 openRowAfterDoubleClick={() => openRowAfterDoubleClick(row)}
-                openGitRefDeleteModal={openGitRefDeleteModal}
                 openBranchCreateModal={openBranchCreateModal}
                 openCommitMessageModal={openCommitMessageModal}
                 openChangeSummaryModal={openChangeSummaryModal}
@@ -5516,7 +5467,10 @@ const CommitHistory = ({
                       : "branch-merge-conflict-count"
                   }
                 >
-                  {branchMergeConfirmation.preview.conflictCount} conflicts
+                  {branchMergeConfirmation.preview.conflictCount}{" "}
+                  {branchMergeConfirmation.preview.conflictCount === 1
+                    ? "conflict"
+                    : "conflicts"}
                 </strong>
                 .
               </span>
@@ -6473,12 +6427,12 @@ const MoltTreeDesktopApp = () => {
         <div className="repo-actions">
           {selectedRepo === null ? null : (
             <>
-              <BottomTitleTooltip title="Move all branches to match origin">
+              <BottomTitleTooltip title="Sync with origin">
                 <span className="repo-action-tooltip-trigger">
                   <button
                     className="repo-action-control"
                     type="button"
-                    aria-label="Sync branches"
+                    aria-label="Sync"
                     onClick={() =>
                       openBranchSyncModal("revert", selectedRepo.root)
                     }
@@ -6495,12 +6449,12 @@ const MoltTreeDesktopApp = () => {
                   </button>
                 </span>
               </BottomTitleTooltip>
-              <BottomTitleTooltip title="Push all branches">
+              <BottomTitleTooltip title="Push to origin">
                 <span className="repo-action-tooltip-trigger">
                   <button
                     className="repo-action-control"
                     type="button"
-                    aria-label="Push branches"
+                    aria-label="Push"
                     onClick={() =>
                       openBranchSyncModal("push", selectedRepo.root)
                     }
