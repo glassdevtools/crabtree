@@ -1505,8 +1505,6 @@ const createCommitGraph = ({
       }
 
       const parentColorIndex = colorIndexOfSha[parent];
-      const segmentColorIndex =
-        parentIndex === 0 ? commitLane.colorIndex : parentColorIndex;
 
       addSegment({
         fromLane: lane,
@@ -1514,9 +1512,9 @@ const createCommitGraph = ({
         fromRowIndex: rowIndex,
         toRowIndex: rowIndex + 1,
         color: readCommitGraphColor(
-          segmentColorIndex === undefined
+          parentColorIndex === undefined
             ? commitLane.colorIndex
-            : segmentColorIndex,
+            : parentColorIndex,
         ),
         isMergeSegment: parentIndex > 0,
       });
