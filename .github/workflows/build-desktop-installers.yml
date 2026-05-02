@@ -72,7 +72,7 @@ jobs:
     name: Build macOS installer
     needs: read-package-release-status
     if: needs.read-package-release-status.outputs.should_publish == 'true'
-    runs-on: macos-14
+    runs-on: macos-26
     env:
       CSC_LINK: ${{ secrets.APPLE_CERTIFICATE }}
       CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -151,7 +151,7 @@ jobs:
   build-windows-installer:
     name: Build Windows installer
     needs: read-package-release-status
-    if: needs.read-package-release-status.outputs.should_publish == 'true'
+    if: ${{ false }}
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -186,7 +186,6 @@ jobs:
     needs:
       - read-package-release-status
       - build-macos-installer
-      - build-windows-installer
     if: needs.read-package-release-status.outputs.should_publish == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -221,8 +220,7 @@ jobs:
             release-artifacts/**/MoltTree-*.dmg \
             release-artifacts/**/MoltTree-*.zip \
             release-artifacts/**/*.blockmap \
-            release-artifacts/**/latest*.yml \
-            release-artifacts/**/MoltTree-*.exe
+            release-artifacts/**/latest*.yml
           do
             release_assets+=("$asset_path")
           done
@@ -230,13 +228,6 @@ jobs:
           for dmg_path in release-artifacts/**/MoltTree-*-universal.dmg; do
             static_asset_path="release-artifacts/MoltTree.dmg"
             cp "$dmg_path" "$static_asset_path"
-            release_assets+=("$static_asset_path")
-            break
-          done
-
-          for installer_path in release-artifacts/**/MoltTree-*-x64.exe; do
-            static_asset_path="release-artifacts/MoltTree.exe"
-            cp "$installer_path" "$static_asset_path"
             release_assets+=("$static_asset_path")
             break
           done

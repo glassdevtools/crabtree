@@ -32,7 +32,7 @@ const config = {
         arch: ["universal"],
       },
     ],
-    icon: "packaging/macos/generated-icons/icon.icns",
+    icon: "packaging/macos/icon.icon",
     hardenedRuntime: true,
     entitlements: "packaging/macos/entitlements.plist",
     entitlementsInherit: "packaging/macos/entitlements.inherit.plist",
@@ -51,6 +51,7 @@ const config = {
   dmg: {
     artifactName: "${productName}-${version}-${arch}.${ext}",
     background: "packaging/macos/generated-icons/dmg-background.png",
+    icon: "packaging/macos/generated-icons/icon.icns",
     // TODO: AI-PICKED-VALUE: These icon centers keep the default DMG spacing but move the row up to the middle of the visible area.
     contents: [
       {

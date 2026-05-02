@@ -5,7 +5,7 @@
 MoltTree uses Electron Builder for macOS packaging. The packaging flow is:
 
 1. Build the Electron app into `out/`.
-2. Regenerate the macOS icon from `packaging/icons/app-icon-source.png`.
+2. Regenerate the legacy DMG icon and DMG background assets.
 3. Build universal macOS `dist/MoltTree-<version>-universal.dmg` and `dist/MoltTree-<version>-universal.zip`.
 4. Code sign and notarize when signing and Apple credentials are available.
 
@@ -50,7 +50,7 @@ Regenerate icons with:
 npm run icons:mac --workspace desktop-app
 ```
 
-The script uses macOS `sips` and `iconutil` to write `packaging/macos/generated-icons/icon.icns`, `packaging/macos/generated-icons/dmg-background.png`, and `packaging/macos/generated-icons/dmg-background@2x.png`. That generated directory is ignored and should be recreated before packaging. Windows packaging uses the PNG icon directly.
+The app icon uses the Apple Icon Composer package at `packaging/macos/icon.icon`. Packaging that `.icon` file requires current Xcode tooling. The script uses macOS `sips` and `iconutil` to write the legacy DMG icon at `packaging/macos/generated-icons/icon.icns`, plus `packaging/macos/generated-icons/dmg-background.png` and `packaging/macos/generated-icons/dmg-background@2x.png`. That generated directory is ignored and should be recreated before packaging. Windows packaging uses the PNG icon directly.
 
 ## Code Signing And Notarization
 
