@@ -13,11 +13,11 @@ export type ThreadGroup = {
 export const readIsGitChangeSummaryEmpty = (
   changeSummary: GitChangeSummary,
 ) => {
-  const added = changeSummary.staged.added + changeSummary.unstaged.added;
+  const changedFileCount =
+    changeSummary.staged.changedFileCount +
+    changeSummary.unstaged.changedFileCount;
 
-  const removed = changeSummary.staged.removed + changeSummary.unstaged.removed;
-
-  return added === 0 && removed === 0;
+  return changedFileCount === 0;
 };
 
 export const readIsWorktreeCwd = ({

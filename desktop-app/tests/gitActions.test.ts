@@ -660,6 +660,31 @@ test("reads staged and unstaged change summaries for repo and worktree cwd value
   });
 });
 
+test("reads tracked binary file changes as changed files", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    await writeFile(join(repoRoot, "icon.png"), Buffer.from([0, 1, 2]));
+    await runGit({ cwd: repoRoot, args: ["add", "--", "icon.png"] });
+    await runGit({ cwd: repoRoot, args: ["commit", "-m", "binary"] });
+    const threads = [createThread({ id: "root-thread", cwd: repoRoot })];
+    const repoGraphResult = await readRepoGraphs({
+      threads,
+      focusedRepoRoot: null,
+    });
+
+    await writeFile(join(repoRoot, "icon.png"), Buffer.from([0, 1, 2, 3]));
+
+    const { gitChangesOfCwd, gitErrors } = await readGitChangesOfCwd({
+      threads,
+      repos: repoGraphResult.repos,
+    });
+
+    assert.equal(gitErrors.length, 0);
+    assert.equal(gitChangesOfCwd[repoRoot]?.unstaged.added, 0);
+    assert.equal(gitChangesOfCwd[repoRoot]?.unstaged.removed, 0);
+    assert.equal(gitChangesOfCwd[repoRoot]?.unstaged.changedFileCount, 1);
+  });
+});
+
 test("caps untracked line counts at ten thousand lines", async () => {
   await withRepo(async ({ repoRoot }) => {
     await commitRepoFile({

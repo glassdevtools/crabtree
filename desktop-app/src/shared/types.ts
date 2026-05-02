@@ -38,14 +38,15 @@ export type GitWorktree = {
   threadIds: string[];
 };
 
-export type GitChangeLineCounts = {
+export type GitChangeCounts = {
   added: number;
   removed: number;
+  changedFileCount: number;
 };
 
 export type GitChangeSummary = {
-  staged: GitChangeLineCounts;
-  unstaged: GitChangeLineCounts;
+  staged: GitChangeCounts;
+  unstaged: GitChangeCounts;
 };
 
 export type GitCommitChangesRequest = {

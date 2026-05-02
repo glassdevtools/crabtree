@@ -889,7 +889,8 @@ textarea,
 }
 
 .change-summary-row-empty .commit-thread-change-added,
-.change-summary-row-empty .commit-thread-change-removed {
+.change-summary-row-empty .commit-thread-change-removed,
+.change-summary-row-empty .commit-thread-change-file-count {
   color: #8b929c;
 }
 
@@ -1341,6 +1342,11 @@ textarea,
 
 .commit-thread-change-removed {
   color: #c53a13;
+}
+
+.commit-thread-change-file-count {
+  grid-column: span 2;
+  color: #343a43;
 }
 
 .commit-ref svg,

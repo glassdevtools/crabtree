@@ -1,16 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readDisplayedThreadGroups } from "../src/renderer/threadGroups";
+import {
+  readDisplayedThreadGroups,
+  readIsGitChangeSummaryEmpty,
+} from "../src/renderer/threadGroups";
 import type { CodexThread, GitChangeSummary } from "../src/shared/types";
 
 const EMPTY_CHANGE_SUMMARY: GitChangeSummary = {
   staged: {
     added: 0,
     removed: 0,
+    changedFileCount: 0,
   },
   unstaged: {
     added: 0,
     removed: 0,
+    changedFileCount: 0,
   },
 };
 
@@ -18,10 +23,12 @@ const ADDED_CHANGE_SUMMARY: GitChangeSummary = {
   staged: {
     added: 1,
     removed: 0,
+    changedFileCount: 1,
   },
   unstaged: {
     added: 0,
     removed: 0,
+    changedFileCount: 0,
   },
 };
 
@@ -29,10 +36,25 @@ const REMOVED_CHANGE_SUMMARY: GitChangeSummary = {
   staged: {
     added: 0,
     removed: 0,
+    changedFileCount: 0,
   },
   unstaged: {
     added: 0,
     removed: 1,
+    changedFileCount: 1,
+  },
+};
+
+const BINARY_CHANGE_SUMMARY: GitChangeSummary = {
+  staged: {
+    added: 0,
+    removed: 0,
+    changedFileCount: 0,
+  },
+  unstaged: {
+    added: 0,
+    removed: 0,
+    changedFileCount: 1,
   },
 };
 
@@ -104,4 +126,8 @@ test("orders changed cwd chat groups before unchanged groups", () => {
     threadGroups[0].threads.map((thread) => thread.id),
     ["changed-root-a", "changed-root-b"],
   );
+});
+
+test("treats file-only change summaries as changed", () => {
+  assert.equal(readIsGitChangeSummaryEmpty(BINARY_CHANGE_SUMMARY), false);
 });

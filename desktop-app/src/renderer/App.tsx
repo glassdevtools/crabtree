@@ -44,6 +44,7 @@ import type {
   CodexThreadStatusChange,
   DashboardData,
   GitBranchSyncChange,
+  GitChangeCounts,
   GitChangeSummary,
   GitCommit,
   GitMergePreview,
@@ -155,10 +156,12 @@ const EMPTY_GIT_CHANGE_SUMMARY: GitChangeSummary = {
   staged: {
     added: 0,
     removed: 0,
+    changedFileCount: 0,
   },
   unstaged: {
     added: 0,
     removed: 0,
+    changedFileCount: 0,
   },
 };
 
@@ -166,7 +169,44 @@ const readTotalGitChangeSummary = (changeSummary: GitChangeSummary) => {
   return {
     added: changeSummary.staged.added + changeSummary.unstaged.added,
     removed: changeSummary.staged.removed + changeSummary.unstaged.removed,
+    changedFileCount:
+      changeSummary.staged.changedFileCount +
+      changeSummary.unstaged.changedFileCount,
   };
+};
+
+const readChangedFileCountText = (changedFileCount: number) => {
+  return changedFileCount === 1
+    ? `${changedFileCount} file`
+    : `${changedFileCount} files`;
+};
+
+// Binary changes can have file changes without line counts, so the graph uses this shared display for both cases.
+const GitChangeCountText = ({
+  changeCounts,
+}: {
+  changeCounts: GitChangeCounts;
+}) => {
+  if (
+    changeCounts.added === 0 &&
+    changeCounts.removed === 0 &&
+    changeCounts.changedFileCount > 0
+  ) {
+    return (
+      <span className="commit-thread-change-file-count">
+        {readChangedFileCountText(changeCounts.changedFileCount)}
+      </span>
+    );
+  }
+
+  return (
+    <>
+      <span className="commit-thread-change-added">+{changeCounts.added}</span>
+      <span className="commit-thread-change-removed">
+        -{changeCounts.removed}
+      </span>
+    </>
+  );
 };
 
 const readCreatedGitRefName = (gitRefName: string) => {
@@ -2669,12 +2709,9 @@ const CommitHistoryRow = ({
                       })
                     }
                   >
-                    <span className="commit-thread-change-added">
-                      +{actionTotalChangeSummary.added}
-                    </span>
-                    <span className="commit-thread-change-removed">
-                      -{actionTotalChangeSummary.removed}
-                    </span>
+                    <GitChangeCountText
+                      changeCounts={actionTotalChangeSummary}
+                    />
                   </Button>
                 </TitleTooltip>
                 {shouldShowActionCommit && actionCommitBranchTarget !== null ? (
@@ -3614,13 +3651,9 @@ const CommitHistory = ({
     headChangeSummary === undefined
       ? EMPTY_GIT_CHANGE_SUMMARY
       : headChangeSummary;
-  const totalHeadChangeSummary = readTotalGitChangeSummary(
-    headTotalChangeSummary,
-  );
   const isHeadClean =
     headChangeSummary !== undefined &&
-    totalHeadChangeSummary.added === 0 &&
-    totalHeadChangeSummary.removed === 0;
+    readIsGitChangeSummaryEmpty(headTotalChangeSummary);
   const mergeability = useMemo(() => {
     const commitOfSha: { [sha: string]: GitCommit } = {};
     const branchShaOfBranch: { [branch: string]: string } = {};
@@ -5427,35 +5460,29 @@ const CommitHistory = ({
               <div className="change-summary-breakdown">
                 <div
                   className={
-                    changeSummaryTarget.changeSummary.staged.added === 0 &&
-                      changeSummaryTarget.changeSummary.staged.removed === 0
+                    changeSummaryTarget.changeSummary.staged
+                      .changedFileCount === 0
                       ? "change-summary-row change-summary-row-empty"
                       : "change-summary-row"
                   }
                 >
                   <span>Staged</span>
-                  <span className="commit-thread-change-added">
-                    +{changeSummaryTarget.changeSummary.staged.added}
-                  </span>
-                  <span className="commit-thread-change-removed">
-                    -{changeSummaryTarget.changeSummary.staged.removed}
-                  </span>
+                  <GitChangeCountText
+                    changeCounts={changeSummaryTarget.changeSummary.staged}
+                  />
                 </div>
                 <div
                   className={
-                    changeSummaryTarget.changeSummary.unstaged.added === 0 &&
-                      changeSummaryTarget.changeSummary.unstaged.removed === 0
+                    changeSummaryTarget.changeSummary.unstaged
+                      .changedFileCount === 0
                       ? "change-summary-row change-summary-row-empty"
                       : "change-summary-row"
                   }
                 >
                   <span>Unstaged</span>
-                  <span className="commit-thread-change-added">
-                    +{changeSummaryTarget.changeSummary.unstaged.added}
-                  </span>
-                  <span className="commit-thread-change-removed">
-                    -{changeSummaryTarget.changeSummary.unstaged.removed}
-                  </span>
+                  <GitChangeCountText
+                    changeCounts={changeSummaryTarget.changeSummary.unstaged}
+                  />
                 </div>
               </div>
               <DialogFooter>

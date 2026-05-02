@@ -474,10 +474,11 @@ const readRemoteTagName = (remoteRef: string) => {
   return remoteRef.slice(tagPrefix.length);
 };
 
-const parseGitChangeLineCounts = (stdout: string) => {
-  const lineCounts = {
+const parseGitChangeCounts = (stdout: string) => {
+  const changeCounts = {
     added: 0,
     removed: 0,
+    changedFileCount: 0,
   };
 
   for (const line of stdout.split("\n")) {
@@ -489,16 +490,19 @@ const parseGitChangeLineCounts = (stdout: string) => {
     const added = Number(addedText);
     const removed = Number(removedText);
 
+    // Binary numstat rows use "-" for line counts, but each row is still one changed file.
+    changeCounts.changedFileCount += 1;
+
     if (Number.isFinite(added)) {
-      lineCounts.added += added;
+      changeCounts.added += added;
     }
 
     if (Number.isFinite(removed)) {
-      lineCounts.removed += removed;
+      changeCounts.removed += removed;
     }
   }
 
-  return lineCounts;
+  return changeCounts;
 };
 
 const parseGitStatusUntrackedPaths = (stdout: string) => {
@@ -584,7 +588,7 @@ const readFileAddedLineCount = async ({
   }
 };
 
-const readUntrackedGitChangeLineCounts = async ({ cwd }: { cwd: string }) => {
+const readUntrackedGitChangeCounts = async ({ cwd }: { cwd: string }) => {
   const [repoRoot, status] = await Promise.all([
     readGitText({ cwd, args: ["rev-parse", "--show-toplevel"] }),
     runGit({
@@ -593,6 +597,7 @@ const readUntrackedGitChangeLineCounts = async ({ cwd }: { cwd: string }) => {
     }),
   ]);
   let addedLineCount = 0;
+  let changedFileCount = 0;
 
   for (const untrackedPath of parseGitStatusUntrackedPaths(status.stdout)) {
     if (addedLineCount >= MAX_UNTRACKED_ADDED_LINE_COUNT) {
@@ -606,6 +611,7 @@ const readUntrackedGitChangeLineCounts = async ({ cwd }: { cwd: string }) => {
       continue;
     }
 
+    changedFileCount += 1;
     addedLineCount += await readFileAddedLineCount({
       path,
       maxAddedLineCount: MAX_UNTRACKED_ADDED_LINE_COUNT - addedLineCount,
@@ -615,6 +621,7 @@ const readUntrackedGitChangeLineCounts = async ({ cwd }: { cwd: string }) => {
   return {
     added: Math.min(addedLineCount, MAX_UNTRACKED_ADDED_LINE_COUNT),
     removed: 0,
+    changedFileCount,
   };
 };
 
@@ -622,14 +629,16 @@ const readGitChangeSummary = async ({ cwd }: { cwd: string }) => {
   const [unstaged, staged, untracked] = await Promise.all([
     runGit({ cwd, args: ["diff", "--numstat", "--", "."] }),
     runGit({ cwd, args: ["diff", "--cached", "--numstat", "--", "."] }),
-    readUntrackedGitChangeLineCounts({ cwd }),
+    readUntrackedGitChangeCounts({ cwd }),
   ]);
-  const unstagedLineCounts = parseGitChangeLineCounts(unstaged.stdout.trim());
+  const unstagedCounts = parseGitChangeCounts(unstaged.stdout.trim());
   const changeSummary: GitChangeSummary = {
-    staged: parseGitChangeLineCounts(staged.stdout.trim()),
+    staged: parseGitChangeCounts(staged.stdout.trim()),
     unstaged: {
-      added: unstagedLineCounts.added + untracked.added,
-      removed: unstagedLineCounts.removed + untracked.removed,
+      added: unstagedCounts.added + untracked.added,
+      removed: unstagedCounts.removed + untracked.removed,
+      changedFileCount:
+        unstagedCounts.changedFileCount + untracked.changedFileCount,
     },
   };
 
