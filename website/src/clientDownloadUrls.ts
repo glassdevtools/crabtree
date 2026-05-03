@@ -19,7 +19,7 @@ type NavigatorWithUserAgentData = Navigator & {
 const clientDownloads: ClientDownload[] = [
   {
     platform: "macos",
-    href: "https://github.com/glassdevtools/crabtree/releases/latest/download/latest.dmg",
+    href: "https://github.com/glassdevtools/crabtree/releases/latest/download/Crabtree.dmg",
   },
 ];
 

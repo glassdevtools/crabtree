@@ -263,7 +263,7 @@ jobs:
 
           | OS | Download |
           | --- | --- |
-          | Mac | [Download for Mac](https://github.com/glassdevtools/crabtree/releases/download/${RELEASE_TAG}/latest.dmg) |
+          | Mac | [Download for Mac](https://github.com/glassdevtools/crabtree/releases/download/${RELEASE_TAG}/Crabtree.dmg) |
           | Windows | Coming soon... |
           | Linux | Coming soon... |
           EOF
