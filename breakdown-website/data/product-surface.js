@@ -135,7 +135,7 @@ window.breakdownWebsiteData.productSurface = {
       product: "GitHub Releases",
       usedBy: "Website downloads and desktop updater",
       neededOutsideRepo:
-        "Public release assets named Crabtree.dmg and eventually Crabtree.exe, plus Electron update YAML files.",
+        "Public release assets named latest.dmg and brand aliases, plus Electron update YAML files.",
       expectedSource:
         "Created by .github/workflows/build-desktop-installers.yml using the built-in GitHub token.",
     },

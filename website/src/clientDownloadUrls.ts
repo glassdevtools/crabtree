@@ -6,7 +6,6 @@ type DetectedOS = {
 };
 
 type ClientDownload = DetectedOS & {
-  fileName: string;
   href: string;
 };
 
@@ -20,13 +19,7 @@ type NavigatorWithUserAgentData = Navigator & {
 const clientDownloads: ClientDownload[] = [
   {
     platform: "macos",
-    fileName: "Crabtree.dmg",
-    href: "https://github.com/glassdevtools/crabtree/releases/latest/download/Crabtree.dmg",
-  },
-  {
-    platform: "windows",
-    fileName: "Crabtree.exe",
-    href: "https://github.com/glassdevtools/crabtree/releases/latest/download/Crabtree.exe",
+    href: "https://github.com/glassdevtools/crabtree/releases/latest/download/latest.dmg",
   },
 ];
 

@@ -219,6 +219,7 @@ jobs:
           for asset_path in \
             release-artifacts/**/Crabtree-*.dmg \
             release-artifacts/**/Crabtree-*.zip \
+            release-artifacts/**/Crabtree-*.exe \
             release-artifacts/**/*.blockmap \
             release-artifacts/**/latest*.yml
           do
@@ -226,9 +227,26 @@ jobs:
           done
 
           for dmg_path in release-artifacts/**/Crabtree-*-universal.dmg; do
-            static_asset_path="release-artifacts/Crabtree.dmg"
-            cp "$dmg_path" "$static_asset_path"
-            release_assets+=("$static_asset_path")
+            for static_asset_path in \
+              release-artifacts/latest.dmg \
+              release-artifacts/Crabtree.dmg \
+              release-artifacts/MoltTree.dmg
+            do
+              cp "$dmg_path" "$static_asset_path"
+              release_assets+=("$static_asset_path")
+            done
+            break
+          done
+
+          for exe_path in release-artifacts/**/Crabtree-*.exe; do
+            for static_asset_path in \
+              release-artifacts/latest.exe \
+              release-artifacts/Crabtree.exe \
+              release-artifacts/MoltTree.exe
+            do
+              cp "$exe_path" "$static_asset_path"
+              release_assets+=("$static_asset_path")
+            done
             break
           done
 
@@ -245,7 +263,7 @@ jobs:
 
           | OS | Download |
           | --- | --- |
-          | Mac | [Download for Mac](https://github.com/glassdevtools/crabtree/releases/download/${RELEASE_TAG}/Crabtree.dmg) |
+          | Mac | [Download for Mac](https://github.com/glassdevtools/crabtree/releases/download/${RELEASE_TAG}/latest.dmg) |
           | Windows | Coming soon... |
           | Linux | Coming soon... |
           EOF

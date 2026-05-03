@@ -1,6 +1,6 @@
 const config = {
-  // TODO: AI-PICKED-VALUE: This bundle id is based on the existing Glass signing identity and the Crabtree app name.
-  appId: "com.glassdevtools.crabtree",
+  // TODO: AI-PICKED-VALUE: This bundle id keeps existing MoltTree installs on the same app identity after the Crabtree rename.
+  appId: "com.glassdevtools.molttree",
   productName: "Crabtree",
   electronVersion: "41.3.0",
   directories: {
