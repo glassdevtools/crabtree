@@ -1,6 +1,6 @@
-# MoltTree Website
+# Crabtree Website
 
-Next.js site for MoltTree.
+Next.js site for Crabtree.
 
 Run from the repo root:
 

@@ -138,7 +138,7 @@ const UNFOCUSED_ERROR_TOAST_DURATION_MS = Infinity;
 const USER_GIT_UPDATE_TOAST_ID_PREFIX = "user-git-update";
 const DASHBOARD_WARNING_TOAST_ID_PREFIX = "dashboard-warning";
 const GITHUB_REPOSITORY_URL = packageInfo.repository.url.replace(/\.git$/, "");
-console.log("[MoltTree renderer]", { version: packageInfo.version });
+console.log("[Crabtree renderer]", { version: packageInfo.version });
 const CHECKED_OUT_BY_WORKTREE_MESSAGE =
   "This branch is checked out in a worktree. Delete the worktree or switch its branch first.";
 const COMMIT_GRAPH_ACTION_ICON_SIZE = 10;
@@ -672,7 +672,7 @@ const copyText = async ({
   errorMessage: string;
 }) => {
   try {
-    await window.molttree.copyText(text);
+    await window.crabtree.copyText(text);
     toast.success("Copied!", {
       closeButton: false,
       description: <div className="copy-toast-value">{text}</div>,
@@ -1983,7 +1983,7 @@ const ChatRobotTags = ({
 
   const openThread = async (threadId: string) => {
     try {
-      await window.molttree.openCodexThread(threadId);
+      await window.crabtree.openCodexThread(threadId);
       trackDesktopAction({ eventName: "chat_opened", properties: {} });
     } catch (error) {
       const message =
@@ -4615,14 +4615,14 @@ const CommitHistory = ({
         try {
           switch (branchCreateTarget.type) {
             case "path":
-              await window.molttree.createGitBranch({
+              await window.crabtree.createGitBranch({
                 path: branchCreateTarget.path,
                 branch,
                 expectedHeadSha: branchCreateTarget.sha,
               });
               break;
             case "commit":
-              await window.molttree.createGitRef({
+              await window.crabtree.createGitRef({
                 repoRoot: branchCreateTarget.repoRoot,
                 gitRefType: "branch",
                 name: branch,
@@ -4660,7 +4660,7 @@ const CommitHistory = ({
       gitRefCreateText.successMessage,
       async () => {
         try {
-          await window.molttree.createGitRef({
+          await window.crabtree.createGitRef({
             repoRoot,
             gitRefType: gitRefCreateTarget.gitRefType,
             name,
@@ -4704,7 +4704,7 @@ const CommitHistory = ({
       "Created pull request.",
       async () => {
         try {
-          pullRequestUrl = await window.molttree.createGitPullRequest({
+          pullRequestUrl = await window.crabtree.createGitPullRequest({
             repoRoot,
             baseBranch,
             headBranch,
@@ -4735,7 +4735,7 @@ const CommitHistory = ({
     }
 
     try {
-      await window.molttree.openExternalUrl(pullRequestUrl);
+      await window.crabtree.openExternalUrl(pullRequestUrl);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to open pull request.";
@@ -4754,14 +4754,14 @@ const CommitHistory = ({
       "Committed changes.",
       async () => {
         try {
-          const newSha = await window.molttree.commitAllGitChanges({
+          const newSha = await window.crabtree.commitAllGitChanges({
             path: commitMessageTarget.path,
             message,
           });
 
           if (commitMessageTarget.branchTarget !== null) {
             try {
-              await window.molttree.moveGitBranch({
+              await window.crabtree.moveGitBranch({
                 repoRoot,
                 branch: commitMessageTarget.branchTarget.branch,
                 oldSha: commitMessageTarget.branchTarget.oldSha,
@@ -4806,14 +4806,14 @@ const CommitHistory = ({
         try {
           switch (deleteTarget.gitRefType) {
             case "branch":
-              await window.molttree.deleteGitBranch({
+              await window.crabtree.deleteGitBranch({
                 repoRoot,
                 branch: deleteTarget.name,
                 oldSha: deleteTarget.oldSha,
               });
               break;
             case "tag":
-              await window.molttree.deleteGitTag({
+              await window.crabtree.deleteGitTag({
                 repoRoot,
                 tag: deleteTarget.name,
                 oldSha: deleteTarget.oldSha,
@@ -4841,7 +4841,7 @@ const CommitHistory = ({
   };
   const openCodePath = async (path: string) => {
     try {
-      await window.molttree.openPath({ path, launcher: pathLauncher });
+      await window.crabtree.openPath({ path, launcher: pathLauncher });
       trackDesktopAction({
         eventName: "repo_opened",
         properties: { launcher: pathLauncher, source: "commit_history" },
@@ -4864,7 +4864,7 @@ const CommitHistory = ({
     }
 
     try {
-      const preview = await window.molttree.previewGitMerge({
+      const preview = await window.crabtree.previewGitMerge({
         repoRoot,
         branch,
       });
@@ -4894,7 +4894,7 @@ const CommitHistory = ({
       "Merged branch.",
       async () => {
         try {
-          await window.molttree.mergeGitBranch({
+          await window.crabtree.mergeGitBranch({
             repoRoot,
             branch: request.branch,
           });
@@ -4945,7 +4945,7 @@ const CommitHistory = ({
       "Pushed.",
       async () => {
         try {
-          await window.molttree.pushGitBranchSyncChanges(branchSyncChanges);
+          await window.crabtree.pushGitBranchSyncChanges(branchSyncChanges);
           trackDesktopAction({
             eventName: "branches_pushed",
             properties: {
@@ -4987,7 +4987,7 @@ const CommitHistory = ({
           switch (request.operation) {
             case "moveBranchPointer":
               if (request.gitRefType === "branch") {
-                await window.molttree.moveGitBranch({
+                await window.crabtree.moveGitBranch({
                   repoRoot: request.repoRoot,
                   branch: request.refName,
                   oldSha: request.oldSha,
@@ -4996,7 +4996,7 @@ const CommitHistory = ({
                   targetPath: request.targetPath,
                 });
               } else {
-                await window.molttree.moveGitTag({
+                await window.crabtree.moveGitTag({
                   repoRoot: request.repoRoot,
                   tag: request.refName,
                   oldSha: request.oldSha,
@@ -5041,7 +5041,7 @@ const CommitHistory = ({
       "Switched HEAD.",
       async () => {
         try {
-          await window.molttree.checkoutGitCommit({
+          await window.crabtree.checkoutGitCommit({
             repoRoot,
             sha: row.commit.sha,
           });
@@ -5747,16 +5747,13 @@ const RepoSection = ({
 const ElectronApiMissingScreen = () => (
   <main className="electron-api-missing-screen">
     <Card className="electron-api-missing-card">
-      <h1>MoltTree desktop UI</h1>
-      <p>
-        Open this app from Electron. The website runs at{" "}
-        <a href="http://127.0.0.1:5174/">127.0.0.1:5174</a>.
-      </p>
+      <h1>Crabtree desktop UI</h1>
+      <p>Open this app from Electron.</p>
     </Card>
   </main>
 );
 
-const MoltTreeDesktopApp = () => {
+const CrabtreeDesktopApp = () => {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(
     null,
   );
@@ -5981,7 +5978,7 @@ const MoltTreeDesktopApp = () => {
             pendingDashboardRefreshRepoRootRef.current = null;
 
             try {
-              const nextDashboardData = await window.molttree.readDashboard({
+              const nextDashboardData = await window.crabtree.readDashboard({
                 repoRoot: nextRepoRoot,
               });
 
@@ -6042,7 +6039,7 @@ const MoltTreeDesktopApp = () => {
     let nextDashboardData: DashboardData | null;
 
     try {
-      nextDashboardData = await window.molttree.readDashboardIfIdle({
+      nextDashboardData = await window.crabtree.readDashboardIfIdle({
         repoRoot,
       });
     } catch (error) {
@@ -6073,7 +6070,7 @@ const MoltTreeDesktopApp = () => {
 
       try {
         const nextDashboardData =
-          await window.molttree.readDashboardAfterGitMutation();
+          await window.crabtree.readDashboardAfterGitMutation();
         applyDashboardData(nextDashboardData);
         await new Promise<void>((resolve) => {
           dashboardPaintResolversRef.current.push(resolve);
@@ -6101,9 +6098,9 @@ const MoltTreeDesktopApp = () => {
   useEffect(() => {
     let didCancel = false;
     const stopWatchingAppUpdateStatus =
-      window.molttree.watchAppUpdateStatus(setAppUpdateStatus);
+      window.crabtree.watchAppUpdateStatus(setAppUpdateStatus);
 
-    void window.molttree
+    void window.crabtree
       .readAppUpdateStatus()
       .then((nextAppUpdateStatus) => {
         if (!didCancel) {
@@ -6121,7 +6118,7 @@ const MoltTreeDesktopApp = () => {
   }, []);
   useEffect(() => {
     const stopWatchingCodexThreadStatus =
-      window.molttree.watchCodexThreadStatus(
+      window.crabtree.watchCodexThreadStatus(
         (codexThreadStatusChange: CodexThreadStatusChange) => {
           codexThreadStatusOfIdRef.current[codexThreadStatusChange.threadId] =
             codexThreadStatusChange.status;
@@ -6372,10 +6369,10 @@ const MoltTreeDesktopApp = () => {
         try {
           switch (action) {
             case "push":
-              await window.molttree.pushGitBranchSyncChanges(changes);
+              await window.crabtree.pushGitBranchSyncChanges(changes);
               break;
             case "revert":
-              await window.molttree.revertGitBranchSyncChanges(changes);
+              await window.crabtree.revertGitBranchSyncChanges(changes);
               break;
           }
 
@@ -6471,7 +6468,7 @@ const MoltTreeDesktopApp = () => {
     }
 
     try {
-      await window.molttree.openPath({
+      await window.crabtree.openPath({
         path: selectedRepo.root,
         launcher: pathLauncher,
       });
@@ -6510,16 +6507,16 @@ const MoltTreeDesktopApp = () => {
   const runAppUpdateAction = async () => {
     try {
       if (appUpdateStatus.type === "ready") {
-        await window.molttree.quitAndInstallAppUpdate();
+        await window.crabtree.quitAndInstallAppUpdate();
         return;
       }
 
-      const nextAppUpdateStatus = await window.molttree.checkForAppUpdate();
+      const nextAppUpdateStatus = await window.crabtree.checkForAppUpdate();
       setAppUpdateStatus(nextAppUpdateStatus);
 
       switch (nextAppUpdateStatus.type) {
         case "idle":
-          showSuccessMessage("MoltTree is up to date.");
+          showSuccessMessage("Crabtree is up to date.");
           return;
         case "ready":
           showSuccessMessage("Update ready.");
@@ -6535,7 +6532,7 @@ const MoltTreeDesktopApp = () => {
     } catch (error) {
       const message = readCaughtUserFacingErrorMessage({
         error,
-        fallbackMessage: "Failed to update MoltTree.",
+        fallbackMessage: "Failed to update Crabtree.",
       });
       showErrorMessage(message);
     }
@@ -6559,7 +6556,7 @@ const MoltTreeDesktopApp = () => {
     loadingRepoRoot !== null && selectedRepo?.root === loadingRepoRoot;
   const emptyRepoDescription =
     dashboardData.gitErrors.length > 0 && dashboardData.threads.length > 0
-      ? "MoltTree found Codex chats, but Git could not read their folders. " +
+      ? "Crabtree found Codex chats, but Git could not read their folders. " +
         "They may be deleted, moved, not valid Git worktrees, or blocked by macOS permissions."
       : "No Git repositories found from Codex.";
   const repoHeaderControls = (
@@ -6788,14 +6785,14 @@ const MoltTreeDesktopApp = () => {
                         eventName: "github_clicked",
                         properties: { button_location: "settings" },
                       });
-                      void window.molttree.openExternalUrl(
+                      void window.crabtree.openExternalUrl(
                         GITHUB_REPOSITORY_URL,
                       );
                     }}
                     rel="noreferrer"
                     target="_blank"
                   >
-                    glassdevtools/molttree
+                    glassdevtools/crabtree
                   </a>
                 </dd>
               </div>
@@ -6862,9 +6859,9 @@ const MoltTreeDesktopApp = () => {
 };
 
 export const App = () => {
-  if (window.molttree === undefined) {
+  if (window.crabtree === undefined) {
     return <ElectronApiMissingScreen />;
   }
 
-  return <MoltTreeDesktopApp />;
+  return <CrabtreeDesktopApp />;
 };

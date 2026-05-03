@@ -7,7 +7,7 @@ import { buttonVariants } from "@/components/ui/button";
 import defaultAppIcon from "../src/assets/default-app-icon.png";
 import productScreenshot from "../src/assets/product-screenshot.png";
 
-const repoUrl = "https://github.com/glassdevtools/molttree";
+const repoUrl = "https://github.com/glassdevtools/crabtree";
 const ctaDownloadButtonClassName = "ctaButton ctaButtonDownload";
 const ctaGithubButtonClassName = "ctaButton ctaButtonGithub";
 const downloadButtonClassName = "downloadButton";
@@ -16,7 +16,7 @@ const featureItems = [
   {
     title: "Easily merge your worktrees",
     descriptionLines: [
-      "In Codex it's easy to spin up 100 worktrees, but merging them back together is hard. MoltTree was built to fix that. Commit, branch, merge, update main, and push without leaving the app.",
+      "In Codex it's easy to spin up 100 worktrees, but merging them back together is hard. Crabtree was built to fix that. Commit, branch, merge, update main, and push without leaving the app.",
     ],
   },
   {
@@ -76,16 +76,16 @@ const questionItems = [
 const faqItems = [
   {
     question: "What are the core features?",
-    answer:
-      ["It's a Git visualizer that:",
-        "- Shows you where your chats and worktrees are in Git.",
-        "- Suggests actions to take, like commit/merge/push.",
-      ]
+    answer: [
+      "It's a Git visualizer that:",
+      "- Shows you where your chats and worktrees are in Git.",
+      "- Suggests actions to take, like commit/merge/push.",
+    ],
   },
   {
     question: "How should I use it?",
     answer: [
-      "Start a bunch of worktrees in Codex. When you're ready to merge them, open MoltTree and switch to a branch by double clicking. Follow the suggestions in the Graph column: branch, commit, merge, and push.",
+      "Start a bunch of worktrees in Codex. When you're ready to merge them, open Crabtree and switch to a branch by double clicking. Follow the suggestions in the Graph column: branch, commit, merge, and push.",
     ],
   },
   {
@@ -110,12 +110,12 @@ const HomePage = () => {
             draggable={false}
           />
           <span className="wordmarkText">
-            <span className="wordmarkTextBase">MoltTree</span>
+            <span className="wordmarkTextBase">Crabtree</span>
             <span
               className="wordmarkTextGradient transition-opacity duration-500 ease-out"
               aria-hidden="true"
             >
-              MoltTree
+              Crabtree
             </span>
           </span>
         </a>
@@ -159,10 +159,11 @@ const HomePage = () => {
                   draggable={false}
                 />
               </span>
-              <span>MoltTree</span>
+              <span>Crabtree</span>
             </h1>
             <p className="heroSubtext">
-              Easily merge your Codex worktrees together. MoltTree lets you manage your chats, worktrees, and branches, all on one page.
+              Easily merge your Codex worktrees together. Crabtree lets you
+              manage your chats, worktrees, and branches, all on one page.
             </p>
 
             <div className="hero__actions">
@@ -188,7 +189,7 @@ const HomePage = () => {
           <figure className="productPhoto">
             <Image
               src={productScreenshot}
-              alt="MoltTree app showing Codex chats, branches, worktrees, changed files, and Git history"
+              alt="Crabtree app showing Codex chats, branches, worktrees, changed files, and Git history"
               sizes="(max-width: 760px) calc(100vw - 32px), (max-width: 1128px) calc(100vw - 48px), 1080px"
               preload
               placeholder="blur"

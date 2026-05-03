@@ -2,11 +2,11 @@
 
 ## macOS
 
-MoltTree uses Electron Builder for macOS packaging. The packaging flow is:
+Crabtree uses Electron Builder for macOS packaging. The packaging flow is:
 
 1. Build the Electron app into `out/`.
 2. Regenerate the legacy DMG assets from checked-in packaging assets.
-3. Build universal macOS `dist/MoltTree-<version>-universal.dmg` and `dist/MoltTree-<version>-universal.zip`.
+3. Build universal macOS `dist/Crabtree-<version>-universal.dmg` and `dist/Crabtree-<version>-universal.zip`.
 4. Code sign and notarize when signing and Apple credentials are available.
 
 Run:
@@ -26,7 +26,7 @@ npx electron-builder --config electron-builder.config.cjs --mac dir -c.mac.ident
 
 ## Windows
 
-MoltTree uses Electron Builder's NSIS target for Windows packaging. The Windows build uses the transparent renderer icon at `src/renderer/assets/default-app-icon.png` so the executable icon does not render as a hard white square. Windows builds are currently unsigned.
+Crabtree uses Electron Builder's NSIS target for Windows packaging. The Windows build uses the transparent renderer icon at `src/renderer/assets/default-app-icon.png` so the executable icon does not render as a hard white square. Windows builds are currently unsigned.
 
 Run:
 
@@ -78,13 +78,13 @@ For notarization, use one of Electron Builder's supported Apple credential modes
 Keychain profile mode:
 
 ```bash
-xcrun notarytool store-credentials "MOLTTREE_NOTARY" \
+xcrun notarytool store-credentials "CRABTREE_NOTARY" \
   --apple-id "you@example.com" \
   --team-id "TEAMID" \
   --password "app-specific-password"
 
 export APPLE_KEYCHAIN="$(security default-keychain | tr -d '\"')"
-export APPLE_KEYCHAIN_PROFILE="MOLTTREE_NOTARY"
+export APPLE_KEYCHAIN_PROFILE="CRABTREE_NOTARY"
 ```
 
 App Store Connect API key mode:
@@ -104,7 +104,7 @@ The app uses `electron-updater` in packaged builds. Electron Builder writes `app
 Release builds publish to:
 
 ```text
-https://github.com/glassdevtools/molttree/releases
+https://github.com/glassdevtools/crabtree/releases
 ```
 
 This assumes the release assets are public. Do not ship a desktop updater that needs a private GitHub token on user machines.
@@ -122,7 +122,7 @@ The macOS release assets must include `latest-mac.yml`, the `.dmg`, the `.zip`, 
 
 The workflow reads `desktop-app/package.json` and uses `v<version>` as the release tag. If that GitHub Release already exists, the installer builds are skipped. Otherwise, macOS and Windows installers build in parallel, upload GitHub Actions artifacts, and a final release job waits for both builds before publishing the GitHub Release.
 
-If the matching GitHub Release does not exist yet, the workflow requires Apple signing secrets, creates the `v<version>` tag on the current commit when needed, then publishes the signed and notarized macOS release assets and the unsigned Windows installer to `glassdevtools/molttree` GitHub Releases. It also uploads `MoltTree.dmg` and `MoltTree.exe` aliases for website downloads. If the tag already exists on a different commit, the workflow fails so that a package version cannot silently point at two different builds.
+If the matching GitHub Release does not exist yet, the workflow requires Apple signing secrets, creates the `v<version>` tag on the current commit when needed, then publishes the signed and notarized macOS release assets and the unsigned Windows installer to `glassdevtools/crabtree` GitHub Releases. It also uploads `Crabtree.dmg` and `Crabtree.exe` aliases for website downloads. If the tag already exists on a different commit, the workflow fails so that a package version cannot silently point at two different builds.
 
 GitHub release uploads use the built-in `${{ github.token }}` as `GH_TOKEN`; no repository secret is needed for that token.
 

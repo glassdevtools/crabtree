@@ -1,6 +1,6 @@
 # Git Testing Inventory
 
-This file is the short checklist for Git behavior in MoltTree. Tests should prove each action works and that unsafe actions either warn first or cannot hide commits from the visible graph.
+This file is the short checklist for Git behavior in Crabtree. Tests should prove each action works and that unsafe actions either warn first or cannot hide commits from the visible graph.
 
 ## Git State We Read
 

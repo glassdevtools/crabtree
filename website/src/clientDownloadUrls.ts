@@ -1,5 +1,5 @@
 export const CLIENT_DOWNLOAD_PAGE_PATH =
-  "https://github.com/glassdevtools/molttree/releases/latest";
+  "https://github.com/glassdevtools/crabtree/releases/latest";
 
 type DetectedOS = {
   platform: "macos" | "windows";
@@ -20,13 +20,13 @@ type NavigatorWithUserAgentData = Navigator & {
 const clientDownloads: ClientDownload[] = [
   {
     platform: "macos",
-    fileName: "MoltTree.dmg",
-    href: "https://github.com/glassdevtools/molttree/releases/latest/download/MoltTree.dmg",
+    fileName: "Crabtree.dmg",
+    href: "https://github.com/glassdevtools/crabtree/releases/latest/download/Crabtree.dmg",
   },
   {
     platform: "windows",
-    fileName: "MoltTree.exe",
-    href: "https://github.com/glassdevtools/molttree/releases/latest/download/MoltTree.exe",
+    fileName: "Crabtree.exe",
+    href: "https://github.com/glassdevtools/crabtree/releases/latest/download/Crabtree.exe",
   },
 ];
 

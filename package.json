@@ -1,9 +1,10 @@
 {
-  "name": "molttree-repo",
+  "name": "crabtree-repo",
   "private": true,
   "workspaces": [
     "desktop-app",
-    "website"
+    "website",
+    "breakdown-website"
   ],
   "scripts": {
     "dev": "scripts/dev.sh",
@@ -13,7 +14,10 @@
     "test:desktop": "npm run test --workspace desktop-app",
     "dev:website": "npm run dev --workspace website",
     "build:website": "npm run build --workspace website",
-    "build": "npm run build:desktop && npm run build:website",
+    "dev:breakdown-website": "npm run dev --workspace breakdown-website",
+    "build:breakdown-website": "npm run build --workspace breakdown-website",
+    "test:breakdown-website": "npm run test --workspace breakdown-website",
+    "build": "npm run build:desktop && npm run build:website && npm run build:breakdown-website",
     "format": "prettier --write ."
   }
 }

@@ -135,7 +135,7 @@ const commitRepoFile = async ({
 
 const createRepo = async () => {
   const repoRoot = await realpath(
-    await mkdtemp(join(tmpdir(), "molttree-git-")),
+    await mkdtemp(join(tmpdir(), "crabtree-git-")),
   );
 
   await runGit({
@@ -148,7 +148,7 @@ const createRepo = async () => {
   });
   await runGit({
     cwd: repoRoot,
-    args: ["config", "user.name", "MoltTree Tests"],
+    args: ["config", "user.name", "Crabtree Tests"],
   });
 
   return { repoRoot };
@@ -166,7 +166,7 @@ const withRepo = async (runTest: ({ repoRoot }: GitRepo) => Promise<void>) => {
 
 const createRepoWithOrigin = async () => {
   const parentRoot = await realpath(
-    await mkdtemp(join(tmpdir(), "molttree-git-origin-")),
+    await mkdtemp(join(tmpdir(), "crabtree-git-origin-")),
   );
   const originRoot = join(parentRoot, "origin.git");
   const repoRoot = join(parentRoot, "repo");
@@ -182,7 +182,7 @@ const createRepoWithOrigin = async () => {
   });
   await runGit({
     cwd: repoRoot,
-    args: ["config", "user.name", "MoltTree Tests"],
+    args: ["config", "user.name", "Crabtree Tests"],
   });
   const mainSha = await commitRepoFile({
     repoRoot,
@@ -345,7 +345,7 @@ test("deeply reads only the focused repo graph", async () => {
 });
 
 test("reports Git errors when Codex folders cannot seed any repos", async () => {
-  const parentRoot = await mkdtemp(join(tmpdir(), "molttree-missing-repo-"));
+  const parentRoot = await mkdtemp(join(tmpdir(), "crabtree-missing-repo-"));
   const missingRepoRoot = join(parentRoot, "missing");
 
   try {
@@ -577,7 +577,7 @@ test("reads local branches as branch sync changes when origin tracking refs are 
     });
     await runGit({
       cwd: repoRoot,
-      args: ["remote", "set-url", "origin", "/tmp/molttree-missing-origin.git"],
+      args: ["remote", "set-url", "origin", "/tmp/crabtree-missing-origin.git"],
     });
     const { repos, warnings, gitErrors } = await readRepoGraphs({
       threads: [createThread({ id: "root-thread", cwd: repoRoot })],

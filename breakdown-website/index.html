@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Crabtree UI State Breakdown</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <!-- TODO: AI-PICKED-VALUE: Mermaid 11.14.0 is the current npm release used to render the requested diagrams in this static site. -->
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/mermaid@11.14.0/dist/mermaid.min.js"
+    ></script>
+    <script defer src="./data/product-surface.js"></script>
+    <script defer src="./data/website.js"></script>
+    <script defer src="./data/desktop-app.js"></script>
+    <script defer src="./main.js"></script>
+  </head>
+  <body>
+    <header class="siteHeader">
+      <div>
+        <p class="eyebrow">Crabtree internal reference</p>
+        <h1>UI State Breakdown</h1>
+        <p class="intro">
+          A split breakdown of the product surface, public website, and desktop
+          app. This follows the repo README and the current app source.
+        </p>
+      </div>
+      <nav class="siteNav" aria-label="Breakdown sections">
+        <a href="#product-surface">Parent</a>
+        <a href="#website">Website</a>
+        <a href="#desktop-app">Desktop</a>
+      </nav>
+    </header>
+
+    <main id="breakdown-root" class="breakdownRoot"></main>
+  </body>
+</html>

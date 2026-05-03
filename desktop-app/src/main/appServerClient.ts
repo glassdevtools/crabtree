@@ -36,7 +36,7 @@ export type AppServerClient = {
 const CODEX_DARWIN_COMMAND_PATH =
   "/Applications/Codex.app/Contents/Resources/codex";
 // TODO: AI-PICKED-VALUE: The temp cache directory lets dev and packaged builds reuse one copied Codex binary per installed app version.
-const CODEX_DARWIN_COMMAND_CACHE_DIR = join(tmpdir(), "molttree-codex-cli");
+const CODEX_DARWIN_COMMAND_CACHE_DIR = join(tmpdir(), "crabtree-codex-cli");
 // TODO: AI-PICKED-VALUE: Ten seconds keeps startup bounded while giving Codex app-server enough time to answer normal requests.
 const APP_SERVER_REQUEST_TIMEOUT_MS = 10000;
 
@@ -210,8 +210,8 @@ export const createAppServerClient = async ({
     id: 0,
     params: {
       clientInfo: {
-        name: "molttree",
-        title: "MoltTree",
+        name: "crabtree",
+        title: "Crabtree",
         version: "0",
       },
     },

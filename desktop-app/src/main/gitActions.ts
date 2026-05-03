@@ -298,7 +298,7 @@ const detachWorktreeHeadAtSha = async ({
       "update-ref",
       "--no-deref",
       "-m",
-      `MoltTree: detach HEAD from ${branch}`,
+      `Crabtree: detach HEAD from ${branch}`,
       "HEAD",
       expectedHeadSha,
     ],
@@ -328,7 +328,7 @@ const attachWorktreeHeadToBranch = async ({
     args: [
       "symbolic-ref",
       "-m",
-      `MoltTree: attach HEAD to ${branch}`,
+      `Crabtree: attach HEAD to ${branch}`,
       "HEAD",
       `refs/heads/${branch}`,
     ],
@@ -633,7 +633,7 @@ export const commitAllGitChanges = async ({
         args: [
           "update-ref",
           "-m",
-          `MoltTree: move ${branch}`,
+          `Crabtree: move ${branch}`,
           branchRef,
           newSha,
           oldSha,
@@ -674,7 +674,7 @@ const createGitRefAtTargetSha = async ({
     args: [
       "update-ref",
       "-m",
-      `MoltTree: create ${name}`,
+      `Crabtree: create ${name}`,
       gitRef,
       targetSha,
       ZERO_SHA,
@@ -799,7 +799,7 @@ const deleteVerifiedGitRef = async ({
     args: [
       "update-ref",
       "-m",
-      `MoltTree: delete ${refName}`,
+      `Crabtree: delete ${refName}`,
       "-d",
       gitRef,
       refHead,
@@ -1193,7 +1193,7 @@ export const moveGitBranch = async ({
       args: [
         "update-ref",
         "-m",
-        `MoltTree: move ${branch}`,
+        `Crabtree: move ${branch}`,
         branchRef,
         targetSha,
         expectedOldSha,
@@ -1241,7 +1241,7 @@ export const moveGitTag = async ({
     args: [
       "update-ref",
       "-m",
-      `MoltTree: move ${tag}`,
+      `Crabtree: move ${tag}`,
       tagRef,
       targetSha,
       refHead,
@@ -1308,7 +1308,7 @@ export const switchGitBranch = async ({
       args: [
         "update-ref",
         "-m",
-        `MoltTree: move ${branch}`,
+        `Crabtree: move ${branch}`,
         branchRef,
         targetSha,
         expectedOldSha,
@@ -1676,7 +1676,7 @@ export const revertGitBranchSyncChanges = async (
           args: [
             "update-ref",
             "-m",
-            `MoltTree: delete ${name}`,
+            `Crabtree: delete ${name}`,
             "-d",
             tagRef,
             localSha,
@@ -1770,7 +1770,7 @@ export const revertGitBranchSyncChanges = async (
         args: [
           "update-ref",
           "-m",
-          `MoltTree: create ${name}`,
+          `Crabtree: create ${name}`,
           branchRef,
           remoteSha,
           ZERO_SHA,
@@ -1802,7 +1802,7 @@ export const revertGitBranchSyncChanges = async (
         args: [
           "update-ref",
           "-m",
-          `MoltTree: reset ${name}`,
+          `Crabtree: reset ${name}`,
           branchRef,
           remoteSha,
           localSha,

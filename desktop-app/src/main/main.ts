@@ -115,7 +115,7 @@ const createMainWindow = () => {
     height: MAIN_WINDOW_HEIGHT,
     minWidth: MAIN_WINDOW_MIN_WIDTH,
     minHeight: MAIN_WINDOW_MIN_HEIGHT,
-    title: "MoltTree",
+    title: "Crabtree",
     backgroundColor: "#f4f6f8",
     show: false,
     webPreferences: {

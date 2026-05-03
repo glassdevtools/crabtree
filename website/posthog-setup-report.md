@@ -1,7 +1,7 @@
 <wizard-report>
 # PostHog post-wizard report
 
-The wizard completed a PostHog integration for the MoltTree website. It has since been reduced to explicit anonymous event tracking only. PostHog is initialized via `instrumentation-client.ts` with a reverse proxy through Next.js rewrites. Autocapture, pageviews, pageleave, exception capture, heatmaps, surveys, persistence, person profiles, scroll properties, feature flags, and session recording are disabled in client config.
+The wizard completed a PostHog integration for the Crabtree website. It has since been reduced to explicit anonymous event tracking only. PostHog is initialized via `instrumentation-client.ts` with a reverse proxy through Next.js rewrites. Autocapture, pageviews, pageleave, exception capture, heatmaps, surveys, persistence, person profiles, scroll properties, feature flags, and session recording are disabled in client config.
 
 Two client-side events are tracked across the three paired landing-page buttons: `download_app_clicked` and `github_clicked`. Each event is tagged with `surface: "website"`, `app_version`, and `button_location` (`nav`, `hero`, or `cta`).
 

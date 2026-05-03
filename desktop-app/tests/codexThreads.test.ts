@@ -10,7 +10,7 @@ import {
 } from "../src/main/codexThreads";
 
 const createTempRolloutFile = (text: string) => {
-  const dir = mkdtempSync(join(tmpdir(), "molttree-codex-rollout-"));
+  const dir = mkdtempSync(join(tmpdir(), "crabtree-codex-rollout-"));
   const path = join(dir, "rollout.jsonl");
 
   writeFileSync(path, text);

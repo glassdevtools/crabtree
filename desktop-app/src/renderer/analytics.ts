@@ -5,7 +5,7 @@ const POSTHOG_PROJECT_TOKEN =
   "phc_rFdSeJdgESyPtJWuULeF8uSHDS87cnGRMAYEW3fZUKN5";
 const POSTHOG_HOST = "https://us.i.posthog.com";
 const POSTHOG_UI_HOST = "https://us.posthog.com";
-const PRIVATE_MODE_STORAGE_KEY = "molttree.privateMode";
+const PRIVATE_MODE_STORAGE_KEY = "crabtree.privateMode";
 
 type DesktopAnalyticsEventName =
   | "branch_created"
@@ -50,7 +50,7 @@ const applyAnalyticsPrivateMode = (isPrivateMode: boolean) => {
     captureEventName: false,
   });
   analyticsIdentityPromise = (async () => {
-    const analyticsInstallId = await window.molttree.readAnalyticsInstallId();
+    const analyticsInstallId = await window.crabtree.readAnalyticsInstallId();
 
     if (readIsAnalyticsPrivateMode()) {
       return;
@@ -144,7 +144,7 @@ export const trackDesktopAppOpened = () => {
   didTrackDesktopAppOpened = true;
 
   void (async () => {
-    const desktopRuntimeInfo = await window.molttree.readDesktopRuntimeInfo();
+    const desktopRuntimeInfo = await window.crabtree.readDesktopRuntimeInfo();
 
     trackDesktopAction({
       eventName: "desktop_app_opened",

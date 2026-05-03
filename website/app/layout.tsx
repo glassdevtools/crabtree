@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
 
-const siteTitle = "MoltTree";
+const siteTitle = "Crabtree";
 const siteDescription = "Easily merge your Codex worktrees together.";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://molttree.app"),
+  metadataBase: new URL("https://crabtree.app"),
   title: siteTitle,
   description: siteDescription,
   alternates: {

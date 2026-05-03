@@ -203,7 +203,7 @@ export type AppUpdateStatus =
   | { type: "ready"; version: string }
   | { type: "error"; message: string };
 
-export type MoltTreeApi = {
+export type CrabtreeApi = {
   readDashboard: (request: DashboardReadRequest) => Promise<DashboardData>;
   readDashboardIfIdle: (
     request: DashboardReadRequest,

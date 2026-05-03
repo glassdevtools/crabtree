@@ -17,11 +17,11 @@ import type {
   GitMoveBranchRequest,
   GitMoveTagRequest,
   GitSwitchBranchRequest,
-  MoltTreeApi,
+  CrabtreeApi,
   OpenPathRequest,
 } from "../shared/types";
 
-const api: MoltTreeApi = {
+const api: CrabtreeApi = {
   readDashboard: async (request: DashboardReadRequest) => {
     const dashboardData: DashboardData = await ipcRenderer.invoke(
       "dashboard:read",
@@ -172,4 +172,4 @@ const api: MoltTreeApi = {
   },
 };
 
-contextBridge.exposeInMainWorld("molttree", api);
+contextBridge.exposeInMainWorld("crabtree", api);

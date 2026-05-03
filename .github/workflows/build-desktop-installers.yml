@@ -139,10 +139,10 @@ jobs:
       - name: Upload macOS installer
         uses: actions/upload-artifact@v4
         with:
-          name: molttree-macos-universal
+          name: crabtree-macos-universal
           path: |
-            desktop-app/dist/MoltTree-*.dmg
-            desktop-app/dist/MoltTree-*.zip
+            desktop-app/dist/Crabtree-*.dmg
+            desktop-app/dist/Crabtree-*.zip
             desktop-app/dist/*.blockmap
             desktop-app/dist/latest*.yml
           if-no-files-found: error
@@ -173,10 +173,10 @@ jobs:
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: molttree-windows-x64
+          name: crabtree-windows-x64
           path: |
-            desktop-app/dist/MoltTree-*.exe
-            desktop-app/dist/MoltTree-*.exe.blockmap
+            desktop-app/dist/Crabtree-*.exe
+            desktop-app/dist/Crabtree-*.exe.blockmap
             desktop-app/dist/latest*.yml
           if-no-files-found: error
           retention-days: 14
@@ -217,16 +217,16 @@ jobs:
 
           release_assets=()
           for asset_path in \
-            release-artifacts/**/MoltTree-*.dmg \
-            release-artifacts/**/MoltTree-*.zip \
+            release-artifacts/**/Crabtree-*.dmg \
+            release-artifacts/**/Crabtree-*.zip \
             release-artifacts/**/*.blockmap \
             release-artifacts/**/latest*.yml
           do
             release_assets+=("$asset_path")
           done
 
-          for dmg_path in release-artifacts/**/MoltTree-*-universal.dmg; do
-            static_asset_path="release-artifacts/MoltTree.dmg"
+          for dmg_path in release-artifacts/**/Crabtree-*-universal.dmg; do
+            static_asset_path="release-artifacts/Crabtree.dmg"
             cp "$dmg_path" "$static_asset_path"
             release_assets+=("$static_asset_path")
             break
@@ -239,13 +239,13 @@ jobs:
 
           release_notes_path="$RUNNER_TEMP/release-notes.md"
           cat > "$release_notes_path" <<EOF
-          MoltTree ${PACKAGE_VERSION}.
+          Crabtree ${PACKAGE_VERSION}.
 
-          Website: [MoltTree](https://molttree.app)
+          Website: [Crabtree](https://crabtree.app)
 
           | OS | Download |
           | --- | --- |
-          | Mac | [Download for Mac](https://github.com/glassdevtools/molttree/releases/download/${RELEASE_TAG}/MoltTree.dmg) |
+          | Mac | [Download for Mac](https://github.com/glassdevtools/crabtree/releases/download/${RELEASE_TAG}/Crabtree.dmg) |
           | Windows | Coming soon... |
           | Linux | Coming soon... |
           EOF

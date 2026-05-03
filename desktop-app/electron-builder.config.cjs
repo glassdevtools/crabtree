@@ -1,7 +1,7 @@
 const config = {
-  // TODO: AI-PICKED-VALUE: This bundle id is based on the existing Glass signing identity and the MoltTree app name.
-  appId: "com.glassdevtools.molttree",
-  productName: "MoltTree",
+  // TODO: AI-PICKED-VALUE: This bundle id is based on the existing Glass signing identity and the Crabtree app name.
+  appId: "com.glassdevtools.crabtree",
+  productName: "Crabtree",
   electronVersion: "41.3.0",
   directories: {
     output: "dist",
@@ -16,7 +16,7 @@ const config = {
     {
       provider: "github",
       owner: "glassdevtools",
-      repo: "molttree",
+      repo: "crabtree",
       releaseType: "release",
     },
   ],
@@ -35,11 +35,11 @@ const config = {
     icon: "packaging/macos/icon.icon",
     extendInfo: {
       NSDesktopFolderUsageDescription:
-        "MoltTree needs access to repositories stored on your Desktop so it can read their Git history.",
+        "Crabtree needs access to repositories stored on your Desktop so it can read their Git history.",
       NSDocumentsFolderUsageDescription:
-        "MoltTree needs access to repositories stored in Documents so it can read their Git history.",
+        "Crabtree needs access to repositories stored in Documents so it can read their Git history.",
       NSDownloadsFolderUsageDescription:
-        "MoltTree needs access to repositories stored in Downloads so it can read their Git history.",
+        "Crabtree needs access to repositories stored in Downloads so it can read their Git history.",
     },
     hardenedRuntime: true,
     entitlements: "packaging/macos/entitlements.plist",
