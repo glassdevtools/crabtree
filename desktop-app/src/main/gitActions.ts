@@ -1337,14 +1337,14 @@ export const checkoutGitCommit = async ({
     return;
   }
 
-  const statusText = await readGitTextForPath({
-    path: repoRoot,
-    args: ["status", "--porcelain"],
-  });
+  // const statusText = await readGitTextForPath({
+  //   path: repoRoot,
+  //   args: ["status", "--porcelain"],
+  // });
 
-  if (statusText.length > 0) {
-    throw new Error("Working tree must be clean before switching away.");
-  }
+  // if (statusText.length > 0) {
+  //   throw new Error("Working tree must be clean before switching away.");
+  // }
 
   const visibleRefText = await readGitTextForPath({
     path: repoRoot,
