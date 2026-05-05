@@ -45,7 +45,6 @@ export type GitChangeCounts = {
 };
 
 export type GitChangeSummary = {
-  conflictCount: number;
   staged: GitChangeCounts;
   unstaged: GitChangeCounts;
 };
@@ -111,7 +110,6 @@ export type GitCheckoutCommitRequest = {
 
 export type GitMergeBranchRequest = {
   repoRoot: string;
-  path: string;
   branch: string;
 };
 
