@@ -20,6 +20,7 @@ import type {
   GitSwitchBranchRequest,
   OpenPathRequest,
   PathLauncher,
+  TerminalSessionEvent,
 } from "../shared/types";
 import type { AppServerClient } from "./appServerClient";
 import { readOrCreateAnalyticsInstallId } from "./analyticsStore";
@@ -56,6 +57,13 @@ import {
   switchGitBranch,
   unstageGitChanges,
 } from "./gitActions";
+import {
+  createTerminalSessionController,
+  readTerminalSessionResizeRequest,
+  readTerminalSessionStartRequest,
+  readTerminalSessionStopRequest,
+  readTerminalSessionWriteRequest,
+} from "./terminalSessions";
 
 // The main process owns local system access. The renderer only receives narrow, typed IPC methods through preload.
 // TODO: AI-PICKED-VALUE: This initial window size gives the graph and thread sidebar enough room on a laptop display.
@@ -74,6 +82,19 @@ const codexThreadStatusOfId: {
 const APP_SERVER_LOADED_THREAD_PAGE_SIZE = 200;
 const { autoUpdater } = electronUpdater;
 const appUpdateController = createAppUpdateController({ app, autoUpdater });
+const sendTerminalSessionEvent = (
+  terminalSessionEvent: TerminalSessionEvent,
+) => {
+  for (const browserWindow of BrowserWindow.getAllWindows()) {
+    browserWindow.webContents.send(
+      "terminal:sessionEvent",
+      terminalSessionEvent,
+    );
+  }
+};
+const terminalSessionController = createTerminalSessionController({
+  sendTerminalSessionEvent,
+});
 
 const readExternalUrl = (value: unknown) => {
   if (typeof value !== "string" || value.length === 0) {
@@ -854,6 +875,34 @@ ipcMain.handle("path:open", async (_event, value: unknown) => {
   }
 });
 
+ipcMain.handle("terminal:readSessions", () => {
+  return terminalSessionController.readTerminalSessions();
+});
+
+ipcMain.handle("terminal:startSession", async (_event, value: unknown) => {
+  return await terminalSessionController.startTerminalSession(
+    readTerminalSessionStartRequest(value),
+  );
+});
+
+ipcMain.handle("terminal:writeSession", async (_event, value: unknown) => {
+  terminalSessionController.writeTerminalSession(
+    readTerminalSessionWriteRequest(value),
+  );
+});
+
+ipcMain.handle("terminal:resizeSession", async (_event, value: unknown) => {
+  terminalSessionController.resizeTerminalSession(
+    readTerminalSessionResizeRequest(value),
+  );
+});
+
+ipcMain.handle("terminal:stopSession", async (_event, value: unknown) => {
+  terminalSessionController.stopTerminalSession(
+    readTerminalSessionStopRequest(value),
+  );
+});
+
 ipcMain.handle("clipboard:writeText", async (_event, text: unknown) => {
   if (typeof text !== "string" || text.length === 0) {
     throw new Error("text must be a non-empty string.");
@@ -1062,6 +1111,7 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", () => {
+  terminalSessionController.stopAllTerminalSessions();
   appUpdateController.stop();
 });
 

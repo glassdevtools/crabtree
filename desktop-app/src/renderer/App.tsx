@@ -7,7 +7,11 @@ import {
   Settings,
   Tag,
   Trash2,
+  X,
 } from "lucide-react";
+import { FitAddon } from "@xterm/addon-fit";
+import { Terminal as XtermTerminal } from "@xterm/xterm";
+import { Dialog as RadixDialog } from "radix-ui";
 import { GoDotFill } from "react-icons/go";
 import {
   LuCheck,
@@ -17,6 +21,7 @@ import {
   LuGitPullRequestArrow,
 } from "react-icons/lu";
 import { MdOutlineCallSplit } from "react-icons/md";
+import { PiTerminalWindowFill } from "react-icons/pi";
 import { VscVscode } from "react-icons/vsc";
 import { Resizable } from "react-resizable";
 import { toast } from "sonner";
@@ -51,7 +56,9 @@ import type {
   GitWorktree,
   PathLauncher,
   RepoGraph,
+  TerminalSessionEvent,
 } from "../shared/types";
+import type { IDisposable as XtermDisposable } from "@xterm/xterm";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -59,10 +66,12 @@ import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
+  DialogOverlay,
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
@@ -108,6 +117,7 @@ import {
   trackDesktopAction,
 } from "./analytics";
 import packageInfo from "../../package.json";
+import "@xterm/xterm/css/xterm.css";
 
 // The history view is a SourceTree-style row table. Git owns the commits; the renderer only assigns lanes.
 // TODO: AI-PICKED-VALUE: These graph sizes and colors are initial SourceTree-like choices for dense commit rows.
@@ -854,6 +864,10 @@ type ChangeSummaryTarget = {
   path: string;
   title: string;
   changeSummary: GitChangeSummary;
+};
+
+type TerminalTarget = {
+  cwd: string;
 };
 
 type BranchMergeConfirmation = {
@@ -1962,19 +1976,26 @@ const ChatRobotTags = ({
   threadGroups,
   worktrees,
   pathLauncher,
+  isTerminalBusyOfCwd,
   openCopyContextMenu,
   openCodePath,
+  openTerminalModal,
   showErrorMessage,
 }: {
   threadGroups: ThreadGroup[];
   worktrees: GitWorktree[];
   pathLauncher: PathLauncher;
+  isTerminalBusyOfCwd: { [cwd: string]: boolean };
   openCopyContextMenu: (
     event: MouseEvent<Element>,
     text: string,
     errorMessage: string,
   ) => void;
   openCodePath: (path: string) => Promise<void>;
+  openTerminalModal: (
+    event: MouseEvent<HTMLButtonElement>,
+    cwd: string,
+  ) => void;
   showErrorMessage: (message: string) => void;
 }) => {
   if (threadGroups.length === 0) {
@@ -2005,31 +2026,64 @@ const ChatRobotTags = ({
         return (
           <span className="commit-thread-group" key={threadGroup.key}>
             {threadGroup.cwd.length === 0 ? null : (
-              <TitleTooltip title={`Open in ${pathLauncherLabel}`}>
-                <Button
-                  aria-label={`Open ${threadGroup.cwd}`}
-                  className="commit-thread-code-location"
-                  variant="ghost"
-                  size="icon-xs"
-                  type="button"
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onDoubleClick={(event) => event.stopPropagation()}
-                  onContextMenu={(event) => {
-                    openCopyContextMenu(
-                      event,
-                      threadGroup.cwd,
-                      "Failed to copy path.",
-                    );
-                  }}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    void openCodePath(threadGroup.cwd);
-                  }}
-                >
-                  <PathLauncherIcon pathLauncher={pathLauncher} />
-                </Button>
-              </TitleTooltip>
+              <>
+                <TitleTooltip title={`Open in ${pathLauncherLabel}`}>
+                  <Button
+                    aria-label={`Open ${threadGroup.cwd}`}
+                    className="commit-thread-code-location"
+                    variant="ghost"
+                    size="icon-xs"
+                    type="button"
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                    onContextMenu={(event) => {
+                      openCopyContextMenu(
+                        event,
+                        threadGroup.cwd,
+                        "Failed to copy path.",
+                      );
+                    }}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      void openCodePath(threadGroup.cwd);
+                    }}
+                  >
+                    <PathLauncherIcon pathLauncher={pathLauncher} />
+                  </Button>
+                </TitleTooltip>
+                <TitleTooltip title="Open Terminal">
+                  <Button
+                    aria-label={`Open terminal in ${threadGroup.cwd}`}
+                    className={
+                      isTerminalBusyOfCwd[threadGroup.cwd] === true
+                        ? "commit-thread-terminal commit-thread-terminal-busy"
+                        : "commit-thread-terminal"
+                    }
+                    variant="ghost"
+                    size="icon-xs"
+                    type="button"
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                    onClick={(event) =>
+                      openTerminalModal(event, threadGroup.cwd)
+                    }
+                  >
+                    <PiTerminalWindowFill
+                      aria-hidden="true"
+                      className="commit-thread-terminal-icon"
+                      size={10}
+                    />
+                    {isTerminalBusyOfCwd[threadGroup.cwd] === true ? (
+                      <LoaderCircle
+                        aria-hidden="true"
+                        className="commit-thread-terminal-loading-icon"
+                        size={9}
+                      />
+                    ) : null}
+                  </Button>
+                </TitleTooltip>
+              </>
             )}
             {threadGroup.threads.map((thread) => {
               const title = threadTitle(thread);
@@ -2182,6 +2236,7 @@ const CommitHistoryRow = ({
   threadOfId,
   gitChangesOfCwd,
   pathLauncher,
+  isTerminalBusyOfCwd,
   isBranchPointerDropTarget,
   shouldOwnMainWorktreeHead,
   isBranchMergeableOfBranch,
@@ -2202,6 +2257,7 @@ const CommitHistoryRow = ({
   openCopyContextMenu,
   openGitRefContextMenu,
   openCodePath,
+  openTerminalModal,
   showErrorMessage,
   startBranchPointerDrag,
   finishBranchPointerDrag,
@@ -2216,6 +2272,7 @@ const CommitHistoryRow = ({
   threadOfId: { [id: string]: CodexThread };
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   pathLauncher: PathLauncher;
+  isTerminalBusyOfCwd: { [cwd: string]: boolean };
   isBranchPointerDropTarget: boolean;
   shouldOwnMainWorktreeHead: boolean;
   isBranchMergeableOfBranch: { [branch: string]: boolean };
@@ -2261,6 +2318,10 @@ const CommitHistoryRow = ({
     gitRefContextMenuTarget: Omit<GitRefContextMenuTarget, "x" | "y">,
   ) => void;
   openCodePath: (path: string) => Promise<void>;
+  openTerminalModal: (
+    event: MouseEvent<HTMLButtonElement>,
+    cwd: string,
+  ) => void;
   showErrorMessage: (message: string) => void;
   startBranchPointerDrag: ({
     event,
@@ -2808,8 +2869,10 @@ const CommitHistoryRow = ({
           threadGroups={threadGroups}
           worktrees={worktrees}
           pathLauncher={pathLauncher}
+          isTerminalBusyOfCwd={isTerminalBusyOfCwd}
           openCopyContextMenu={openCopyContextMenu}
           openCodePath={openCodePath}
+          openTerminalModal={openTerminalModal}
           showErrorMessage={showErrorMessage}
         />
       </div>
@@ -3003,6 +3066,410 @@ const ConfirmationDialog = ({
           </DialogFooter>
         </DialogContent>
       ) : null}
+    </Dialog>
+  );
+};
+
+// The terminal has its own modal surface because the shared dialog is sized for small forms.
+const TerminalModalContent = ({ children }: { children: ReactNode }) => {
+  return (
+    <RadixDialog.Portal>
+      <DialogOverlay />
+      <RadixDialog.Content
+        className="terminal-modal-content"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+        }}
+      >
+        {children}
+      </RadixDialog.Content>
+    </RadixDialog.Portal>
+  );
+};
+
+// The terminal modal renders the browser terminal while the main process owns the shell and cwd.
+const TerminalDialog = ({
+  terminalTarget,
+  isTerminalRunning,
+  closeTerminalModal,
+  updateTerminalStatusState,
+  showErrorMessage,
+}: {
+  terminalTarget: TerminalTarget | null;
+  isTerminalRunning: boolean;
+  closeTerminalModal: () => void;
+  updateTerminalStatusState: ({
+    cwd,
+    isRunning,
+    isBusy,
+  }: {
+    cwd: string;
+    isRunning: boolean;
+    isBusy: boolean;
+  }) => void;
+  showErrorMessage: (message: string) => void;
+}) => {
+  const [terminalElement, setTerminalElement] = useState<HTMLDivElement | null>(
+    null,
+  );
+  const terminalRef = useRef<XtermTerminal | null>(null);
+  const setTerminalElementRef = useCallback(
+    (nextTerminalElement: HTMLDivElement | null) => {
+      setTerminalElement(nextTerminalElement);
+    },
+    [],
+  );
+
+  useLayoutEffect(() => {
+    if (terminalTarget === null || terminalElement === null) {
+      return;
+    }
+
+    const cwd = terminalTarget.cwd;
+    const terminal = new XtermTerminal();
+    const fitAddon = new FitAddon();
+    const queuedTerminalEvents: TerminalSessionEvent[] = [];
+    let didWriteSnapshot = false;
+    let isDisposed = false;
+    let dataDisposable: XtermDisposable | null = null;
+    let resizeDisposable: XtermDisposable | null = null;
+    let animationFrameId: number | null = null;
+
+    // The writer batches PTY chunks so xterm receives output in order without a render for every process event.
+    const createTerminalWriter = ({
+      write,
+      schedule,
+    }: {
+      write: (data: string, done: VoidFunction | undefined) => void;
+      schedule: (flush: VoidFunction) => void;
+    }) => {
+      let chunks: string[] | undefined;
+      let waits: VoidFunction[] | undefined;
+      let isScheduled = false;
+      let isWriting = false;
+
+      const settle = () => {
+        const hasQueuedChunks = chunks !== undefined && chunks.length > 0;
+
+        if (isScheduled || isWriting || hasQueuedChunks) {
+          return;
+        }
+
+        const callbacks = waits;
+
+        if (callbacks === undefined || callbacks.length === 0) {
+          return;
+        }
+
+        waits = undefined;
+
+        for (const callback of callbacks) {
+          callback();
+        }
+      };
+      const run = () => {
+        if (isWriting) {
+          return;
+        }
+
+        isScheduled = false;
+
+        const nextChunks = chunks;
+
+        if (nextChunks === undefined || nextChunks.length === 0) {
+          settle();
+          return;
+        }
+
+        chunks = undefined;
+        isWriting = true;
+        write(nextChunks.join(""), () => {
+          isWriting = false;
+
+          if (chunks !== undefined && chunks.length > 0) {
+            if (isScheduled) {
+              return;
+            }
+
+            isScheduled = true;
+            schedule(run);
+            return;
+          }
+
+          settle();
+        });
+      };
+      const push = (data: string) => {
+        if (data.length === 0) {
+          return;
+        }
+
+        if (chunks === undefined) {
+          chunks = [data];
+        } else {
+          chunks.push(data);
+        }
+
+        if (isScheduled || isWriting) {
+          return;
+        }
+
+        isScheduled = true;
+        schedule(run);
+      };
+      const flush = (done: VoidFunction | undefined) => {
+        const hasQueuedChunks = chunks !== undefined && chunks.length > 0;
+
+        if (!isScheduled && !isWriting && !hasQueuedChunks) {
+          if (done !== undefined) {
+            done();
+          }
+
+          return;
+        }
+
+        if (done !== undefined) {
+          if (waits === undefined) {
+            waits = [done];
+          } else {
+            waits.push(done);
+          }
+        }
+
+        run();
+      };
+
+      return { push, flush };
+    };
+    const terminalWriter = createTerminalWriter({
+      write: (data, done) => {
+        terminal.write(data, done);
+      },
+      schedule: queueMicrotask,
+    });
+    const fitTerminal = () => {
+      try {
+        fitAddon.fit();
+      } catch (error) {
+        console.error("Failed to fit terminal.", error);
+      }
+    };
+    const readTerminalDimensions = () => {
+      return {
+        cols: Math.max(1, terminal.cols),
+        rows: Math.max(1, terminal.rows),
+      };
+    };
+    const resizeTerminal = () => {
+      fitTerminal();
+      const { cols, rows } = readTerminalDimensions();
+
+      void window.crabtree.resizeTerminalSession({
+        cwd,
+        cols,
+        rows,
+      });
+    };
+    const resizeObserver = new ResizeObserver(resizeTerminal);
+    const removeTerminalSessionWatch = window.crabtree.watchTerminalSession(
+      (terminalSessionEvent) => {
+        if (terminalSessionEvent.cwd !== cwd) {
+          return;
+        }
+
+        switch (terminalSessionEvent.type) {
+          case "data":
+            if (didWriteSnapshot) {
+              terminalWriter.push(terminalSessionEvent.data);
+              return;
+            }
+
+            queuedTerminalEvents.push(terminalSessionEvent);
+            return;
+          case "status":
+            updateTerminalStatusState({
+              cwd,
+              isRunning: terminalSessionEvent.isRunning,
+              isBusy: terminalSessionEvent.isBusy,
+            });
+            return;
+        }
+      },
+    );
+
+    terminal.loadAddon(fitAddon);
+    terminal.open(terminalElement);
+    terminalRef.current = terminal;
+    resizeObserver.observe(terminalElement);
+    terminal.focus();
+    dataDisposable = terminal.onData((data) => {
+      void window.crabtree
+        .writeTerminalSession({ cwd, data })
+        .catch((error) => {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "Failed to write to terminal.";
+          showErrorMessage(message);
+        });
+    });
+    resizeDisposable = terminal.onResize(({ cols, rows }) => {
+      void window.crabtree.resizeTerminalSession({ cwd, cols, rows });
+    });
+
+    animationFrameId = window.requestAnimationFrame(() => {
+      fitTerminal();
+      terminal.focus();
+
+      const { cols, rows } = readTerminalDimensions();
+
+      void window.crabtree
+        .startTerminalSession({
+          cwd,
+          cols,
+          rows,
+        })
+        .then((terminalSessionSnapshot) => {
+          if (isDisposed) {
+            return;
+          }
+
+          terminalWriter.push(terminalSessionSnapshot.output);
+          didWriteSnapshot = true;
+          updateTerminalStatusState({
+            cwd,
+            isRunning: terminalSessionSnapshot.isRunning,
+            isBusy: terminalSessionSnapshot.isBusy,
+          });
+
+          for (const terminalSessionEvent of queuedTerminalEvents) {
+            if (
+              terminalSessionEvent.type === "data" &&
+              terminalSessionEvent.cursor > terminalSessionSnapshot.cursor
+            ) {
+              const terminalSessionEventStartCursor =
+                terminalSessionEvent.cursor - terminalSessionEvent.data.length;
+
+              if (
+                terminalSessionEventStartCursor < terminalSessionSnapshot.cursor
+              ) {
+                terminalWriter.push(
+                  terminalSessionEvent.data.slice(
+                    terminalSessionSnapshot.cursor -
+                      terminalSessionEventStartCursor,
+                  ),
+                );
+              } else {
+                terminalWriter.push(terminalSessionEvent.data);
+              }
+            }
+          }
+
+          terminalWriter.flush(undefined);
+        })
+        .catch((error) => {
+          const message =
+            error instanceof Error ? error.message : "Failed to open terminal.";
+          terminalWriter.push(`\r\n${message}\r\n`);
+          terminalWriter.flush(undefined);
+          updateTerminalStatusState({ cwd, isRunning: false, isBusy: false });
+          showErrorMessage(message);
+        });
+    });
+
+    return () => {
+      isDisposed = true;
+      if (animationFrameId !== null) {
+        window.cancelAnimationFrame(animationFrameId);
+      }
+
+      if (terminalRef.current === terminal) {
+        terminalRef.current = null;
+      }
+
+      removeTerminalSessionWatch();
+      resizeObserver.disconnect();
+      dataDisposable?.dispose();
+      resizeDisposable?.dispose();
+      terminal.dispose();
+    };
+  }, [
+    showErrorMessage,
+    terminalElement,
+    terminalTarget,
+    updateTerminalStatusState,
+  ]);
+
+  const stopTerminal = async () => {
+    if (terminalTarget === null) {
+      return;
+    }
+
+    try {
+      await window.crabtree.stopTerminalSession(terminalTarget.cwd);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to stop terminal.";
+      showErrorMessage(message);
+    }
+  };
+
+  return (
+    <Dialog
+      open={terminalTarget !== null}
+      onOpenChange={(isOpen) => {
+        if (isOpen) {
+          return;
+        }
+
+        closeTerminalModal();
+      }}
+    >
+      {terminalTarget === null ? null : (
+        <TerminalModalContent>
+          <div className="terminal-modal-header">
+            <DialogTitle className="terminal-modal-title">Terminal</DialogTitle>
+            <DialogDescription>
+              <code className="terminal-modal-path">{terminalTarget.cwd}</code>
+            </DialogDescription>
+          </div>
+          <div
+            className="terminal-surface"
+            ref={setTerminalElementRef}
+            aria-label={`Terminal in ${terminalTarget.cwd}`}
+            onMouseDown={() => {
+              terminalRef.current?.focus();
+            }}
+          />
+          <div className="terminal-modal-footer">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!isTerminalRunning}
+              onClick={() => {
+                void stopTerminal();
+              }}
+            >
+              Stop Terminal
+            </Button>
+            <Button type="button" onClick={closeTerminalModal}>
+              Close
+            </Button>
+          </div>
+          <DialogClose asChild>
+            <Button
+              aria-label="Close terminal"
+              className="terminal-modal-close"
+              size="icon-sm"
+              type="button"
+              variant="ghost"
+            >
+              <X aria-hidden="true" />
+              <span className="sr-only">Close terminal</span>
+            </Button>
+          </DialogClose>
+        </TerminalModalContent>
+      )}
     </Dialog>
   );
 };
@@ -3536,6 +4003,15 @@ const CommitHistory = ({
     useState<CommitMessageTarget | null>(null);
   const [changeSummaryTarget, setChangeSummaryTarget] =
     useState<ChangeSummaryTarget | null>(null);
+  const [terminalTarget, setTerminalTarget] = useState<TerminalTarget | null>(
+    null,
+  );
+  const [isTerminalRunningOfCwd, setIsTerminalRunningOfCwd] = useState<{
+    [cwd: string]: boolean;
+  }>({});
+  const [isTerminalBusyOfCwd, setIsTerminalBusyOfCwd] = useState<{
+    [cwd: string]: boolean;
+  }>({});
   const [gitRefDeleteTarget, setGitRefDeleteTarget] =
     useState<GitRefDeleteTarget | null>(null);
   const [branchMergeConfirmation, setBranchMergeConfirmation] =
@@ -3548,6 +4024,88 @@ const CommitHistory = ({
     useState<BranchPointerMove | null>(null);
   const [branchPointerDropTargetRowId, setBranchPointerDropTargetRowId] =
     useState<string | null>(null);
+  const updateTerminalStatusState = useCallback(
+    ({
+      cwd,
+      isRunning,
+      isBusy,
+    }: {
+      cwd: string;
+      isRunning: boolean;
+      isBusy: boolean;
+    }) => {
+      setIsTerminalRunningOfCwd((currentIsTerminalRunningOfCwd) => {
+        if (currentIsTerminalRunningOfCwd[cwd] === isRunning) {
+          return currentIsTerminalRunningOfCwd;
+        }
+
+        return {
+          ...currentIsTerminalRunningOfCwd,
+          [cwd]: isRunning,
+        };
+      });
+      setIsTerminalBusyOfCwd((currentIsTerminalBusyOfCwd) => {
+        if (currentIsTerminalBusyOfCwd[cwd] === isBusy) {
+          return currentIsTerminalBusyOfCwd;
+        }
+
+        return {
+          ...currentIsTerminalBusyOfCwd,
+          [cwd]: isBusy,
+        };
+      });
+    },
+    [],
+  );
+  useEffect(() => {
+    let isDisposed = false;
+    const removeTerminalSessionWatch = window.crabtree.watchTerminalSession(
+      (terminalSessionEvent) => {
+        switch (terminalSessionEvent.type) {
+          case "data":
+            return;
+          case "status":
+            updateTerminalStatusState({
+              cwd: terminalSessionEvent.cwd,
+              isRunning: terminalSessionEvent.isRunning,
+              isBusy: terminalSessionEvent.isBusy,
+            });
+            return;
+        }
+      },
+    );
+
+    void window.crabtree
+      .readTerminalSessions()
+      .then((terminalSessionSummaries) => {
+        if (isDisposed) {
+          return;
+        }
+
+        const nextIsTerminalRunningOfCwd: { [cwd: string]: boolean } = {};
+        const nextIsTerminalBusyOfCwd: { [cwd: string]: boolean } = {};
+
+        for (const terminalSessionSummary of terminalSessionSummaries) {
+          nextIsTerminalRunningOfCwd[terminalSessionSummary.cwd] =
+            terminalSessionSummary.isRunning;
+          nextIsTerminalBusyOfCwd[terminalSessionSummary.cwd] =
+            terminalSessionSummary.isBusy;
+        }
+
+        setIsTerminalRunningOfCwd(nextIsTerminalRunningOfCwd);
+        setIsTerminalBusyOfCwd(nextIsTerminalBusyOfCwd);
+      })
+      .catch((error) => {
+        const message =
+          error instanceof Error ? error.message : "Failed to read terminals.";
+        showErrorMessage(message);
+      });
+
+    return () => {
+      isDisposed = true;
+      removeTerminalSessionWatch();
+    };
+  }, [showErrorMessage, updateTerminalStatusState]);
   useEffect(() => {
     if (
       gitRefCreateMenuTarget === null &&
@@ -4592,6 +5150,21 @@ const CommitHistory = ({
   const closeChangeSummaryModal = () => {
     setChangeSummaryTarget(null);
   };
+  const openTerminalModal = (
+    event: MouseEvent<HTMLButtonElement>,
+    cwd: string,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setTerminalTarget({ cwd });
+    trackDesktopAction({
+      eventName: "terminal_opened",
+      properties: { source: "commit_history" },
+    });
+  };
+  const closeTerminalModal = () => {
+    setTerminalTarget(null);
+  };
   const closeBranchMergeConfirmationModal = () => {
     setBranchMergeConfirmation(null);
   };
@@ -5358,6 +5931,7 @@ const CommitHistory = ({
                 threadOfId={threadOfId}
                 gitChangesOfCwd={gitChangesOfCwd}
                 pathLauncher={pathLauncher}
+                isTerminalBusyOfCwd={isTerminalBusyOfCwd}
                 isBranchPointerDropTarget={
                   branchPointerDropTargetRowId === row.id
                 }
@@ -5392,6 +5966,7 @@ const CommitHistory = ({
                 openCopyContextMenu={openCopyContextMenu}
                 openGitRefContextMenu={openGitRefContextMenu}
                 openCodePath={openCodePath}
+                openTerminalModal={openTerminalModal}
                 showErrorMessage={showErrorMessage}
                 startBranchPointerDrag={startBranchPointerDrag}
                 finishBranchPointerDrag={finishBranchPointerDrag}
@@ -5418,6 +5993,16 @@ const CommitHistory = ({
           commitMessageTarget={commitMessageTarget}
           createCommit={createCommit}
           closeCommitMessageModal={closeCommitMessageModal}
+        />
+        <TerminalDialog
+          terminalTarget={terminalTarget}
+          isTerminalRunning={
+            terminalTarget !== null &&
+            isTerminalRunningOfCwd[terminalTarget.cwd] === true
+          }
+          closeTerminalModal={closeTerminalModal}
+          updateTerminalStatusState={updateTerminalStatusState}
+          showErrorMessage={showErrorMessage}
         />
         <Dialog
           open={changeSummaryTarget !== null}

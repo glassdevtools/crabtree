@@ -12,6 +12,7 @@
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
     "icons:mac": "scripts/generate_macos_icons.sh",
+    "postinstall": "node scripts/fix_node_pty_spawn_helper.cjs",
     "dist:mac": "scripts/package_macos.sh",
     "dist:win": "npm run build && electron-builder --config electron-builder.config.cjs --win",
     "typecheck": "tsc --noEmit",
@@ -19,7 +20,10 @@
     "format": "prettier --write ."
   },
   "dependencies": {
+    "@lydell/node-pty": "^1.2.0-beta.12",
     "@types/react-resizable": "^3.0.8",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "electron-updater": "^6.8.3",
