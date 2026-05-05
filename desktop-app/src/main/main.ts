@@ -10,7 +10,6 @@ import type {
   GitCheckoutCommitRequest,
   GitCommitChangesRequest,
   GitCreateBranchRequest,
-  GitDiffRequest,
   GitCreatePullRequestRequest,
   GitCreateRefRequest,
   GitDeleteBranchRequest,
@@ -52,7 +51,6 @@ import {
   moveGitTag,
   previewGitMerge,
   pushGitBranchSyncChanges,
-  readGitDiff,
   readGitMainWorktreePathForPath,
   revertGitBranchSyncChanges,
   stageGitChanges,
@@ -661,65 +659,6 @@ const readGitMergeBranchRequest = (value: unknown) => {
   return gitMergeBranchRequest;
 };
 
-const readGitDiffRequest = (value: unknown) => {
-  if (!isObject(value)) {
-    throw new Error("gitDiffRequest must be an object.");
-  }
-
-  const { mode, target } = value;
-
-  if (mode !== "changesMadeHere" && mode !== "diffAgainstHead") {
-    throw new Error("gitDiffRequest needs a diff mode.");
-  }
-
-  if (!isObject(target)) {
-    throw new Error("gitDiffRequest needs a target.");
-  }
-
-  switch (target.type) {
-    case "commit": {
-      if (
-        typeof target.repoRoot !== "string" ||
-        target.repoRoot.length === 0 ||
-        typeof target.sha !== "string" ||
-        target.sha.length === 0
-      ) {
-        throw new Error(
-          "gitDiffRequest commit target needs a repo root and sha.",
-        );
-      }
-
-      const gitDiffRequest: GitDiffRequest = {
-        mode,
-        target: {
-          type: "commit",
-          repoRoot: target.repoRoot,
-          sha: target.sha,
-        },
-      };
-
-      return gitDiffRequest;
-    }
-    case "path": {
-      if (typeof target.path !== "string" || target.path.length === 0) {
-        throw new Error("gitDiffRequest path target needs a path.");
-      }
-
-      const gitDiffRequest: GitDiffRequest = {
-        mode,
-        target: {
-          type: "path",
-          path: target.path,
-        },
-      };
-
-      return gitDiffRequest;
-    }
-    default:
-      throw new Error("gitDiffRequest target must be a commit or path.");
-  }
-};
-
 const readGitCreatePullRequestRequest = (value: unknown) => {
   if (!isObject(value)) {
     throw new Error("gitCreatePullRequestRequest must be an object.");
@@ -1110,10 +1049,6 @@ ipcMain.handle("git:mergeBranch", async (_event, value: unknown) => {
       return await mergeGitBranch(gitMergeBranchRequest);
     },
   });
-});
-
-ipcMain.handle("git:readDiff", async (_event, value: unknown) => {
-  return await readGitDiff(readGitDiffRequest(value));
 });
 
 ipcMain.handle("git:createPullRequest", async (_event, value: unknown) => {

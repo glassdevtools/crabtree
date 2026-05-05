@@ -27,7 +27,6 @@ type DesktopAnalyticsEventName =
   | "pull_request_created"
   | "repo_opened"
   | "repo_selected"
-  | "row_diff_opened"
   | "tag_created"
   | "tag_deleted"
   | "tag_dragged"
