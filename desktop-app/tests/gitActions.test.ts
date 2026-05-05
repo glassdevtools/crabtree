@@ -1237,6 +1237,139 @@ test("commits all changes and advances colocated local branch tags", async () =>
   });
 });
 
+test("commits a staged merge resolution without staging unrelated work", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    await writeRepoFile({
+      repoRoot,
+      filePath: "conflict.txt",
+      content: "base\n",
+    });
+    await writeRepoFile({
+      repoRoot,
+      filePath: "unrelated.txt",
+      content: "base\n",
+    });
+    await runGit({ cwd: repoRoot, args: ["add", "--", "."] });
+    await runGit({ cwd: repoRoot, args: ["commit", "-m", "initial"] });
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
+    await commitRepoFile({
+      repoRoot,
+      filePath: "conflict.txt",
+      content: "feature\n",
+      message: "feature",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "main"] });
+    await commitRepoFile({
+      repoRoot,
+      filePath: "conflict.txt",
+      content: "main\n",
+      message: "main",
+    });
+
+    await assert.rejects(async () => {
+      await runGit({ cwd: repoRoot, args: ["merge", "feature"] });
+    });
+
+    await writeRepoFile({
+      repoRoot,
+      filePath: "conflict.txt",
+      content: "main\nfeature\n",
+    });
+    await runGit({ cwd: repoRoot, args: ["add", "--", "conflict.txt"] });
+    await writeRepoFile({
+      repoRoot,
+      filePath: "unrelated.txt",
+      content: "dirty\n",
+    });
+
+    const newSha = await commitAllGitChanges({
+      path: repoRoot,
+      message: "merge feature",
+    });
+
+    assert.equal(
+      await readOptionalSha({ cwd: repoRoot, ref: "MERGE_HEAD" }),
+      null,
+    );
+    assert.equal(
+      (
+        await runGit({
+          cwd: repoRoot,
+          args: ["rev-list", "--parents", "-n", "1", newSha],
+        })
+      ).split(" ").length,
+      3,
+    );
+    assert.equal(
+      await runGit({ cwd: repoRoot, args: ["show", `${newSha}:conflict.txt`] }),
+      "main\nfeature",
+    );
+    assert.equal(
+      await runGit({
+        cwd: repoRoot,
+        args: ["show", `${newSha}:unrelated.txt`],
+      }),
+      "base",
+    );
+    assert.equal(
+      await readRepoFile({ repoRoot, filePath: "unrelated.txt" }),
+      "dirty\n",
+    );
+    assert.equal(
+      await runGit({ cwd: repoRoot, args: ["diff", "--name-only"] }),
+      "unrelated.txt",
+    );
+    assert.equal(
+      await runGit({
+        cwd: repoRoot,
+        args: ["diff", "--cached", "--name-only"],
+      }),
+      "",
+    );
+  });
+});
+
+test("does not stage unresolved merge conflicts before committing", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    await commitRepoFile({
+      repoRoot,
+      filePath: "conflict.txt",
+      content: "base\n",
+      message: "initial",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
+    await commitRepoFile({
+      repoRoot,
+      filePath: "conflict.txt",
+      content: "feature\n",
+      message: "feature",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "main"] });
+    await commitRepoFile({
+      repoRoot,
+      filePath: "conflict.txt",
+      content: "main\n",
+      message: "main",
+    });
+
+    await assert.rejects(async () => {
+      await runGit({ cwd: repoRoot, args: ["merge", "feature"] });
+    });
+    await assert.rejects(async () => {
+      await commitAllGitChanges({ path: repoRoot, message: "bad merge" });
+    });
+
+    assert.notEqual(
+      await readOptionalSha({ cwd: repoRoot, ref: "MERGE_HEAD" }),
+      null,
+    );
+    assert.match(
+      await runGit({ cwd: repoRoot, args: ["status", "--porcelain"] }),
+      /^UU conflict\.txt$/m,
+    );
+  });
+});
+
 test("keeps a successful commit when a colocated branch tag moves first", async () => {
   await withRepo(async ({ repoRoot }) => {
     const oldSha = await commitRepoFile({

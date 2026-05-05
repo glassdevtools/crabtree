@@ -596,6 +596,15 @@ export const unstageGitChanges = async (path: string) => {
   });
 };
 
+const readIsMergeInProgress = async ({ path }: { path: string }) => {
+  const mergeHead = await readNullableGitTextForPath({
+    path,
+    args: ["rev-parse", "--verify", "MERGE_HEAD"],
+  });
+
+  return mergeHead !== null;
+};
+
 const readGitDiffFilesForText = ({
   diffText,
   section,
@@ -854,7 +863,12 @@ export const commitAllGitChanges = async ({
     sha: oldSha,
   });
 
-  await stageGitChanges(path);
+  // During a merge, Git expects the index to contain the resolved files.
+  // Staging the whole tree here can pull unrelated work into the merge commit.
+  if (!(await readIsMergeInProgress({ path }))) {
+    await stageGitChanges(path);
+  }
+
   await runGitCommandForPath({ path, args: ["commit", "-m", message] });
 
   const newSha = await readGitTextForPath({
