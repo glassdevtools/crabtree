@@ -27,7 +27,6 @@ import {
   moveGitTag,
   previewGitMerge,
   pushGitBranchSyncChanges,
-  readGitDiff,
   readGitMainWorktreePathForPath,
   revertGitBranchSyncChanges,
   stageGitChanges,
@@ -757,126 +756,6 @@ test("reads tracked binary file changes as changed files", async () => {
     assert.equal(gitChangesOfCwd[repoRoot]?.unstaged.added, 0);
     assert.equal(gitChangesOfCwd[repoRoot]?.unstaged.removed, 0);
     assert.equal(gitChangesOfCwd[repoRoot]?.unstaged.changedFileCount, 1);
-  });
-});
-
-test("reads the patch introduced by a commit", async () => {
-  await withRepo(async ({ repoRoot }) => {
-    await commitRepoFile({
-      repoRoot,
-      filePath: "notes.txt",
-      content: "before\n",
-      message: "base",
-    });
-    const changedSha = await commitRepoFile({
-      repoRoot,
-      filePath: "notes.txt",
-      content: "before\nafter\n",
-      message: "change notes",
-    });
-
-    const gitDiff = await readGitDiff({
-      mode: "changesMadeHere",
-      target: { type: "commit", repoRoot, sha: changedSha },
-    });
-
-    assert.equal(gitDiff.files.length, 1);
-    assert.equal(gitDiff.files[0]?.path, "notes.txt");
-    assert.equal(gitDiff.files[0]?.section, null);
-    assert.match(gitDiff.files[0]?.diff ?? "", /\+after/);
-  });
-});
-
-test("reads staged, unstaged, and untracked worktree patches", async () => {
-  await withRepo(async ({ repoRoot }) => {
-    await commitRepoFile({
-      repoRoot,
-      filePath: "staged.txt",
-      content: "base\n",
-      message: "base staged",
-    });
-    await commitRepoFile({
-      repoRoot,
-      filePath: "unstaged.txt",
-      content: "base\n",
-      message: "base unstaged",
-    });
-    await appendRepoFile({
-      repoRoot,
-      filePath: "staged.txt",
-      content: "staged\n",
-    });
-    await runGit({ cwd: repoRoot, args: ["add", "--", "staged.txt"] });
-    await appendRepoFile({
-      repoRoot,
-      filePath: "unstaged.txt",
-      content: "unstaged\n",
-    });
-    await writeRepoFile({
-      repoRoot,
-      filePath: "untracked.txt",
-      content: "untracked\n",
-    });
-
-    const gitDiff = await readGitDiff({
-      mode: "changesMadeHere",
-      target: { type: "path", path: repoRoot },
-    });
-    const stagedDiff = gitDiff.files.find(
-      (file) => file.section === "Staged" && file.path === "staged.txt",
-    );
-    const unstagedDiff = gitDiff.files.find(
-      (file) => file.section === "Unstaged" && file.path === "unstaged.txt",
-    );
-    const untrackedDiff = gitDiff.files.find(
-      (file) => file.section === "Unstaged" && file.path === "untracked.txt",
-    );
-
-    assert.match(stagedDiff?.diff ?? "", /\+staged/);
-    assert.match(unstagedDiff?.diff ?? "", /\+unstaged/);
-    assert.match(untrackedDiff?.diff ?? "", /\+untracked/);
-  });
-});
-
-test("reads worktree diff against HEAD as one tracked section plus untracked files", async () => {
-  await withRepo(async ({ repoRoot }) => {
-    await commitRepoFile({
-      repoRoot,
-      filePath: "tracked.txt",
-      content: "base\n",
-      message: "base",
-    });
-    await appendRepoFile({
-      repoRoot,
-      filePath: "tracked.txt",
-      content: "changed\n",
-    });
-    await runGit({ cwd: repoRoot, args: ["add", "--", "tracked.txt"] });
-    await appendRepoFile({
-      repoRoot,
-      filePath: "tracked.txt",
-      content: "changed again\n",
-    });
-    await writeRepoFile({
-      repoRoot,
-      filePath: "new-file.txt",
-      content: "new\n",
-    });
-
-    const gitDiff = await readGitDiff({
-      mode: "diffAgainstHead",
-      target: { type: "path", path: repoRoot },
-    });
-    const trackedDiff = gitDiff.files.find(
-      (file) => file.section === null && file.path === "tracked.txt",
-    );
-    const untrackedDiff = gitDiff.files.find(
-      (file) => file.section === null && file.path === "new-file.txt",
-    );
-
-    assert.match(trackedDiff?.diff ?? "", /\+changed/);
-    assert.match(trackedDiff?.diff ?? "", /\+changed again/);
-    assert.match(untrackedDiff?.diff ?? "", /\+new/);
   });
 });
 

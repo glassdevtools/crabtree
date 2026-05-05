@@ -1,13 +1,9 @@
 import {
   CircleCheck,
-  ChevronDown,
-  ChevronRight,
   CircleArrowDown,
   CircleArrowUp,
   Copy,
   ExternalLink,
-  FileDiff,
-  GitCompareArrows,
   LoaderCircle,
   Settings,
   Tag,
@@ -54,8 +50,6 @@ import type {
   GitChangeCounts,
   GitChangeSummary,
   GitCommit,
-  GitDiffFile,
-  GitDiffRequest,
   GitMergePreview,
   GitWorktree,
   PathLauncher,
@@ -225,59 +219,6 @@ const GitChangeCountText = ({
       </span>
     </>
   );
-};
-
-const GitDiffLine = ({ line }: { line: string }) => {
-  let className = "row-diff-line";
-
-  if (
-    line.startsWith("diff --") ||
-    line.startsWith("@@") ||
-    line.startsWith("index ") ||
-    line.startsWith("old mode ") ||
-    line.startsWith("new mode ") ||
-    line.startsWith("new file mode ") ||
-    line.startsWith("deleted file mode ") ||
-    line.startsWith("copy from ") ||
-    line.startsWith("copy to ") ||
-    line.startsWith("rename from ") ||
-    line.startsWith("rename to ") ||
-    line.startsWith("similarity index ") ||
-    line.startsWith("dissimilarity index ") ||
-    line.startsWith("--- ") ||
-    line.startsWith("+++ ") ||
-    line.startsWith("\\ No newline at end of file")
-  ) {
-    return null;
-  }
-
-  if (line.startsWith("+")) {
-    className = `${className} row-diff-line-added`;
-  } else if (line.startsWith("-")) {
-    className = `${className} row-diff-line-removed`;
-  }
-
-  return <span className={className}>{line}</span>;
-};
-
-const readGitDiffLineCounts = (diff: string) => {
-  const lineCounts = {
-    added: 0,
-    removed: 0,
-  };
-
-  for (const line of diff.split("\n")) {
-    if (line.startsWith("+") && !line.startsWith("+++ ")) {
-      lineCounts.added += 1;
-      continue;
-    }
-
-    if (line.startsWith("-") && !line.startsWith("--- ")) {
-      lineCounts.removed += 1;
-    }
-  }
-
-  return lineCounts;
 };
 
 const readCreatedGitRefName = (gitRefName: string) => {
@@ -905,26 +846,12 @@ type BranchCreateTarget =
       title: string;
     };
 
-type RowDiffTarget = {
-  title: string;
-  description: string;
-  repositoryPath: string | null;
-  request: GitDiffRequest;
-};
-
-type RowDiffLoadState =
-  | { type: "loading" }
-  | { type: "loaded"; files: GitDiffFile[] }
-  | { type: "error"; message: string };
-
-type RowContextMenuTarget = {
+type GitRefCreateMenuTarget = {
   x: number;
   y: number;
   sha: string | null;
   isEnabled: boolean;
   pullRequestTarget: GitPullRequestCreateTarget | null;
-  changesMadeHereTarget: RowDiffTarget;
-  diffAgainstHeadTarget: RowDiffTarget;
 };
 
 type CopyContextMenuTarget = {
@@ -966,6 +893,12 @@ type CommitMessageTarget = {
   path: string;
   title: string;
   branchTarget: CommitBranchTarget | null;
+};
+
+type ChangeSummaryTarget = {
+  path: string;
+  title: string;
+  changeSummary: GitChangeSummary;
 };
 
 type BranchMergeConfirmation = {
@@ -2364,11 +2297,11 @@ const CommitHistoryRow = ({
   updateBranchPointerDropTarget,
   clearBranchPointerDropTarget,
   finishBranchPointerDrop,
-  openRowContextMenu,
+  openGitRefCreateMenu,
   openRowAfterDoubleClick,
   openBranchCreateModal,
   openCommitMessageModal,
-  openChangesDiffModal,
+  openChangeSummaryModal,
   openBranchMergeModal,
   openBranchPushModal,
   openCopyContextMenu,
@@ -2398,7 +2331,7 @@ const CommitHistoryRow = ({
   updateBranchPointerDropTarget: (event: DragEvent<HTMLDivElement>) => void;
   clearBranchPointerDropTarget: (event: DragEvent<HTMLDivElement>) => void;
   finishBranchPointerDrop: (event: DragEvent<HTMLDivElement>) => void;
-  openRowContextMenu: (
+  openGitRefCreateMenu: (
     event: MouseEvent<HTMLDivElement>,
     row: CommitGraphRow,
   ) => void;
@@ -2411,9 +2344,9 @@ const CommitHistoryRow = ({
     event: MouseEvent<HTMLButtonElement>,
     commitMessageTarget: CommitMessageTarget,
   ) => void;
-  openChangesDiffModal: (
+  openChangeSummaryModal: (
     event: MouseEvent<HTMLButtonElement>,
-    rowDiffTarget: RowDiffTarget,
+    changeSummaryTarget: ChangeSummaryTarget,
   ) => void;
   openBranchMergeModal: (
     event: MouseEvent<HTMLButtonElement>,
@@ -2830,7 +2763,7 @@ const CommitHistoryRow = ({
     <div
       className={rowClassName}
       onDoubleClick={row.isCommitRow ? openRowAfterDoubleClick : undefined}
-      onContextMenu={(event) => openRowContextMenu(event, row)}
+      onContextMenu={(event) => openGitRefCreateMenu(event, row)}
       onDragOver={updateBranchPointerDropTarget}
       onDragLeave={clearBranchPointerDropTarget}
       onDrop={finishBranchPointerDrop}
@@ -2849,17 +2782,10 @@ const CommitHistoryRow = ({
                     onMouseDown={(event) => event.stopPropagation()}
                     onDoubleClick={(event) => event.stopPropagation()}
                     onClick={(event) =>
-                      openChangesDiffModal(event, {
-                        title: "Changes",
-                        description: actionThreadGroup.cwd,
-                        repositoryPath: actionThreadGroup.cwd,
-                        request: {
-                          mode: "changesMadeHere",
-                          target: {
-                            type: "path",
-                            path: actionThreadGroup.cwd,
-                          },
-                        },
+                      openChangeSummaryModal(event, {
+                        path: actionThreadGroup.cwd,
+                        title: actionThreadGroup.cwd,
+                        changeSummary: actionChangeSummary,
                       })
                     }
                   >
@@ -3123,242 +3049,6 @@ const CommitHistoryColumnResizeHandle = ({
       onPointerUp={finishColumnResize}
       onPointerCancel={finishColumnResize}
     />
-  );
-};
-
-const RowDiffDialog = ({
-  rowDiffTarget,
-  rowDiffLoadState,
-  openCodePath,
-  closeRowDiffModal,
-}: {
-  rowDiffTarget: RowDiffTarget | null;
-  rowDiffLoadState: RowDiffLoadState;
-  openCodePath: (path: string) => Promise<void>;
-  closeRowDiffModal: () => void;
-}) => {
-  const [
-    isRowDiffFileExpandedOfFileIndex,
-    setIsRowDiffFileExpandedOfFileIndex,
-  ] = useState<{ [fileIndex: number]: boolean }>({});
-
-  useEffect(() => {
-    if (rowDiffLoadState.type !== "loaded") {
-      setIsRowDiffFileExpandedOfFileIndex({});
-      return;
-    }
-
-    const nextIsRowDiffFileExpandedOfFileIndex: {
-      [fileIndex: number]: boolean;
-    } = {};
-
-    for (
-      let fileIndex = 0;
-      fileIndex < rowDiffLoadState.files.length;
-      fileIndex += 1
-    ) {
-      nextIsRowDiffFileExpandedOfFileIndex[fileIndex] = true;
-    }
-
-    setIsRowDiffFileExpandedOfFileIndex(nextIsRowDiffFileExpandedOfFileIndex);
-  }, [rowDiffLoadState]);
-
-  const setAllRowDiffFilesExpanded = (shouldExpand: boolean) => {
-    if (rowDiffLoadState.type !== "loaded") {
-      return;
-    }
-
-    const nextIsRowDiffFileExpandedOfFileIndex: {
-      [fileIndex: number]: boolean;
-    } = {};
-
-    for (
-      let fileIndex = 0;
-      fileIndex < rowDiffLoadState.files.length;
-      fileIndex += 1
-    ) {
-      nextIsRowDiffFileExpandedOfFileIndex[fileIndex] = shouldExpand;
-    }
-
-    setIsRowDiffFileExpandedOfFileIndex(nextIsRowDiffFileExpandedOfFileIndex);
-  };
-
-  const toggleRowDiffFile = (fileIndex: number) => {
-    setIsRowDiffFileExpandedOfFileIndex(
-      (currentIsRowDiffFileExpandedOfFileIndex) => ({
-        ...currentIsRowDiffFileExpandedOfFileIndex,
-        [fileIndex]:
-          currentIsRowDiffFileExpandedOfFileIndex[fileIndex] === false,
-      }),
-    );
-  };
-
-  let shouldShowRowDiffFileActions = false;
-  let isEveryRowDiffFileExpanded = false;
-  let isEveryRowDiffFileCollapsed = false;
-  const rowDiffRepositoryPath = rowDiffTarget?.repositoryPath ?? null;
-
-  if (rowDiffLoadState.type === "loaded" && rowDiffLoadState.files.length > 0) {
-    shouldShowRowDiffFileActions = true;
-    isEveryRowDiffFileExpanded = true;
-    isEveryRowDiffFileCollapsed = true;
-
-    for (
-      let fileIndex = 0;
-      fileIndex < rowDiffLoadState.files.length;
-      fileIndex += 1
-    ) {
-      const isFileExpanded =
-        isRowDiffFileExpandedOfFileIndex[fileIndex] !== false;
-
-      if (isFileExpanded) {
-        isEveryRowDiffFileCollapsed = false;
-        continue;
-      }
-
-      isEveryRowDiffFileExpanded = false;
-    }
-  }
-
-  return (
-    <Dialog
-      open={rowDiffTarget !== null}
-      onOpenChange={(isOpen) => {
-        if (isOpen) {
-          return;
-        }
-
-        closeRowDiffModal();
-      }}
-    >
-      {rowDiffTarget === null ? null : (
-        <DialogContent className="row-diff-modal">
-          <DialogHeader>
-            <DialogTitle>{rowDiffTarget.title}</DialogTitle>
-            <DialogDescription>{rowDiffTarget.description}</DialogDescription>
-          </DialogHeader>
-          <div className="row-diff-actions">
-            {shouldShowRowDiffFileActions ? (
-              <>
-                <Button
-                  className="row-diff-action-button"
-                  variant="outline"
-                  size="sm"
-                  type="button"
-                  disabled={isEveryRowDiffFileExpanded}
-                  onClick={() => setAllRowDiffFilesExpanded(true)}
-                >
-                  <ChevronDown size={12} strokeWidth={1.8} />
-                  <span>Expand all</span>
-                </Button>
-                <Button
-                  className="row-diff-action-button"
-                  variant="outline"
-                  size="sm"
-                  type="button"
-                  disabled={isEveryRowDiffFileCollapsed}
-                  onClick={() => setAllRowDiffFilesExpanded(false)}
-                >
-                  <ChevronRight size={12} strokeWidth={1.8} />
-                  <span>Collapse all</span>
-                </Button>
-              </>
-            ) : null}
-          </div>
-          <div className="row-diff-body">
-            {rowDiffLoadState.type === "loading" ? (
-              <div className="row-diff-message">
-                <LoaderCircle
-                  aria-hidden="true"
-                  className="row-diff-loading-icon"
-                  size={14}
-                />
-                <span>Loading diff...</span>
-              </div>
-            ) : rowDiffLoadState.type === "error" ? (
-              <div className="row-diff-message row-diff-error-message">
-                {rowDiffLoadState.message}
-              </div>
-            ) : rowDiffLoadState.files.length === 0 ? (
-              <div className="row-diff-message">No changes found.</div>
-            ) : (
-              <div className="row-diff-scroll">
-                {rowDiffLoadState.files.map((file, fileIndex) => {
-                  const lineCounts = readGitDiffLineCounts(file.diff);
-
-                  return (
-                    <section
-                      className="row-diff-file"
-                      key={`${file.section ?? "diff"}:${file.path}:${fileIndex}`}
-                    >
-                      <button
-                        className="row-diff-file-header"
-                        type="button"
-                        aria-expanded={
-                          isRowDiffFileExpandedOfFileIndex[fileIndex] !== false
-                        }
-                        onClick={() => toggleRowDiffFile(fileIndex)}
-                      >
-                        <span
-                          className="row-diff-file-toggle"
-                          aria-hidden="true"
-                        >
-                          {isRowDiffFileExpandedOfFileIndex[fileIndex] ===
-                          false ? (
-                            <ChevronRight size={12} strokeWidth={1.8} />
-                          ) : (
-                            <ChevronDown size={12} strokeWidth={1.8} />
-                          )}
-                        </span>
-                        {file.section === null ? null : (
-                          <span className="row-diff-file-section">
-                            {file.section}
-                          </span>
-                        )}
-                        <code>{file.path}</code>
-                        <span className="row-diff-file-line-counts">
-                          <span className="row-diff-file-line-count-added">
-                            +{lineCounts.added}
-                          </span>
-                          <span className="row-diff-file-line-count-removed">
-                            -{lineCounts.removed}
-                          </span>
-                        </span>
-                      </button>
-                      {isRowDiffFileExpandedOfFileIndex[fileIndex] ===
-                      false ? null : (
-                        <pre className="row-diff-pre">
-                          <code>
-                            {file.diff.split("\n").map((line, lineIndex) => (
-                              <GitDiffLine line={line} key={lineIndex} />
-                            ))}
-                          </code>
-                        </pre>
-                      )}
-                    </section>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            {rowDiffRepositoryPath === null ? null : (
-              <Button
-                type="button"
-                onClick={() => {
-                  void openCodePath(rowDiffRepositoryPath);
-                }}
-              >
-                Open Repository
-              </Button>
-            )}
-            <Button type="button" variant="outline" onClick={closeRowDiffModal}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      )}
-    </Dialog>
   );
 };
 
@@ -3939,8 +3629,8 @@ const CommitHistory = ({
   const branchPointerDragRef = useRef<BranchPointerDrag | null>(null);
   const [branchCreateTarget, setBranchCreateTarget] =
     useState<BranchCreateTarget | null>(null);
-  const [rowContextMenuTarget, setRowContextMenuTarget] =
-    useState<RowContextMenuTarget | null>(null);
+  const [gitRefCreateMenuTarget, setGitRefCreateMenuTarget] =
+    useState<GitRefCreateMenuTarget | null>(null);
   const [copyContextMenuTarget, setCopyContextMenuTarget] =
     useState<CopyContextMenuTarget | null>(null);
   const [gitRefContextMenuTarget, setGitRefContextMenuTarget] =
@@ -3951,12 +3641,8 @@ const CommitHistory = ({
     useState<GitPullRequestCreateTarget | null>(null);
   const [commitMessageTarget, setCommitMessageTarget] =
     useState<CommitMessageTarget | null>(null);
-  const [rowDiffTarget, setRowDiffTarget] = useState<RowDiffTarget | null>(
-    null,
-  );
-  const [rowDiffLoadState, setRowDiffLoadState] = useState<RowDiffLoadState>({
-    type: "loading",
-  });
+  const [changeSummaryTarget, setChangeSummaryTarget] =
+    useState<ChangeSummaryTarget | null>(null);
   const [gitRefDeleteTarget, setGitRefDeleteTarget] =
     useState<GitRefDeleteTarget | null>(null);
   const [branchMergeConfirmation, setBranchMergeConfirmation] =
@@ -3971,7 +3657,7 @@ const CommitHistory = ({
     useState<string | null>(null);
   useEffect(() => {
     if (
-      rowContextMenuTarget === null &&
+      gitRefCreateMenuTarget === null &&
       copyContextMenuTarget === null &&
       gitRefContextMenuTarget === null
     ) {
@@ -3979,7 +3665,7 @@ const CommitHistory = ({
     }
 
     const closeContextMenus = () => {
-      setRowContextMenuTarget(null);
+      setGitRefCreateMenuTarget(null);
       setCopyContextMenuTarget(null);
       setGitRefContextMenuTarget(null);
     };
@@ -3998,7 +3684,7 @@ const CommitHistory = ({
       window.removeEventListener("mousedown", closeContextMenus);
       window.removeEventListener("keydown", closeContextMenusAfterEscape);
     };
-  }, [copyContextMenuTarget, gitRefContextMenuTarget, rowContextMenuTarget]);
+  }, [copyContextMenuTarget, gitRefContextMenuTarget, gitRefCreateMenuTarget]);
   useLayoutEffect(() => {
     const contextMenu = contextMenuRef.current;
     if (contextMenu === null) {
@@ -4021,43 +3707,7 @@ const CommitHistory = ({
     );
     contextMenu.style.left = `${left}px`;
     contextMenu.style.top = `${top}px`;
-  }, [copyContextMenuTarget, gitRefContextMenuTarget, rowContextMenuTarget]);
-  useEffect(() => {
-    if (rowDiffTarget === null) {
-      return;
-    }
-
-    let shouldIgnore = false;
-
-    setRowDiffLoadState({ type: "loading" });
-
-    void window.crabtree
-      .readGitDiff(rowDiffTarget.request)
-      .then((gitDiff) => {
-        if (shouldIgnore) {
-          return;
-        }
-
-        setRowDiffLoadState({ type: "loaded", files: gitDiff.files });
-      })
-      .catch((error) => {
-        if (shouldIgnore) {
-          return;
-        }
-
-        setRowDiffLoadState({
-          type: "error",
-          message: readCaughtUserFacingErrorMessage({
-            error,
-            fallbackMessage: "Failed to read diff.",
-          }),
-        });
-      });
-
-    return () => {
-      shouldIgnore = true;
-    };
-  }, [rowDiffTarget]);
+  }, [copyContextMenuTarget, gitRefContextMenuTarget, gitRefCreateMenuTarget]);
   const graph = useMemo(
     () =>
       createCommitGraph({
@@ -4928,7 +4578,7 @@ const CommitHistory = ({
   const closeBranchCreateModal = () => {
     setBranchCreateTarget(null);
   };
-  const openRowContextMenu = (
+  const openGitRefCreateMenu = (
     event: MouseEvent<HTMLDivElement>,
     row: CommitGraphRow,
   ) => {
@@ -4936,35 +4586,7 @@ const CommitHistory = ({
     event.stopPropagation();
     setCopyContextMenuTarget(null);
     setGitRefContextMenuTarget(null);
-    const gitDiffRowTarget: GitDiffRequest["target"] =
-      row.threadGroup !== null && row.threadGroup.cwd.length > 0
-        ? { type: "path", path: row.threadGroup.cwd }
-        : { type: "commit", repoRoot, sha: row.commit.sha };
-    const gitDiffDescription =
-      row.threadGroup !== null && row.threadGroup.cwd.length > 0
-        ? row.threadGroup.cwd
-        : `${row.commit.shortSha} ${row.commit.subject}`;
-    const gitDiffAgainstHeadDescription =
-      row.threadGroup !== null && row.threadGroup.cwd.length > 0
-        ? `${row.threadGroup.cwd} vs HEAD`
-        : `HEAD vs ${row.commit.shortSha} ${row.commit.subject}`;
-    const readRowDiffTarget = (mode: GitDiffRequest["mode"]): RowDiffTarget => {
-      return {
-        title:
-          mode === "changesMadeHere" ? "See changes here" : "Diff against HEAD",
-        description:
-          mode === "changesMadeHere"
-            ? gitDiffDescription
-            : gitDiffAgainstHeadDescription,
-        repositoryPath: null,
-        request: {
-          mode,
-          target: gitDiffRowTarget,
-        },
-      };
-    };
-
-    setRowContextMenuTarget({
+    setGitRefCreateMenuTarget({
       sha: row.isCommitRow ? row.commit.sha : null,
       isEnabled: row.isCommitRow,
       pullRequestTarget: row.isCommitRow
@@ -4976,8 +4598,6 @@ const CommitHistory = ({
             defaultBaseBranch: defaultBranch,
           }
         : null,
-      changesMadeHereTarget: readRowDiffTarget("changesMadeHere"),
-      diffAgainstHeadTarget: readRowDiffTarget("diffAgainstHead"),
       x: event.clientX,
       y: event.clientY,
     });
@@ -4989,7 +4609,7 @@ const CommitHistory = ({
   ) => {
     event.preventDefault();
     event.stopPropagation();
-    setRowContextMenuTarget(null);
+    setGitRefCreateMenuTarget(null);
     setGitRefContextMenuTarget(null);
     setCopyContextMenuTarget({
       text,
@@ -5004,7 +4624,7 @@ const CommitHistory = ({
   ) => {
     event.preventDefault();
     event.stopPropagation();
-    setRowContextMenuTarget(null);
+    setGitRefCreateMenuTarget(null);
     setCopyContextMenuTarget(null);
     setGitRefContextMenuTarget({
       ...gitRefContextMenuTarget,
@@ -5029,45 +4649,33 @@ const CommitHistory = ({
           : "Failed to copy tag name.",
     });
   };
-  const openRowDiffModal = (rowDiffTarget: RowDiffTarget) => {
-    setRowContextMenuTarget(null);
-    setRowDiffTarget(rowDiffTarget);
-    trackDesktopAction({
-      eventName: "row_diff_opened",
-      properties: {
-        mode: rowDiffTarget.request.mode,
-        target_type: rowDiffTarget.request.target.type,
-      },
-    });
-  };
-  const closeRowDiffModal = () => {
-    setRowDiffTarget(null);
-    setRowDiffLoadState({ type: "loading" });
-  };
   const openGitRefCreateModal = (gitRefType: "branch" | "tag") => {
-    if (rowContextMenuTarget === null || rowContextMenuTarget.sha === null) {
+    if (
+      gitRefCreateMenuTarget === null ||
+      gitRefCreateMenuTarget.sha === null
+    ) {
       return;
     }
 
     setGitRefCreateTarget({
       gitRefType,
-      sha: rowContextMenuTarget.sha,
+      sha: gitRefCreateMenuTarget.sha,
     });
-    setRowContextMenuTarget(null);
+    setGitRefCreateMenuTarget(null);
   };
   const closeGitRefCreateModal = () => {
     setGitRefCreateTarget(null);
   };
   const openGitPullRequestCreateModal = () => {
     if (
-      rowContextMenuTarget === null ||
-      rowContextMenuTarget.pullRequestTarget === null
+      gitRefCreateMenuTarget === null ||
+      gitRefCreateMenuTarget.pullRequestTarget === null
     ) {
       return;
     }
 
-    setGitPullRequestCreateTarget(rowContextMenuTarget.pullRequestTarget);
-    setRowContextMenuTarget(null);
+    setGitPullRequestCreateTarget(gitRefCreateMenuTarget.pullRequestTarget);
+    setGitRefCreateMenuTarget(null);
   };
   const closeGitPullRequestCreateModal = () => {
     setGitPullRequestCreateTarget(null);
@@ -5083,17 +4691,20 @@ const CommitHistory = ({
   const closeCommitMessageModal = () => {
     setCommitMessageTarget(null);
   };
-  const openChangesDiffModal = (
+  const openChangeSummaryModal = (
     event: MouseEvent<HTMLButtonElement>,
-    rowDiffTarget: RowDiffTarget,
+    changeSummaryTarget: ChangeSummaryTarget,
   ) => {
     event.preventDefault();
     event.stopPropagation();
-    setRowDiffTarget(rowDiffTarget);
+    setChangeSummaryTarget(changeSummaryTarget);
     trackDesktopAction({
       eventName: "change_summary_opened",
       properties: {},
     });
+  };
+  const closeChangeSummaryModal = () => {
+    setChangeSummaryTarget(null);
   };
   const closeBranchMergeConfirmationModal = () => {
     setBranchMergeConfirmation(null);
@@ -5597,13 +5208,13 @@ const CommitHistory = ({
   }
   return (
     <>
-      {rowContextMenuTarget === null ? null : (
+      {gitRefCreateMenuTarget === null ? null : (
         <div
           ref={contextMenuRef}
-          className="context-menu"
+          className="git-ref-create-menu"
           style={{
-            left: rowContextMenuTarget.x,
-            top: rowContextMenuTarget.y,
+            left: gitRefCreateMenuTarget.x,
+            top: gitRefCreateMenuTarget.y,
           }}
           onMouseDown={(event) => event.stopPropagation()}
           onContextMenu={(event) => {
@@ -5612,69 +5223,44 @@ const CommitHistory = ({
           }}
         >
           <Button
-            className="context-menu-item"
+            className="git-ref-create-menu-item"
             variant="ghost"
             size="sm"
             type="button"
-            disabled={!rowContextMenuTarget.isEnabled}
+            disabled={!gitRefCreateMenuTarget.isEnabled}
             onClick={() => openGitRefCreateModal("branch")}
           >
             <LuGitBranchPlus size={10} strokeWidth={1.75} />
             <span>Add branch</span>
           </Button>
           <Button
-            className="context-menu-item"
+            className="git-ref-create-menu-item"
             variant="ghost"
             size="sm"
             type="button"
-            disabled={!rowContextMenuTarget.isEnabled}
+            disabled={!gitRefCreateMenuTarget.isEnabled}
             onClick={() => openGitRefCreateModal("tag")}
           >
             <Tag size={10} strokeWidth={1.75} />
             <span>Add tag</span>
           </Button>
           <Button
-            className="context-menu-item"
+            className="git-ref-create-menu-item"
             variant="ghost"
             size="sm"
             type="button"
-            disabled={!rowContextMenuTarget.isEnabled}
+            disabled={!gitRefCreateMenuTarget.isEnabled}
             onClick={openGitPullRequestCreateModal}
           >
             <LuGitPullRequestArrow size={10} strokeWidth={1.75} />
             <span>Add pull request</span>
-          </Button>
-          <div className="context-menu-separator" />
-          <Button
-            className="context-menu-item"
-            variant="ghost"
-            size="sm"
-            type="button"
-            onClick={() =>
-              openRowDiffModal(rowContextMenuTarget.changesMadeHereTarget)
-            }
-          >
-            <FileDiff size={10} strokeWidth={1.75} />
-            <span>See changes here</span>
-          </Button>
-          <Button
-            className="context-menu-item"
-            variant="ghost"
-            size="sm"
-            type="button"
-            onClick={() =>
-              openRowDiffModal(rowContextMenuTarget.diffAgainstHeadTarget)
-            }
-          >
-            <GitCompareArrows size={10} strokeWidth={1.75} />
-            <span>Diff against HEAD</span>
           </Button>
         </div>
       )}
       {copyContextMenuTarget === null ? null : (
         <div
           ref={contextMenuRef}
-          className="context-menu"
+          className="git-ref-create-menu"
           style={{
             left: copyContextMenuTarget.x,
             top: copyContextMenuTarget.y,
@@ -5686,7 +5272,7 @@ const CommitHistory = ({
           }}
         >
           <Button
-            className="context-menu-item"
+            className="git-ref-create-menu-item"
             variant="ghost"
             size="sm"
             type="button"
@@ -5702,7 +5288,7 @@ const CommitHistory = ({
       {gitRefContextMenuTarget === null ? null : (
         <div
           ref={contextMenuRef}
-          className="context-menu"
+          className="git-ref-create-menu"
           style={{
             left: gitRefContextMenuTarget.x,
             top: gitRefContextMenuTarget.y,
@@ -5714,7 +5300,7 @@ const CommitHistory = ({
           }}
         >
           <Button
-            className="context-menu-item"
+            className="git-ref-create-menu-item"
             variant="ghost"
             size="sm"
             type="button"
@@ -5726,7 +5312,7 @@ const CommitHistory = ({
             <span>Copy</span>
           </Button>
           <Button
-            className="context-menu-item"
+            className="git-ref-create-menu-item"
             variant="ghost"
             size="sm"
             type="button"
@@ -5910,11 +5496,11 @@ const CommitHistory = ({
                 finishBranchPointerDrop={(event) =>
                   finishBranchPointerDrop({ event, row })
                 }
-                openRowContextMenu={openRowContextMenu}
+                openGitRefCreateMenu={openGitRefCreateMenu}
                 openRowAfterDoubleClick={() => openRowAfterDoubleClick(row)}
                 openBranchCreateModal={openBranchCreateModal}
                 openCommitMessageModal={openCommitMessageModal}
-                openChangesDiffModal={openChangesDiffModal}
+                openChangeSummaryModal={openChangeSummaryModal}
                 openBranchMergeModal={openBranchMergeModal}
                 openBranchPushModal={openBranchPushModal}
                 openCopyContextMenu={openCopyContextMenu}
@@ -5947,12 +5533,62 @@ const CommitHistory = ({
           createCommit={createCommit}
           closeCommitMessageModal={closeCommitMessageModal}
         />
-        <RowDiffDialog
-          rowDiffTarget={rowDiffTarget}
-          rowDiffLoadState={rowDiffLoadState}
-          openCodePath={openCodePath}
-          closeRowDiffModal={closeRowDiffModal}
-        />
+        <Dialog
+          open={changeSummaryTarget !== null}
+          onOpenChange={(isOpen) => {
+            if (isOpen) {
+              return;
+            }
+
+            closeChangeSummaryModal();
+          }}
+        >
+          {changeSummaryTarget === null ? null : (
+            <DialogContent className="change-summary-modal">
+              <DialogHeader>
+                <DialogTitle>Change Summary</DialogTitle>
+              </DialogHeader>
+              <div className="change-summary-breakdown">
+                <div
+                  className={
+                    changeSummaryTarget.changeSummary.staged
+                      .changedFileCount === 0
+                      ? "change-summary-row change-summary-row-empty"
+                      : "change-summary-row"
+                  }
+                >
+                  <span>Staged</span>
+                  <GitChangeCountText
+                    changeCounts={changeSummaryTarget.changeSummary.staged}
+                  />
+                </div>
+                <div
+                  className={
+                    changeSummaryTarget.changeSummary.unstaged
+                      .changedFileCount === 0
+                      ? "change-summary-row change-summary-row-empty"
+                      : "change-summary-row"
+                  }
+                >
+                  <span>Unstaged</span>
+                  <GitChangeCountText
+                    changeCounts={changeSummaryTarget.changeSummary.unstaged}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    void openCodePath(changeSummaryTarget.path);
+                  }}
+                >
+                  Open Repository
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          )}
+        </Dialog>
         <ConfirmationDialog
           isOpen={gitRefDeleteTarget !== null}
           closeConfirmationDialog={closeGitRefDeleteModal}
