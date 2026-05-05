@@ -96,6 +96,7 @@ import cursorAppIconUrl from "./assets/cursor-app-icon.png";
 import finderAppIconUrl from "./assets/finder-app-icon.png";
 import {
   readChangedWorkingTreeCwdsOfSha,
+  readChangedWorkingTreeShaForCwd,
   readDisplayedThreadGroups,
   readGitChangeCleanState,
   readIsCwdInsidePath,
@@ -1231,10 +1232,21 @@ const createCommitGraph = ({
         continue;
       }
 
-      const displaySha =
-        headSha !== null && !readIsWorktreeCwd({ cwd: thread.cwd, worktrees })
-          ? headSha
-          : commit.sha;
+      const changedWorkingTreeSha = readChangedWorkingTreeShaForCwd({
+        cwd: thread.cwd,
+        changedWorkingTreeCwdsOfSha,
+      });
+      let displaySha = commit.sha;
+
+      if (changedWorkingTreeSha !== null) {
+        displaySha = changedWorkingTreeSha;
+      } else if (
+        headSha !== null &&
+        !readIsWorktreeCwd({ cwd: thread.cwd, worktrees })
+      ) {
+        displaySha = headSha;
+      }
+
       const displayedThreadIds = displayedThreadIdsOfSha[displaySha];
 
       if (displayedThreadIds === undefined) {
@@ -4048,6 +4060,7 @@ const CommitHistory = ({
         !readShouldShowChatOnlyCommitGraphRow({
           refs: row.commit.refs,
           threadIds: row.threadIds,
+          isChangedWorkingTreeRow: row.threadGroup !== null,
         })
       ) {
         continue;

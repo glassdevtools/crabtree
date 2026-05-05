@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   readChangedWorkingTreeCwdsOfSha,
+  readChangedWorkingTreeShaForCwd,
   readDisplayedThreadGroups,
   readGitChangeCleanState,
   readIsGitChangeSummaryEmpty,
@@ -246,6 +247,43 @@ test("maps changed main and linked worktree paths to their commits", () => {
   );
 });
 
+test("finds the changed working tree commit for a chat cwd", () => {
+  const changedWorkingTreeCwdsOfSha = {
+    "main-sha": ["/repo/main"],
+    "nested-worktree-sha": ["/repo/main/worktrees/topic"],
+    "worktree-sha": ["/repo/worktree"],
+  };
+
+  assert.equal(
+    readChangedWorkingTreeShaForCwd({
+      cwd: "/repo/worktree/package",
+      changedWorkingTreeCwdsOfSha,
+    }),
+    "worktree-sha",
+  );
+  assert.equal(
+    readChangedWorkingTreeShaForCwd({
+      cwd: "/repo/main/package",
+      changedWorkingTreeCwdsOfSha,
+    }),
+    "main-sha",
+  );
+  assert.equal(
+    readChangedWorkingTreeShaForCwd({
+      cwd: "/repo/main/worktrees/topic/package",
+      changedWorkingTreeCwdsOfSha,
+    }),
+    "nested-worktree-sha",
+  );
+  assert.equal(
+    readChangedWorkingTreeShaForCwd({
+      cwd: "/repo/clean/package",
+      changedWorkingTreeCwdsOfSha,
+    }),
+    null,
+  );
+});
+
 test("reads clean, dirty, and unknown git change states", () => {
   const gitChangesOfCwd: { [cwd: string]: GitChangeSummary } = {
     "/repo/clean": EMPTY_CHANGE_SUMMARY,
@@ -279,6 +317,18 @@ test("keeps HEAD rows visible in chat-only history", () => {
     readShouldShowChatOnlyCommitGraphRow({
       refs: ["HEAD -> main"],
       threadIds: [],
+      isChangedWorkingTreeRow: false,
+    }),
+    true,
+  );
+});
+
+test("keeps changed working tree rows visible in chat-only history", () => {
+  assert.equal(
+    readShouldShowChatOnlyCommitGraphRow({
+      refs: [],
+      threadIds: [],
+      isChangedWorkingTreeRow: true,
     }),
     true,
   );
@@ -289,6 +339,7 @@ test("hides normal no-chat rows in chat-only history", () => {
     readShouldShowChatOnlyCommitGraphRow({
       refs: ["origin/main"],
       threadIds: [],
+      isChangedWorkingTreeRow: false,
     }),
     false,
   );

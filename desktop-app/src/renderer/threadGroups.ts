@@ -67,11 +67,17 @@ export const readIsWorktreeCwd = ({
 export const readShouldShowChatOnlyCommitGraphRow = ({
   refs,
   threadIds,
+  isChangedWorkingTreeRow,
 }: {
   refs: string[];
   threadIds: string[];
+  isChangedWorkingTreeRow: boolean;
 }) => {
   if (threadIds.length > 0) {
+    return true;
+  }
+
+  if (isChangedWorkingTreeRow) {
     return true;
   }
 
@@ -126,6 +132,35 @@ export const readChangedWorkingTreeCwdsOfSha = ({
   }
 
   return changedWorkingTreeCwdsOfSha;
+};
+
+export const readChangedWorkingTreeShaForCwd = ({
+  cwd,
+  changedWorkingTreeCwdsOfSha,
+}: {
+  cwd: string;
+  changedWorkingTreeCwdsOfSha: { [sha: string]: string[] };
+}) => {
+  let changedWorkingTreeSha: string | null = null;
+  let changedWorkingTreeCwd: string | null = null;
+
+  for (const sha of Object.keys(changedWorkingTreeCwdsOfSha)) {
+    for (const workingTreeCwd of changedWorkingTreeCwdsOfSha[sha]) {
+      if (!readIsCwdInsidePath({ cwd, path: workingTreeCwd })) {
+        continue;
+      }
+
+      if (
+        changedWorkingTreeCwd === null ||
+        workingTreeCwd.length > changedWorkingTreeCwd.length
+      ) {
+        changedWorkingTreeSha = sha;
+        changedWorkingTreeCwd = workingTreeCwd;
+      }
+    }
+  }
+
+  return changedWorkingTreeSha;
 };
 
 export const readDisplayedThreadGroups = ({
