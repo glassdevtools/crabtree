@@ -7,6 +7,9 @@ import type {
   GitCheckoutCommitRequest,
   GitCommitChangesRequest,
   GitCreateBranchRequest,
+  GitDiff,
+  GitDiffFile,
+  GitDiffRequest,
   GitCreatePullRequestRequest,
   GitCreateRefRequest,
   GitDeleteBranchRequest,
@@ -25,6 +28,8 @@ const CHECKED_OUT_BY_WORKTREE_MESSAGE =
   "This branch is checked out in a worktree. Delete the worktree or switch its branch first.";
 // TODO: AI-PICKED-VALUE: This prevents Git mutations and remote reads from waiting forever on a blocked process.
 const GIT_COMMAND_TIMEOUT_MS = 20_000;
+// TODO: AI-PICKED-VALUE: This lets large untracked-file diffs render without letting one IPC read consume unbounded memory.
+const GIT_DIFF_MAX_BUFFER_BYTE_COUNT = 50 * 1024 * 1024;
 const execFileAsync = promisify(execFile);
 
 type GitWorktreePointer = {
@@ -51,6 +56,16 @@ const runGitCommandForPath = async ({
   await createGitClientForPath({ path }).raw(args);
 };
 
+const readGitRawTextForPath = async ({
+  path,
+  args,
+}: {
+  path: string;
+  args: string[];
+}) => {
+  return await createGitClientForPath({ path }).raw(args);
+};
+
 const readGitTextForPath = async ({
   path,
   args,
@@ -58,7 +73,7 @@ const readGitTextForPath = async ({
   path: string;
   args: string[];
 }) => {
-  return (await createGitClientForPath({ path }).raw(args)).trim();
+  return (await readGitRawTextForPath({ path, args })).trim();
 };
 
 const readNullableGitTextForPath = async ({
@@ -579,6 +594,247 @@ export const unstageGitChanges = async (path: string) => {
     path,
     args: ["restore", "--staged", "--", "."],
   });
+};
+
+const readGitDiffFilesForText = ({
+  diffText,
+  section,
+}: {
+  diffText: string;
+  section: string | null;
+}) => {
+  const files: GitDiffFile[] = [];
+  let currentPath = "";
+  let currentDiffLines: string[] = [];
+
+  const readGitDiffPathFromHeader = (line: string) => {
+    const combinedDiffPrefixes = ["diff --cc ", "diff --combined "];
+
+    for (const combinedDiffPrefix of combinedDiffPrefixes) {
+      if (line.startsWith(combinedDiffPrefix)) {
+        return line.slice(combinedDiffPrefix.length);
+      }
+    }
+
+    const newPathPrefix = " b/";
+    const newPathIndex = line.indexOf(newPathPrefix);
+
+    if (newPathIndex === -1) {
+      return "Changed file";
+    }
+
+    return line.slice(newPathIndex + newPathPrefix.length);
+  };
+
+  const pushCurrentFile = () => {
+    if (currentDiffLines.length === 0) {
+      return;
+    }
+
+    files.push({
+      path: currentPath,
+      section,
+      diff: currentDiffLines.join("\n"),
+    });
+  };
+
+  for (const line of diffText.trimEnd().split("\n")) {
+    if (line.length === 0 && currentDiffLines.length === 0) {
+      continue;
+    }
+
+    if (
+      line.startsWith("diff --git ") ||
+      line.startsWith("diff --cc ") ||
+      line.startsWith("diff --combined ")
+    ) {
+      pushCurrentFile();
+      currentPath = readGitDiffPathFromHeader(line);
+      currentDiffLines = [line];
+      continue;
+    }
+
+    if (currentDiffLines.length > 0) {
+      currentDiffLines.push(line);
+    }
+  }
+
+  pushCurrentFile();
+
+  return files;
+};
+
+const readUntrackedGitDiffFilesForPath = async ({
+  path,
+  section,
+}: {
+  path: string;
+  section: string | null;
+}) => {
+  // Untracked files are outside normal Git diff output, so each one is compared with an empty path.
+  const readGitNoIndexDiffTextForPath = async ({
+    untrackedPath,
+  }: {
+    untrackedPath: string;
+  }) => {
+    const emptyPath = process.platform === "win32" ? "NUL" : "/dev/null";
+
+    try {
+      const { stdout } = await execFileAsync(
+        "git",
+        ["diff", "--no-index", "--", emptyPath, untrackedPath],
+        {
+          cwd: path,
+          encoding: "utf8",
+          maxBuffer: GIT_DIFF_MAX_BUFFER_BYTE_COUNT,
+        },
+      );
+
+      return stdout;
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "stdout" in error) {
+        const { stdout } = error;
+
+        if (typeof stdout === "string") {
+          return stdout;
+        }
+      }
+
+      throw error;
+    }
+  };
+
+  const untrackedPathText = await readGitRawTextForPath({
+    path,
+    args: ["ls-files", "--others", "--exclude-standard", "-z", "--", "."],
+  });
+  const files: GitDiffFile[] = [];
+
+  for (const untrackedPath of untrackedPathText.split("\0")) {
+    if (untrackedPath.length === 0) {
+      continue;
+    }
+
+    files.push(
+      ...readGitDiffFilesForText({
+        diffText: await readGitNoIndexDiffTextForPath({ untrackedPath }),
+        section,
+      }),
+    );
+  }
+
+  return files;
+};
+
+export const readGitDiff = async (
+  gitDiffRequest: GitDiffRequest,
+): Promise<GitDiff> => {
+  switch (gitDiffRequest.target.type) {
+    case "commit": {
+      const args =
+        gitDiffRequest.mode === "changesMadeHere"
+          ? [
+              "show",
+              "--format=",
+              "--find-renames",
+              "--patch",
+              "--no-ext-diff",
+              gitDiffRequest.target.sha,
+              "--",
+              ".",
+            ]
+          : [
+              "diff",
+              "--find-renames",
+              "--patch",
+              "--no-ext-diff",
+              "HEAD",
+              gitDiffRequest.target.sha,
+              "--",
+              ".",
+            ];
+      const diffText = await readGitRawTextForPath({
+        path: gitDiffRequest.target.repoRoot,
+        args,
+      });
+
+      return {
+        files: readGitDiffFilesForText({ diffText, section: null }),
+      };
+    }
+    case "path": {
+      const { path } = gitDiffRequest.target;
+
+      if (gitDiffRequest.mode === "changesMadeHere") {
+        // This mode mirrors the working tree state by keeping staged and unstaged patches separate.
+        const [stagedDiffText, unstagedDiffText, untrackedDiffFiles] =
+          await Promise.all([
+            readGitRawTextForPath({
+              path,
+              args: [
+                "diff",
+                "--cached",
+                "--find-renames",
+                "--patch",
+                "--no-ext-diff",
+                "--",
+                ".",
+              ],
+            }),
+            readGitRawTextForPath({
+              path,
+              args: [
+                "diff",
+                "--find-renames",
+                "--patch",
+                "--no-ext-diff",
+                "--",
+                ".",
+              ],
+            }),
+            readUntrackedGitDiffFilesForPath({ path, section: "Unstaged" }),
+          ]);
+
+        return {
+          files: [
+            ...readGitDiffFilesForText({
+              diffText: stagedDiffText,
+              section: "Staged",
+            }),
+            ...readGitDiffFilesForText({
+              diffText: unstagedDiffText,
+              section: "Unstaged",
+            }),
+            ...untrackedDiffFiles,
+          ],
+        };
+      }
+
+      // Diffing against HEAD uses Git's combined tracked diff, then appends untracked file patches.
+      const [diffText, untrackedDiffFiles] = await Promise.all([
+        readGitRawTextForPath({
+          path,
+          args: [
+            "diff",
+            "--find-renames",
+            "--patch",
+            "--no-ext-diff",
+            "HEAD",
+            "--",
+            ".",
+          ],
+        }),
+        readUntrackedGitDiffFilesForPath({ path, section: null }),
+      ]);
+
+      return {
+        files: [
+          ...readGitDiffFilesForText({ diffText, section: null }),
+          ...untrackedDiffFiles,
+        ],
+      };
+    }
+  }
 };
 
 export const commitAllGitChanges = async ({
