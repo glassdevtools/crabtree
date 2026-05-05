@@ -7,6 +7,7 @@ import {
 import type { CodexThread, GitChangeSummary } from "../src/shared/types";
 
 const EMPTY_CHANGE_SUMMARY: GitChangeSummary = {
+  conflictCount: 0,
   staged: {
     added: 0,
     removed: 0,
@@ -20,6 +21,7 @@ const EMPTY_CHANGE_SUMMARY: GitChangeSummary = {
 };
 
 const ADDED_CHANGE_SUMMARY: GitChangeSummary = {
+  conflictCount: 0,
   staged: {
     added: 1,
     removed: 0,
@@ -33,6 +35,7 @@ const ADDED_CHANGE_SUMMARY: GitChangeSummary = {
 };
 
 const REMOVED_CHANGE_SUMMARY: GitChangeSummary = {
+  conflictCount: 0,
   staged: {
     added: 0,
     removed: 0,
@@ -46,6 +49,7 @@ const REMOVED_CHANGE_SUMMARY: GitChangeSummary = {
 };
 
 const BINARY_CHANGE_SUMMARY: GitChangeSummary = {
+  conflictCount: 0,
   staged: {
     added: 0,
     removed: 0,
@@ -55,6 +59,20 @@ const BINARY_CHANGE_SUMMARY: GitChangeSummary = {
     added: 0,
     removed: 0,
     changedFileCount: 1,
+  },
+};
+
+const CONFLICT_CHANGE_SUMMARY: GitChangeSummary = {
+  conflictCount: 1,
+  staged: {
+    added: 0,
+    removed: 0,
+    changedFileCount: 0,
+  },
+  unstaged: {
+    added: 0,
+    removed: 0,
+    changedFileCount: 0,
   },
 };
 
@@ -130,4 +148,8 @@ test("orders changed cwd chat groups before unchanged groups", () => {
 
 test("treats file-only change summaries as changed", () => {
   assert.equal(readIsGitChangeSummaryEmpty(BINARY_CHANGE_SUMMARY), false);
+});
+
+test("treats merge conflicts as changed", () => {
+  assert.equal(readIsGitChangeSummaryEmpty(CONFLICT_CHANGE_SUMMARY), false);
 });

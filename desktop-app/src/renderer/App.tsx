@@ -155,6 +155,7 @@ const COMMIT_GRAPH_COLORS = [
   "#8e6c00",
 ];
 const EMPTY_GIT_CHANGE_SUMMARY: GitChangeSummary = {
+  conflictCount: 0,
   staged: {
     added: 0,
     removed: 0,
@@ -181,6 +182,18 @@ const readChangedFileCountText = (changedFileCount: number) => {
   return changedFileCount === 1
     ? `${changedFileCount} file`
     : `${changedFileCount} files`;
+};
+
+const readConflictCountText = (conflictCount: number) => {
+  return conflictCount === 1
+    ? `${conflictCount} conflict`
+    : `${conflictCount} conflicts`;
+};
+
+const readMergeConflictCountText = (conflictCount: number) => {
+  return conflictCount === 1
+    ? `${conflictCount} merge conflict`
+    : `${conflictCount} merge conflicts`;
 };
 
 // Binary changes can have file changes without line counts, so the graph uses this shared display for both cases.
@@ -2530,6 +2543,7 @@ const CommitHistoryRow = ({
     actionThreadGroup !== null &&
     actionThreadGroup.cwd.length > 0 &&
     shouldShowActionChangeCount &&
+    actionChangeSummary.conflictCount === 0 &&
     actionCommitBranchTarget !== null;
   const shouldShowBranchCreateActions = rowLocalBranches.length === 0;
   const actionBranchCreateTarget: BranchCreateTarget | null =
@@ -2682,9 +2696,17 @@ const CommitHistoryRow = ({
                       })
                     }
                   >
-                    <GitChangeCountText
-                      changeCounts={actionTotalChangeSummary}
-                    />
+                    {actionChangeSummary.conflictCount > 0 ? (
+                      <span className="commit-thread-change-conflict-count">
+                        {readConflictCountText(
+                          actionChangeSummary.conflictCount,
+                        )}
+                      </span>
+                    ) : (
+                      <GitChangeCountText
+                        changeCounts={actionTotalChangeSummary}
+                      />
+                    )}
                   </Button>
                 </TitleTooltip>
                 {shouldShowActionCommit && actionCommitBranchTarget !== null ? (
@@ -5462,6 +5484,14 @@ const CommitHistory = ({
                   />
                 </div>
               </div>
+              {changeSummaryTarget.changeSummary.conflictCount === 0 ? null : (
+                <div className="change-summary-conflict-warning">
+                  -{" "}
+                  {readMergeConflictCountText(
+                    changeSummaryTarget.changeSummary.conflictCount,
+                  )}
+                </div>
+              )}
               <DialogFooter>
                 <Button
                   type="button"

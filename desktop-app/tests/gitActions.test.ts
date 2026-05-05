@@ -705,6 +705,44 @@ test("reads tracked binary file changes as changed files", async () => {
   });
 });
 
+test("reads merge conflicts in change summaries", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    await commitRepoFile({
+      repoRoot,
+      filePath: "conflict.txt",
+      content: "base\n",
+      message: "base",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
+    await commitRepoFile({
+      repoRoot,
+      filePath: "conflict.txt",
+      content: "feature\n",
+      message: "feature",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "main"] });
+    await commitRepoFile({
+      repoRoot,
+      filePath: "conflict.txt",
+      content: "main\n",
+      message: "main",
+    });
+
+    await assert.rejects(async () => {
+      await runGit({ cwd: repoRoot, args: ["merge", "feature"] });
+    });
+
+    const threads = [createThread({ id: "root-thread", cwd: repoRoot })];
+    const { gitChangesOfCwd, gitErrors } = await readGitChangesOfCwd({
+      threads,
+      repos: [],
+    });
+
+    assert.equal(gitErrors.length, 0);
+    assert.equal(gitChangesOfCwd[repoRoot]?.conflictCount, 1);
+  });
+});
+
 test("caps untracked line counts at ten thousand lines", async () => {
   await withRepo(async ({ repoRoot }) => {
     await commitRepoFile({
