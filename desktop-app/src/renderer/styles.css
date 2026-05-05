@@ -577,6 +577,58 @@ textarea,
   line-height: 1.35;
 }
 
+.chat-provider-detection-section {
+  display: grid;
+  gap: 8px;
+}
+
+.chat-provider-detection-title {
+  margin: 0;
+  color: #202124;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.chat-provider-detection-list {
+  display: grid;
+  gap: 7px;
+}
+
+.chat-provider-detection-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 22px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.chat-provider-detection-label {
+  min-width: 0;
+  color: #202124;
+  font-weight: 600;
+}
+
+.chat-provider-detection-status {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  color: #6f7680;
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.chat-provider-detection-status-detected {
+  color: #188038;
+}
+
+.chat-provider-detection-status-missing {
+  color: #8b929c;
+}
+
 .title-tooltip-trigger {
   min-width: 0;
   display: inline-flex;
@@ -1289,6 +1341,19 @@ textarea,
   overflow: visible;
   color: #5f6670;
   opacity: 0.62;
+}
+
+.commit-thread-provider-icon {
+  width: 11px;
+  height: 11px;
+  flex: 0 0 11px;
+  object-fit: contain;
+}
+
+.commit-thread-provider-icon-opencode {
+  /* TODO: AI-PICKED-VALUE: This gives the OpenCode mark a little internal padding inside the chat badge. */
+  padding: 1px;
+  box-sizing: border-box;
 }
 
 .commit-thread-chat-loading-icon {

@@ -195,6 +195,13 @@ export type DesktopRuntimeInfo = {
   isPackaged: boolean;
 };
 
+export type ChatProviderId = "openCode";
+
+export type ChatProviderDetection = {
+  providerId: ChatProviderId;
+  isDetected: boolean;
+};
+
 export type AppUpdateStatus =
   | { type: "unavailable" }
   | { type: "idle" }
@@ -211,6 +218,7 @@ export type CrabtreeApi = {
   readDashboardAfterGitMutation: () => Promise<DashboardData>;
   readAnalyticsInstallId: () => Promise<string>;
   readDesktopRuntimeInfo: () => Promise<DesktopRuntimeInfo>;
+  readChatProviderDetections: () => Promise<ChatProviderDetection[]>;
   readAppUpdateStatus: () => Promise<AppUpdateStatus>;
   watchAppUpdateStatus: (
     onStatusChange: (appUpdateStatus: AppUpdateStatus) => void,

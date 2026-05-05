@@ -1,4 +1,5 @@
 import {
+  CircleCheck,
   CircleArrowDown,
   CircleArrowUp,
   Copy,
@@ -7,8 +8,8 @@ import {
   Settings,
   Tag,
   Trash2,
+  X,
 } from "lucide-react";
-import { GoDotFill } from "react-icons/go";
 import {
   LuCheck,
   LuCornerRightUp,
@@ -40,6 +41,8 @@ import type {
 import type { ResizeCallbackData } from "react-resizable";
 import type {
   AppUpdateStatus,
+  ChatProviderDetection,
+  ChatProviderId,
   CodexThread,
   CodexThreadStatusChange,
   DashboardData,
@@ -92,8 +95,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import codexChatIconUrl from "./assets/codex-chat-icon.png";
 import cursorAppIconUrl from "./assets/cursor-app-icon.png";
 import finderAppIconUrl from "./assets/finder-app-icon.png";
+import openCodeChatIconUrl from "./assets/opencode-chat-icon.svg";
 import {
   readDisplayedThreadGroups,
   readIsGitChangeSummaryEmpty,
@@ -410,6 +415,41 @@ const readAppUpdateButtonText = (appUpdateStatus: AppUpdateStatus) => {
     case "error":
       return "Check for updates";
   }
+};
+
+const readChatProviderLabel = (providerId: ChatProviderId) => {
+  switch (providerId) {
+    case "openCode":
+      return "OpenCode";
+  }
+};
+
+const DEFAULT_CHAT_PROVIDER_DETECTIONS: ChatProviderDetection[] = [
+  { providerId: "openCode", isDetected: false },
+];
+
+const ChatProviderDetectionStatus = ({
+  isDetected,
+}: {
+  isDetected: boolean;
+}) => {
+  return (
+    <span
+      className={cn(
+        "chat-provider-detection-status",
+        isDetected
+          ? "chat-provider-detection-status-detected"
+          : "chat-provider-detection-status-missing",
+      )}
+    >
+      {isDetected ? (
+        <CircleCheck aria-hidden="true" size={15} strokeWidth={2.25} />
+      ) : (
+        <X aria-hidden="true" size={15} strokeWidth={2.25} />
+      )}
+      <span>{isDetected ? "auto detected" : "not detected"}</span>
+    </span>
+  );
 };
 
 const readGitWarningReasonText = (reasons: string[]) => {
@@ -947,6 +987,30 @@ const threadTitle = (thread: CodexThread) => {
   }
 
   return thread.id;
+};
+
+const readIsOpenCodeThread = (thread: CodexThread) => {
+  return thread.source === "openCode";
+};
+
+const ChatProviderIcon = ({
+  isOpenCodeThread,
+}: {
+  isOpenCodeThread: boolean;
+}) => {
+  return (
+    <img
+      alt=""
+      aria-hidden="true"
+      className={cn(
+        "commit-thread-provider-icon",
+        isOpenCodeThread
+          ? "commit-thread-provider-icon-opencode"
+          : "commit-thread-provider-icon-codex",
+      )}
+      src={isOpenCodeThread ? openCodeChatIconUrl : codexChatIconUrl}
+    />
+  );
 };
 
 const readIsThreadActive = (thread: CodexThread) => {
@@ -1981,10 +2045,30 @@ const ChatRobotTags = ({
     return null;
   }
 
-  const openThread = async (threadId: string) => {
+  const openThread = async (thread: CodexThread) => {
     try {
-      await window.crabtree.openCodexThread(threadId);
-      trackDesktopAction({ eventName: "chat_opened", properties: {} });
+      if (readIsOpenCodeThread(thread)) {
+        if (thread.cwd.length === 0) {
+          showErrorMessage("OpenCode chat does not have a folder.");
+          return;
+        }
+
+        const openCodeUrl = new URL("opencode://open-project");
+
+        openCodeUrl.searchParams.set("directory", thread.cwd);
+        await window.crabtree.openExternalUrl(openCodeUrl.toString());
+        trackDesktopAction({
+          eventName: "chat_opened",
+          properties: { provider: "openCode" },
+        });
+        return;
+      }
+
+      await window.crabtree.openCodexThread(thread.id);
+      trackDesktopAction({
+        eventName: "chat_opened",
+        properties: { provider: "codex" },
+      });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to open chat.";
@@ -2034,9 +2118,13 @@ const ChatRobotTags = ({
             {threadGroup.threads.map((thread) => {
               const title = threadTitle(thread);
               const isThreadActive = readIsThreadActive(thread);
+              const isOpenCodeThread = readIsOpenCodeThread(thread);
+              const tooltipTitle = isOpenCodeThread
+                ? "Open in OpenCode"
+                : "Open in Codex";
 
               return (
-                <TitleTooltip title="Open in Codex" key={thread.id}>
+                <TitleTooltip title={tooltipTitle} key={thread.id}>
                   <Button
                     aria-label={
                       isThreadActive ? `${title} is loading` : `Open ${title}`
@@ -2050,9 +2138,10 @@ const ChatRobotTags = ({
                     onClick={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
-                      void openThread(thread.id);
+                      void openThread(thread);
                     }}
                   >
+                    <ChatProviderIcon isOpenCodeThread={isOpenCodeThread} />
                     {isThreadActive ? (
                       <LoaderCircle
                         aria-hidden="true"
@@ -2067,13 +2156,7 @@ const ChatRobotTags = ({
                         className="commit-thread-chat-icon commit-ref-worktree-icon"
                         size={10}
                       />
-                    ) : (
-                      <GoDotFill
-                        aria-hidden="true"
-                        className="commit-thread-chat-icon"
-                        size={9}
-                      />
-                    )}
+                    ) : null}
                   </Button>
                 </TitleTooltip>
               );
@@ -5775,6 +5858,9 @@ const CrabtreeDesktopApp = () => {
   const [isPrivateMode, setIsPrivateMode] = useState(
     readIsAnalyticsPrivateMode,
   );
+  const [chatProviderDetections, setChatProviderDetections] = useState<
+    ChatProviderDetection[]
+  >(DEFAULT_CHAT_PROVIDER_DETECTIONS);
   const [appUpdateStatus, setAppUpdateStatus] = useState<AppUpdateStatus>({
     type: "unavailable",
   });
@@ -6114,6 +6200,24 @@ const CrabtreeDesktopApp = () => {
     return () => {
       didCancel = true;
       stopWatchingAppUpdateStatus();
+    };
+  }, []);
+  useEffect(() => {
+    let didCancel = false;
+
+    void window.crabtree
+      .readChatProviderDetections()
+      .then((nextChatProviderDetections) => {
+        if (!didCancel) {
+          setChatProviderDetections(nextChatProviderDetections);
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to read chat provider detections.", error);
+      });
+
+    return () => {
+      didCancel = true;
     };
   }, []);
   useEffect(() => {
@@ -6556,9 +6660,9 @@ const CrabtreeDesktopApp = () => {
     loadingRepoRoot !== null && selectedRepo?.root === loadingRepoRoot;
   const emptyRepoDescription =
     dashboardData.gitErrors.length > 0 && dashboardData.threads.length > 0
-      ? "Crabtree found Codex chats, but Git could not read their folders. " +
+      ? "Crabtree found chats, but Git could not read their folders. " +
         "They may be deleted, moved, not valid Git worktrees, or blocked by macOS permissions."
-      : "No Git repositories found from Codex.";
+      : "No Git repositories found from Codex or OpenCode.";
   const repoHeaderControls = (
     <>
       {dashboardData.repos.length === 0 ? null : (
@@ -6772,6 +6876,24 @@ const CrabtreeDesktopApp = () => {
                 </div>
               </div>
             </div>
+            <section className="chat-provider-detection-section">
+              <h3 className="chat-provider-detection-title">Chat sources</h3>
+              <div className="chat-provider-detection-list">
+                {chatProviderDetections.map((chatProviderDetection) => (
+                  <div
+                    className="chat-provider-detection-row"
+                    key={chatProviderDetection.providerId}
+                  >
+                    <span className="chat-provider-detection-label">
+                      {readChatProviderLabel(chatProviderDetection.providerId)}
+                    </span>
+                    <ChatProviderDetectionStatus
+                      isDetected={chatProviderDetection.isDetected}
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
             <dl className="settings-modal-fields">
               <div className="settings-modal-field">
                 <dt>GitHub</dt>

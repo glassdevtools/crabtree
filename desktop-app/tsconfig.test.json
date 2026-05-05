@@ -11,6 +11,7 @@
   "include": [
     "tests/**/*.ts",
     "src/main/analyticsStore.ts",
+    "src/main/chatProviderDetection.ts",
     "src/main/codexThreads.ts",
     "src/main/dashboard.ts",
     "src/main/dashboardRefresh.ts",

@@ -51,6 +51,9 @@ const api: CrabtreeApi = {
   readDesktopRuntimeInfo: async () => {
     return await ipcRenderer.invoke("desktop:readRuntimeInfo");
   },
+  readChatProviderDetections: async () => {
+    return await ipcRenderer.invoke("chatProviders:readDetections");
+  },
   readAppUpdateStatus: async () => {
     return await ipcRenderer.invoke("appUpdate:readStatus");
   },

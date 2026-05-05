@@ -237,8 +237,16 @@ const readMainWorktreePath = async ({ root }: { root: string }) => {
   throw new Error("Git worktree list did not include a main worktree.");
 };
 
-const readRepoSeedForThread = async ({ thread }: { thread: CodexThread }) => {
-  if (thread.cwd.length === 0) {
+const readRepoSeedForCwd = async ({
+  cwd,
+  threadIds,
+  sourceDescription,
+}: {
+  cwd: string;
+  threadIds: string[];
+  sourceDescription: string;
+}) => {
+  if (cwd.length === 0) {
     const repoSeedReadResult: RepoSeedReadResult = {
       repoSeed: null,
       gitError: null,
@@ -248,11 +256,11 @@ const readRepoSeedForThread = async ({ thread }: { thread: CodexThread }) => {
   }
 
   try {
-    const threadRoot = await readGitText({
-      cwd: thread.cwd,
+    const rootForCwd = await readGitText({
+      cwd,
       args: ["rev-parse", "--show-toplevel"],
     });
-    const root = await readMainWorktreePath({ root: threadRoot });
+    const root = await readMainWorktreePath({ root: rootForCwd });
     const originUrl = await readNullableGitText({
       cwd: root,
       args: ["config", "--get", "remote.origin.url"],
@@ -269,7 +277,7 @@ const readRepoSeedForThread = async ({ thread }: { thread: CodexThread }) => {
       originUrl,
       currentBranch,
       defaultBranch,
-      threadIds: [thread.id],
+      threadIds,
     };
 
     return {
@@ -279,16 +287,43 @@ const readRepoSeedForThread = async ({ thread }: { thread: CodexThread }) => {
   } catch (error) {
     return {
       repoSeed: null,
-      gitError: `${thread.cwd}: Failed to read Git repository from Codex thread folder. ${readErrorMessage(error)}`,
+      gitError: `${cwd}: Failed to read Git repository from ${sourceDescription}. ${readErrorMessage(error)}`,
     };
   }
 };
 
-const readRepoSeeds = async ({ threads }: { threads: CodexThread[] }) => {
+const readRepoSeedForThread = async ({ thread }: { thread: CodexThread }) => {
+  return await readRepoSeedForCwd({
+    cwd: thread.cwd,
+    threadIds: [thread.id],
+    sourceDescription:
+      thread.source === "openCode"
+        ? "OpenCode session folder"
+        : "Codex thread folder",
+  });
+};
+
+const readRepoSeedForRepoPath = async ({ repoPath }: { repoPath: string }) => {
+  return await readRepoSeedForCwd({
+    cwd: repoPath,
+    threadIds: [],
+    sourceDescription: "OpenCode project folder",
+  });
+};
+
+const readRepoSeeds = async ({
+  threads,
+  repoPaths,
+}: {
+  threads: CodexThread[];
+  repoPaths: string[];
+}) => {
   const repoSeedOfKey: { [key: string]: RepoSeed } = {};
   const threadsOfCwd: { [cwd: string]: CodexThread[] } = {};
   const gitErrors: string[] = [];
   const cwds: string[] = [];
+  const queuedRepoPaths: string[] = [];
+  const isRepoPathQueued: { [repoPath: string]: boolean } = {};
 
   for (const thread of threads) {
     let threadsForCwd = threadsOfCwd[thread.cwd];
@@ -300,6 +335,19 @@ const readRepoSeeds = async ({ threads }: { threads: CodexThread[] }) => {
     }
 
     threadsForCwd.push(thread);
+  }
+
+  for (const repoPath of repoPaths) {
+    if (
+      repoPath.length === 0 ||
+      threadsOfCwd[repoPath] !== undefined ||
+      isRepoPathQueued[repoPath] === true
+    ) {
+      continue;
+    }
+
+    isRepoPathQueued[repoPath] = true;
+    queuedRepoPaths.push(repoPath);
   }
 
   const repoSeedReadResults = await readValuesWithGitReadLimit({
@@ -315,6 +363,15 @@ const readRepoSeeds = async ({ threads }: { threads: CodexThread[] }) => {
       return {
         cwd,
         ...(await readRepoSeedForThread({ thread })),
+      };
+    },
+  });
+  const repoPathSeedReadResults = await readValuesWithGitReadLimit({
+    items: queuedRepoPaths,
+    readItem: async (repoPath) => {
+      return {
+        repoPath,
+        ...(await readRepoSeedForRepoPath({ repoPath })),
       };
     },
   });
@@ -341,6 +398,20 @@ const readRepoSeeds = async ({ threads }: { threads: CodexThread[] }) => {
     }
 
     existingRepoSeed.threadIds.push(...threadIds);
+  }
+
+  for (const repoPathSeedReadResult of repoPathSeedReadResults) {
+    const repoSeed = repoPathSeedReadResult.repoSeed;
+
+    if (repoPathSeedReadResult.gitError !== null) {
+      gitErrors.push(repoPathSeedReadResult.gitError);
+    }
+
+    if (repoSeed === null || repoSeedOfKey[repoSeed.key] !== undefined) {
+      continue;
+    }
+
+    repoSeedOfKey[repoSeed.key] = repoSeed;
   }
 
   const repoSeedReadSummary: RepoSeedReadSummary = {
@@ -1406,14 +1477,16 @@ const readRepoGraphForSeed = async ({
   }
 };
 
-export const readRepoGraphs = async ({
+export const readRepoGraphsWithRepoPaths = async ({
   threads,
+  repoPaths,
   focusedRepoRoot,
 }: {
   threads: CodexThread[];
+  repoPaths: string[];
   focusedRepoRoot: string | null;
 }) => {
-  const repoSeedReadSummary = await readRepoSeeds({ threads });
+  const repoSeedReadSummary = await readRepoSeeds({ threads, repoPaths });
   const { repoSeeds } = repoSeedReadSummary;
   const repos: RepoGraph[] = [];
   const warnings: string[] = [];
@@ -1473,6 +1546,20 @@ export const readRepoGraphs = async ({
   }
 
   return { repos, warnings, gitErrors, readRepoRoots };
+};
+
+export const readRepoGraphs = async ({
+  threads,
+  focusedRepoRoot,
+}: {
+  threads: CodexThread[];
+  focusedRepoRoot: string | null;
+}) => {
+  return await readRepoGraphsWithRepoPaths({
+    threads,
+    repoPaths: [],
+    focusedRepoRoot,
+  });
 };
 
 export const readRepoGraphsForRepoRoots = async ({

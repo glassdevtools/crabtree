@@ -25,6 +25,7 @@ import type { AppServerClient } from "./appServerClient";
 import { readOrCreateAnalyticsInstallId } from "./analyticsStore";
 import { createAppUpdateController } from "./appUpdates";
 import { createAppServerClient } from "./appServerClient";
+import { readChatProviderDetections } from "./chatProviderDetection";
 import {
   readCodexThreadFromAppServerReadResponse,
   readCodexThreadLoadedListFromAppServerResult,
@@ -82,19 +83,22 @@ const readExternalUrl = (value: unknown) => {
 
   const url = new URL(value);
 
-  if (url.protocol !== "https:" && url.protocol !== "http:") {
-    throw new Error("url must use http or https.");
+  switch (url.protocol) {
+    case "https:":
+    case "http:":
+    case "opencode:":
+      return url.toString();
   }
 
-  return url.toString();
+  throw new Error("url must use http, https, or a known app scheme.");
 };
 
-const openExternalUrlInBrowser = async (value: unknown) => {
+const openExternalUrl = async (value: unknown) => {
   await shell.openExternal(readExternalUrl(value));
 };
 
-const openExternalUrlInBrowserFromWindow = (value: unknown) => {
-  void openExternalUrlInBrowser(value).catch((error) => {
+const openExternalUrlFromWindow = (value: unknown) => {
+  void openExternalUrl(value).catch((error) => {
     console.error("Failed to open external URL.", error);
   });
 };
@@ -130,7 +134,7 @@ const createMainWindow = () => {
     mainWindow.show();
   });
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    openExternalUrlInBrowserFromWindow(url);
+    openExternalUrlFromWindow(url);
     return { action: "deny" };
   });
   mainWindow.webContents.on("will-navigate", (event, url) => {
@@ -139,7 +143,7 @@ const createMainWindow = () => {
     }
 
     event.preventDefault();
-    openExternalUrlInBrowserFromWindow(url);
+    openExternalUrlFromWindow(url);
   });
 
   if (process.env.ELECTRON_RENDERER_URL) {
@@ -800,6 +804,10 @@ ipcMain.handle("desktop:readRuntimeInfo", () => {
   };
 });
 
+ipcMain.handle("chatProviders:readDetections", () => {
+  return readChatProviderDetections();
+});
+
 ipcMain.handle("appUpdate:readStatus", () => {
   return appUpdateController.readStatus();
 });
@@ -827,7 +835,7 @@ ipcMain.handle("codex:openNewThread", async () => {
 });
 
 ipcMain.handle("external:openUrl", async (_event, value: unknown) => {
-  await openExternalUrlInBrowser(value);
+  await openExternalUrl(value);
 });
 
 ipcMain.handle("path:open", async (_event, value: unknown) => {

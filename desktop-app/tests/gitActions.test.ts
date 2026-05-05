@@ -38,6 +38,7 @@ import {
   readGitChangesOfCwd,
   readRepoGraphs,
   readRepoGraphsForRepoRoots,
+  readRepoGraphsWithRepoPaths,
 } from "../src/main/gitData";
 import type { CodexThread } from "../src/shared/types";
 
@@ -300,6 +301,59 @@ test("reads repo graphs with commits, worktrees, and branch sync changes", async
     assert.notEqual(featureCommit, undefined);
     assert.equal(featureCommit?.localBranches.includes("feature"), true);
     assert.deepEqual(featureCommit?.threadIds, ["worktree-thread"]);
+  });
+});
+
+test("reads repo graphs from project folders without Codex threads", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    const sha = await commitRepoFile({
+      repoRoot,
+      filePath: "project.txt",
+      content: "project\n",
+      message: "project",
+    });
+
+    const { repos, warnings, gitErrors, readRepoRoots } =
+      await readRepoGraphsWithRepoPaths({
+        threads: [],
+        repoPaths: [repoRoot],
+        focusedRepoRoot: null,
+      });
+    const repo = repos[0];
+
+    assert.equal(warnings.length, 0);
+    assert.equal(gitErrors.length, 0);
+    assert.deepEqual(readRepoRoots, [repoRoot]);
+    assert.equal(repos.length, 1);
+    assert.equal(repo?.root, repoRoot);
+    assert.deepEqual(repo?.threadIds, []);
+    assert.equal(
+      repo?.commits.some((commit) => commit.sha === sha),
+      true,
+    );
+  });
+});
+
+test("merges project folders with Codex thread folders for the same repo", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    await commitRepoFile({
+      repoRoot,
+      filePath: "nested/project.txt",
+      content: "project\n",
+      message: "project",
+    });
+    const threadCwd = join(repoRoot, "nested");
+
+    const { repos, warnings, gitErrors } = await readRepoGraphsWithRepoPaths({
+      threads: [createThread({ id: "thread", cwd: threadCwd })],
+      repoPaths: [repoRoot],
+      focusedRepoRoot: null,
+    });
+
+    assert.equal(warnings.length, 0);
+    assert.equal(gitErrors.length, 0);
+    assert.equal(repos.length, 1);
+    assert.deepEqual(repos[0]?.threadIds, ["thread"]);
   });
 });
 

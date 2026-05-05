@@ -1,14 +1,15 @@
 import type { DashboardData } from "../shared/types";
 import type { CodexThread } from "../shared/types";
 import type { AppServerClient } from "./appServerClient";
+import { readOpenCodeDashboardData } from "./chatProviderDetection";
 import { readCodexThreads } from "./codexThreads";
 import {
   readGitChangesOfCwdForRepoRoots,
-  readRepoGraphs,
+  readRepoGraphsWithRepoPaths,
   readRepoGraphsForRepoRoots,
 } from "./gitData";
 
-// The dashboard joins Codex thread metadata with Git graph data into one renderer-friendly object.
+// The dashboard joins chat metadata with Git graph data into one renderer-friendly object.
 export const readDashboardData = async ({
   appServerClient,
   focusedRepoRoot,
@@ -16,8 +17,16 @@ export const readDashboardData = async ({
   appServerClient: AppServerClient;
   focusedRepoRoot: string | null;
 }) => {
-  const threads = await readCodexThreads(appServerClient);
-  const repoGraphResult = await readRepoGraphs({ threads, focusedRepoRoot });
+  const [codexThreads, openCodeDashboardData] = await Promise.all([
+    readCodexThreads(appServerClient),
+    readOpenCodeDashboardData(),
+  ]);
+  const threads = [...codexThreads, ...openCodeDashboardData.threads];
+  const repoGraphResult = await readRepoGraphsWithRepoPaths({
+    threads,
+    repoPaths: openCodeDashboardData.repoFolders,
+    focusedRepoRoot,
+  });
   const gitChangeResult = await readGitChangesOfCwdForRepoRoots({
     threads,
     repos: repoGraphResult.repos,
@@ -31,7 +40,7 @@ export const readDashboardData = async ({
     threads,
     gitChangesOfCwd: gitChangeResult.gitChangesOfCwd,
     gitErrors: [...repoGraphResult.gitErrors, ...gitChangeResult.gitErrors],
-    warnings: repoGraphResult.warnings,
+    warnings: [...openCodeDashboardData.warnings, ...repoGraphResult.warnings],
   };
 
   return { dashboardData, readRepoRoots: repoGraphResult.readRepoRoots };
