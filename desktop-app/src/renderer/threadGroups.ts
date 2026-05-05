@@ -10,6 +10,8 @@ export type ThreadGroup = {
   threads: CodexThread[];
 };
 
+export type GitChangeCleanState = "clean" | "dirty" | "unknown";
+
 export const readIsGitChangeSummaryEmpty = (
   changeSummary: GitChangeSummary,
 ) => {
@@ -17,7 +19,23 @@ export const readIsGitChangeSummaryEmpty = (
     changeSummary.staged.changedFileCount +
     changeSummary.unstaged.changedFileCount;
 
-  return changedFileCount === 0;
+  return changedFileCount === 0 && changeSummary.conflictCount === 0;
+};
+
+export const readGitChangeCleanState = ({
+  gitChangesOfCwd,
+  cwd,
+}: {
+  gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
+  cwd: string;
+}): GitChangeCleanState => {
+  const gitChangeSummary = gitChangesOfCwd[cwd];
+
+  if (gitChangeSummary === undefined) {
+    return "unknown";
+  }
+
+  return readIsGitChangeSummaryEmpty(gitChangeSummary) ? "clean" : "dirty";
 };
 
 export const readIsWorktreeCwd = ({
@@ -29,6 +47,26 @@ export const readIsWorktreeCwd = ({
 }) => {
   for (const worktree of worktrees) {
     if (cwd === worktree.path || cwd.startsWith(`${worktree.path}/`)) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+export const readShouldShowChatOnlyCommitGraphRow = ({
+  refs,
+  threadIds,
+}: {
+  refs: string[];
+  threadIds: string[];
+}) => {
+  if (threadIds.length > 0) {
+    return true;
+  }
+
+  for (const ref of refs) {
+    if (ref === "HEAD" || ref.startsWith("HEAD -> ")) {
       return true;
     }
   }
@@ -64,11 +102,9 @@ export const readDisplayedThreadGroups = ({
   }
 
   const readIsThreadGroupChanged = (threadGroup: ThreadGroup) => {
-    const gitChangeSummary = gitChangesOfCwd[threadGroup.cwd];
-
     return (
-      gitChangeSummary !== undefined &&
-      !readIsGitChangeSummaryEmpty(gitChangeSummary)
+      readGitChangeCleanState({ gitChangesOfCwd, cwd: threadGroup.cwd }) ===
+      "dirty"
     );
   };
 

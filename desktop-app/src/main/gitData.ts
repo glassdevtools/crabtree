@@ -9,6 +9,7 @@ import type {
   GitWorktree,
   RepoGraph,
 } from "../shared/types";
+import { readGitChildProcessEnv } from "./gitEnv";
 
 // Git is the source of truth for graph structure. Codex only tells us which thread belongs near a branch, commit, or worktree.
 const COMMIT_READ_LIMIT = 2000;
@@ -94,7 +95,7 @@ const runGit = async ({ cwd, args }: { cwd: string; args: string[] }) => {
     baseDir: cwd,
     timeout: { block: GIT_COMMAND_TIMEOUT_MS },
   })
-    .env("GIT_TERMINAL_PROMPT", "0")
+    .env(readGitChildProcessEnv())
     .raw(args);
 
   return { stdout };
@@ -237,6 +238,54 @@ const readMainWorktreePath = async ({ root }: { root: string }) => {
   throw new Error("Git worktree list did not include a main worktree.");
 };
 
+const readCurrentBranchAfterAttachingDetachedHead = async ({
+  root,
+}: {
+  root: string;
+}) => {
+  const currentBranch = await readNullableGitText({
+    cwd: root,
+    args: ["branch", "--show-current"],
+  });
+
+  if (currentBranch !== null) {
+    return currentBranch;
+  }
+
+  const headSha = await readNullableGitText({
+    cwd: root,
+    args: ["rev-parse", "HEAD"],
+  });
+
+  if (headSha === null) {
+    return null;
+  }
+
+  const branchText = await readGitText({
+    cwd: root,
+    args: [
+      "for-each-ref",
+      "--sort=refname",
+      "--points-at",
+      headSha,
+      "--format=%(refname:short)",
+      "refs/heads",
+    ],
+  });
+  const branch = splitLines(branchText)[0] ?? null;
+
+  if (branch === null) {
+    return null;
+  }
+
+  await runGit({
+    cwd: root,
+    args: ["switch", "--ignore-other-worktrees", branch],
+  });
+
+  return branch;
+};
+
 const readRepoSeedForCwd = async ({
   cwd,
   threadIds,
@@ -265,9 +314,8 @@ const readRepoSeedForCwd = async ({
       cwd: root,
       args: ["config", "--get", "remote.origin.url"],
     });
-    const currentBranch = await readNullableGitText({
-      cwd: root,
-      args: ["branch", "--show-current"],
+    const currentBranch = await readCurrentBranchAfterAttachingDetachedHead({
+      root,
     });
     const defaultBranch = await readLocalDefaultBranch({ root });
 
@@ -568,24 +616,36 @@ const parseGitChangeCounts = (stdout: string) => {
   return changeCounts;
 };
 
-const parseGitStatusUntrackedPaths = (stdout: string) => {
-  const paths: string[] = [];
+const parseGitStatusSummary = (stdout: string) => {
+  const untrackedPaths: string[] = [];
+  let conflictCount = 0;
 
   for (const entry of stdout.split("\0")) {
-    if (!entry.startsWith("?? ")) {
-      continue;
+    const statusCode = entry.slice(0, 2);
+
+    switch (statusCode) {
+      case "??": {
+        const path = entry.slice(3);
+
+        if (path.length !== 0) {
+          untrackedPaths.push(path);
+        }
+
+        break;
+      }
+      case "DD":
+      case "AU":
+      case "UD":
+      case "UA":
+      case "DU":
+      case "AA":
+      case "UU":
+        conflictCount += 1;
+        break;
     }
-
-    const path = entry.slice(3);
-
-    if (path.length === 0) {
-      continue;
-    }
-
-    paths.push(path);
   }
 
-  return paths;
+  return { conflictCount, untrackedPaths };
 };
 
 const readFileAddedLineCount = async ({
@@ -651,7 +711,7 @@ const readFileAddedLineCount = async ({
   }
 };
 
-const readUntrackedGitChangeCounts = async ({ cwd }: { cwd: string }) => {
+const readGitStatusChangeSummary = async ({ cwd }: { cwd: string }) => {
   const [repoRoot, status] = await Promise.all([
     readGitText({ cwd, args: ["rev-parse", "--show-toplevel"] }),
     runGit({
@@ -659,10 +719,11 @@ const readUntrackedGitChangeCounts = async ({ cwd }: { cwd: string }) => {
       args: ["status", "--porcelain=v1", "-uall", "-z", "--", "."],
     }),
   ]);
+  const gitStatusSummary = parseGitStatusSummary(status.stdout);
   let addedLineCount = 0;
   let changedFileCount = 0;
 
-  for (const untrackedPath of parseGitStatusUntrackedPaths(status.stdout)) {
+  for (const untrackedPath of gitStatusSummary.untrackedPaths) {
     if (addedLineCount >= MAX_UNTRACKED_ADDED_LINE_COUNT) {
       break;
     }
@@ -682,20 +743,25 @@ const readUntrackedGitChangeCounts = async ({ cwd }: { cwd: string }) => {
   }
 
   return {
-    added: Math.min(addedLineCount, MAX_UNTRACKED_ADDED_LINE_COUNT),
-    removed: 0,
-    changedFileCount,
+    conflictCount: gitStatusSummary.conflictCount,
+    untracked: {
+      added: Math.min(addedLineCount, MAX_UNTRACKED_ADDED_LINE_COUNT),
+      removed: 0,
+      changedFileCount,
+    },
   };
 };
 
 const readGitChangeSummary = async ({ cwd }: { cwd: string }) => {
-  const [unstaged, staged, untracked] = await Promise.all([
+  const [unstaged, staged, statusChangeSummary] = await Promise.all([
     runGit({ cwd, args: ["diff", "--numstat", "--", "."] }),
     runGit({ cwd, args: ["diff", "--cached", "--numstat", "--", "."] }),
-    readUntrackedGitChangeCounts({ cwd }),
+    readGitStatusChangeSummary({ cwd }),
   ]);
   const unstagedCounts = parseGitChangeCounts(unstaged.stdout.trim());
+  const { untracked } = statusChangeSummary;
   const changeSummary: GitChangeSummary = {
+    conflictCount: statusChangeSummary.conflictCount,
     staged: parseGitChangeCounts(staged.stdout.trim()),
     unstaged: {
       added: unstagedCounts.added + untracked.added,
@@ -1025,6 +1091,7 @@ const readGitChangeCwds = ({
 
   for (const repo of repos) {
     pushCwd(repo.root);
+    pushCwd(repo.mainWorktreePath);
 
     for (const worktree of repo.worktrees) {
       pushCwd(worktree.path);
@@ -1381,9 +1448,8 @@ const readRepoSeedForExistingRepo = async ({ repo }: { repo: RepoGraph }) => {
       cwd: repo.root,
       args: ["config", "--get", "remote.origin.url"],
     }),
-    readNullableGitText({
-      cwd: repo.root,
-      args: ["branch", "--show-current"],
+    readCurrentBranchAfterAttachingDetachedHead({
+      root: repo.root,
     }),
     readDefaultBranch({ root: repo.root }),
   ]);

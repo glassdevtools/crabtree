@@ -645,14 +645,19 @@ const readGitMergeBranchRequest = (value: unknown) => {
   if (
     typeof value.repoRoot !== "string" ||
     value.repoRoot.length === 0 ||
+    typeof value.path !== "string" ||
+    value.path.length === 0 ||
     typeof value.branch !== "string" ||
     value.branch.trim().length === 0
   ) {
-    throw new Error("gitMergeBranchRequest needs a repo root and branch.");
+    throw new Error(
+      "gitMergeBranchRequest needs a repo root, path, and branch.",
+    );
   }
 
   const gitMergeBranchRequest: GitMergeBranchRequest = {
     repoRoot: value.repoRoot,
+    path: value.path,
     branch: value.branch.trim(),
   };
 

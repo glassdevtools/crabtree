@@ -946,6 +946,13 @@ textarea,
   color: #8b929c;
 }
 
+.change-summary-conflict-warning {
+  color: #c53a13;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 820;
+}
+
 .change-summary-modal-link {
   width: auto;
   height: auto;
@@ -1407,6 +1414,11 @@ textarea,
 
 .commit-thread-change-removed {
   color: #c53a13;
+}
+
+.commit-thread-change-conflict-count {
+  color: #c53a13;
+  font-weight: 820;
 }
 
 .commit-thread-change-file-count {

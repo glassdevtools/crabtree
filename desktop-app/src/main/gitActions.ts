@@ -18,6 +18,7 @@ import type {
   GitMoveTagRequest,
   GitSwitchBranchRequest,
 } from "../shared/types";
+import { readGitChildProcessEnv } from "./gitEnv";
 
 const FIELD_SEPARATOR = "\u001f";
 const ZERO_SHA = "0000000000000000000000000000000000000000";
@@ -38,7 +39,7 @@ const createGitClientForPath = ({ path }: { path: string }) => {
   return simpleGit({
     baseDir: path,
     timeout: { block: GIT_COMMAND_TIMEOUT_MS },
-  }).env("GIT_TERMINAL_PROMPT", "0");
+  }).env(readGitChildProcessEnv());
 };
 
 const runGitCommandForPath = async ({
@@ -59,6 +60,40 @@ const readGitTextForPath = async ({
   args: string[];
 }) => {
   return (await createGitClientForPath({ path }).raw(args)).trim();
+};
+
+const assertWorktreeCleanForGitAction = async ({
+  path,
+  actionDescription,
+}: {
+  path: string;
+  actionDescription: string;
+}) => {
+  const statusText = await readGitTextForPath({
+    path,
+    args: ["status", "--porcelain"],
+  });
+
+  if (statusText.length > 0) {
+    throw new Error(`Working tree must be clean before ${actionDescription}.`);
+  }
+};
+
+const assertWorktreeHasNoTrackedChangesForGitAction = async ({
+  path,
+  actionDescription,
+}: {
+  path: string;
+  actionDescription: string;
+}) => {
+  const statusText = await readGitTextForPath({
+    path,
+    args: ["status", "--porcelain", "--untracked-files=no"],
+  });
+
+  if (statusText.length > 0) {
+    throw new Error(`Working tree must be clean before ${actionDescription}.`);
+  }
 };
 
 const readNullableGitTextForPath = async ({
@@ -218,8 +253,12 @@ const readGitWorktreePathForBranch = async ({
 };
 
 const readCurrentBranch = async ({ repoRoot }: { repoRoot: string }) => {
+  return await readCurrentBranchForPath({ path: repoRoot });
+};
+
+const readCurrentBranchForPath = async ({ path }: { path: string }) => {
   const branch = await readGitTextForPath({
-    path: repoRoot,
+    path,
     args: ["branch", "--show-current"],
   });
 
@@ -357,8 +396,7 @@ const readLocalBranchesAtSha = async ({
   return localBranchText.split("\n").filter((branch) => branch.length > 0);
 };
 
-// Detached HEAD should reattach when a local branch already points at the same commit.
-const readAvailableLocalBranchAtSha = async ({
+const readLocalBranchAtSha = async ({
   repoRoot,
   sha,
 }: {
@@ -367,54 +405,27 @@ const readAvailableLocalBranchAtSha = async ({
 }) => {
   const localBranches = await readLocalBranchesAtSha({ repoRoot, sha });
 
-  if (localBranches.length === 0) {
-    return null;
-  }
-
-  const worktrees = await readGitWorktrees({ repoRoot });
-  const isCheckedOutBranchOfBranch: { [branch: string]: boolean } = {};
-
-  for (const worktree of worktrees) {
-    if (worktree.branch !== null) {
-      isCheckedOutBranchOfBranch[worktree.branch] = true;
-    }
-  }
-
-  const localDefaultBranch = await readLocalDefaultBranch({ repoRoot });
-
-  if (
-    localDefaultBranch !== null &&
-    localBranches.includes(localDefaultBranch) &&
-    isCheckedOutBranchOfBranch[localDefaultBranch] !== true
-  ) {
-    return localDefaultBranch;
-  }
-
-  for (const localBranch of localBranches) {
-    if (isCheckedOutBranchOfBranch[localBranch] !== true) {
-      return localBranch;
-    }
-  }
-
-  return null;
+  return localBranches[0] ?? null;
 };
 
-const attachHeadToLocalBranchAtCurrentSha = async ({
+const attachWorktreeHeadToLocalBranchAtCurrentSha = async ({
   repoRoot,
+  path,
 }: {
   repoRoot: string;
+  path: string;
 }) => {
-  const currentBranch = await readCurrentBranch({ repoRoot });
+  const currentBranch = await readCurrentBranchForPath({ path });
 
   if (currentBranch !== null) {
     return;
   }
 
   const headSha = await readGitTextForPath({
-    path: repoRoot,
+    path,
     args: ["rev-parse", "HEAD"],
   });
-  const branch = await readAvailableLocalBranchAtSha({
+  const branch = await readLocalBranchAtSha({
     repoRoot,
     sha: headSha,
   });
@@ -423,7 +434,18 @@ const attachHeadToLocalBranchAtCurrentSha = async ({
     return;
   }
 
-  await runGitCommandForPath({ path: repoRoot, args: ["switch", branch] });
+  await attachWorktreeHeadToBranch({ path, branch, expectedHeadSha: headSha });
+};
+
+const attachHeadToLocalBranchAtCurrentSha = async ({
+  repoRoot,
+}: {
+  repoRoot: string;
+}) => {
+  await attachWorktreeHeadToLocalBranchAtCurrentSha({
+    repoRoot,
+    path: repoRoot,
+  });
 };
 
 export const readGitMainWorktreePathForPath = async ({
@@ -1024,6 +1046,7 @@ export const createGitPullRequest = async ({
 
 const readGitMergeBranchTarget = async ({
   repoRoot,
+  path,
   branch,
 }: GitMergeBranchRequest) => {
   await runGitCommandForPath({
@@ -1033,7 +1056,7 @@ const readGitMergeBranchTarget = async ({
 
   const branchRef = `refs/heads/${branch}`;
   const currentBranch = await readGitTextForPath({
-    path: repoRoot,
+    path,
     args: ["branch", "--show-current"],
   });
 
@@ -1046,7 +1069,7 @@ const readGitMergeBranchTarget = async ({
     args: ["rev-parse", "--verify", `${branchRef}^{commit}`],
   });
   const headSha = await readGitTextForPath({
-    path: repoRoot,
+    path,
     args: ["rev-parse", "HEAD"],
   });
 
@@ -1069,12 +1092,12 @@ export const previewGitMerge = async (
 ) => {
   const { branchRef } = await readGitMergeBranchTarget(gitMergeBranchRequest);
   const diffText = await readGitTextForPath({
-    path: gitMergeBranchRequest.repoRoot,
+    path: gitMergeBranchRequest.path,
     args: ["diff", "--numstat", `HEAD...${branchRef}`, "--", "."],
   });
   const lineCounts = parseGitChangeLineCounts(diffText);
   const mergeTreeText = await readGitTextForPath({
-    path: gitMergeBranchRequest.repoRoot,
+    path: gitMergeBranchRequest.path,
     args: [
       "merge-tree",
       "--write-tree",
@@ -1103,22 +1126,18 @@ export const mergeGitBranch = async (
   const { branchRef, currentBranch, oldSha } = await readGitMergeBranchTarget(
     gitMergeBranchRequest,
   );
-  const statusText = await readGitTextForPath({
-    path: gitMergeBranchRequest.repoRoot,
-    args: ["status", "--porcelain"],
+  await assertWorktreeHasNoTrackedChangesForGitAction({
+    path: gitMergeBranchRequest.path,
+    actionDescription: "starting a merge",
   });
 
-  if (statusText.length > 0) {
-    throw new Error("Working tree must be clean before starting a merge.");
-  }
-
   await runGitCommandForPath({
-    path: gitMergeBranchRequest.repoRoot,
+    path: gitMergeBranchRequest.path,
     args: ["merge", "--no-edit", branchRef],
   });
 
   const newSha = await readGitTextForPath({
-    path: gitMergeBranchRequest.repoRoot,
+    path: gitMergeBranchRequest.path,
     args: ["rev-parse", "--verify", "HEAD"],
   });
 
@@ -1206,6 +1225,13 @@ export const moveGitBranch = async ({
       path: targetPath,
       branch,
       expectedHeadSha: targetSha,
+    });
+  }
+
+  if (shouldDetachSource && sourcePath !== null) {
+    await attachWorktreeHeadToLocalBranchAtCurrentSha({
+      repoRoot,
+      path: sourcePath,
     });
   }
 };
@@ -1337,14 +1363,14 @@ export const checkoutGitCommit = async ({
     return;
   }
 
-  const statusText = await readGitTextForPath({
-    path: repoRoot,
-    args: ["status", "--porcelain"],
-  });
+  // const statusText = await readGitTextForPath({
+  //   path: repoRoot,
+  //   args: ["status", "--porcelain"],
+  // });
 
-  if (statusText.length > 0) {
-    throw new Error("Working tree must be clean before switching away.");
-  }
+  // if (statusText.length > 0) {
+  //   throw new Error("Working tree must be clean before switching away.");
+  // }
 
   const visibleRefText = await readGitTextForPath({
     path: repoRoot,
@@ -1365,20 +1391,11 @@ export const checkoutGitCommit = async ({
     );
   }
 
-  const branch = await readAvailableLocalBranchAtSha({
-    repoRoot,
-    sha: targetSha,
-  });
-
-  if (branch !== null) {
-    await runGitCommandForPath({ path: repoRoot, args: ["switch", branch] });
-    return;
-  }
-
   await runGitCommandForPath({
     path: repoRoot,
     args: ["switch", "--detach", targetSha],
   });
+  await attachHeadToLocalBranchAtCurrentSha({ repoRoot });
 };
 
 // -------------------------- Origin ref sync actions ---------------
@@ -1811,14 +1828,10 @@ export const revertGitBranchSyncChanges = async (
       continue;
     }
 
-    const statusText = await readGitTextForPath({
+    await assertWorktreeCleanForGitAction({
       path: worktreePath,
-      args: ["status", "--porcelain"],
+      actionDescription: `resetting ${name}`,
     });
-
-    if (statusText.length > 0) {
-      throw new Error(`Working tree must be clean before resetting ${name}.`);
-    }
 
     const worktreeHead = await readGitTextForPath({
       path: worktreePath,
