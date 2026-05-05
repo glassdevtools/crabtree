@@ -229,6 +229,7 @@ const GitChangeCountText = ({
 
 const GitDiffLine = ({ line }: { line: string }) => {
   let className = "row-diff-line";
+  let displayLine = line;
 
   if (
     line.startsWith("diff --") ||
@@ -253,11 +254,15 @@ const GitDiffLine = ({ line }: { line: string }) => {
 
   if (line.startsWith("+")) {
     className = `${className} row-diff-line-added`;
+    displayLine = line.slice(1);
   } else if (line.startsWith("-")) {
     className = `${className} row-diff-line-removed`;
+    displayLine = line.slice(1);
+  } else if (line.startsWith(" ")) {
+    displayLine = line.slice(1);
   }
 
-  return <span className={className}>{line}</span>;
+  return <span className={className}>{displayLine}</span>;
 };
 
 const readGitDiffLineCounts = (diff: string) => {
