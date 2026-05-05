@@ -755,10 +755,6 @@ textarea,
   pointer-events: none;
 }
 
-.change-summary-modal {
-  width: min(360px, calc(100vw - 32px));
-}
-
 .row-diff-modal {
   width: min(1180px, calc(100vw - 24px));
   max-width: calc(100vw - 24px);
@@ -1029,53 +1025,6 @@ textarea,
 
 .branch-merge-conflict-count-empty {
   color: #343a43;
-}
-
-.change-summary-breakdown {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid #e0e5ec;
-  border-radius: 6px;
-}
-
-.change-summary-row {
-  display: grid;
-  grid-template-columns: 1fr 58px 58px;
-  gap: 8px;
-  align-items: center;
-  padding: 8px 10px;
-  border-bottom: 1px solid #edf0f4;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
-  font-weight: 720;
-}
-
-.change-summary-row:last-child {
-  border-bottom: 0;
-}
-
-.change-summary-row-empty .commit-thread-change-added,
-.change-summary-row-empty .commit-thread-change-removed,
-.change-summary-row-empty .commit-thread-change-file-count {
-  color: #8b929c;
-}
-
-.change-summary-modal-link {
-  width: auto;
-  height: auto;
-  align-self: flex-start;
-  justify-self: start;
-  justify-content: flex-start;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: #0a64c9;
-  cursor: pointer;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  text-decoration: underline;
-  text-underline-offset: 2px;
 }
 
 .branch-tag-change-list {

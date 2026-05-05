@@ -863,6 +863,7 @@ type BranchCreateTarget =
 type RowDiffTarget = {
   title: string;
   description: string;
+  repositoryPath: string | null;
   request: GitDiffRequest;
 };
 
@@ -920,12 +921,6 @@ type CommitMessageTarget = {
   path: string;
   title: string;
   branchTarget: CommitBranchTarget | null;
-};
-
-type ChangeSummaryTarget = {
-  path: string;
-  title: string;
-  changeSummary: GitChangeSummary;
 };
 
 type BranchMergeConfirmation = {
@@ -2268,7 +2263,7 @@ const CommitHistoryRow = ({
   openRowAfterDoubleClick,
   openBranchCreateModal,
   openCommitMessageModal,
-  openChangeSummaryModal,
+  openChangesDiffModal,
   openBranchMergeModal,
   openBranchPushModal,
   openCopyContextMenu,
@@ -2311,9 +2306,9 @@ const CommitHistoryRow = ({
     event: MouseEvent<HTMLButtonElement>,
     commitMessageTarget: CommitMessageTarget,
   ) => void;
-  openChangeSummaryModal: (
+  openChangesDiffModal: (
     event: MouseEvent<HTMLButtonElement>,
-    changeSummaryTarget: ChangeSummaryTarget,
+    rowDiffTarget: RowDiffTarget,
   ) => void;
   openBranchMergeModal: (
     event: MouseEvent<HTMLButtonElement>,
@@ -2747,10 +2742,17 @@ const CommitHistoryRow = ({
                     onMouseDown={(event) => event.stopPropagation()}
                     onDoubleClick={(event) => event.stopPropagation()}
                     onClick={(event) =>
-                      openChangeSummaryModal(event, {
-                        path: actionThreadGroup.cwd,
-                        title: actionThreadGroup.cwd,
-                        changeSummary: actionChangeSummary,
+                      openChangesDiffModal(event, {
+                        title: "Changes",
+                        description: actionThreadGroup.cwd,
+                        repositoryPath: actionThreadGroup.cwd,
+                        request: {
+                          mode: "changesMadeHere",
+                          target: {
+                            type: "path",
+                            path: actionThreadGroup.cwd,
+                          },
+                        },
                       })
                     }
                   >
@@ -3020,10 +3022,12 @@ const CommitHistoryColumnResizeHandle = ({
 const RowDiffDialog = ({
   rowDiffTarget,
   rowDiffLoadState,
+  openCodePath,
   closeRowDiffModal,
 }: {
   rowDiffTarget: RowDiffTarget | null;
   rowDiffLoadState: RowDiffLoadState;
+  openCodePath: (path: string) => Promise<void>;
   closeRowDiffModal: () => void;
 }) => {
   const [
@@ -3085,6 +3089,7 @@ const RowDiffDialog = ({
   let shouldShowRowDiffFileActions = false;
   let isEveryRowDiffFileExpanded = false;
   let isEveryRowDiffFileCollapsed = false;
+  const rowDiffRepositoryPath = rowDiffTarget?.repositoryPath ?? null;
 
   if (rowDiffLoadState.type === "loaded" && rowDiffLoadState.files.length > 0) {
     shouldShowRowDiffFileActions = true;
@@ -3230,6 +3235,16 @@ const RowDiffDialog = ({
             )}
           </div>
           <DialogFooter>
+            {rowDiffRepositoryPath === null ? null : (
+              <Button
+                type="button"
+                onClick={() => {
+                  void openCodePath(rowDiffRepositoryPath);
+                }}
+              >
+                Open Repository
+              </Button>
+            )}
             <Button type="button" variant="outline" onClick={closeRowDiffModal}>
               Close
             </Button>
@@ -3829,8 +3844,6 @@ const CommitHistory = ({
     useState<GitPullRequestCreateTarget | null>(null);
   const [commitMessageTarget, setCommitMessageTarget] =
     useState<CommitMessageTarget | null>(null);
-  const [changeSummaryTarget, setChangeSummaryTarget] =
-    useState<ChangeSummaryTarget | null>(null);
   const [rowDiffTarget, setRowDiffTarget] = useState<RowDiffTarget | null>(
     null,
   );
@@ -4829,6 +4842,7 @@ const CommitHistory = ({
           mode === "changesMadeHere"
             ? gitDiffDescription
             : gitDiffAgainstHeadDescription,
+        repositoryPath: null,
         request: {
           mode,
           target: gitDiffRowTarget,
@@ -4955,20 +4969,17 @@ const CommitHistory = ({
   const closeCommitMessageModal = () => {
     setCommitMessageTarget(null);
   };
-  const openChangeSummaryModal = (
+  const openChangesDiffModal = (
     event: MouseEvent<HTMLButtonElement>,
-    changeSummaryTarget: ChangeSummaryTarget,
+    rowDiffTarget: RowDiffTarget,
   ) => {
     event.preventDefault();
     event.stopPropagation();
-    setChangeSummaryTarget(changeSummaryTarget);
+    setRowDiffTarget(rowDiffTarget);
     trackDesktopAction({
       eventName: "change_summary_opened",
       properties: {},
     });
-  };
-  const closeChangeSummaryModal = () => {
-    setChangeSummaryTarget(null);
   };
   const closeBranchMergeConfirmationModal = () => {
     setBranchMergeConfirmation(null);
@@ -5789,7 +5800,7 @@ const CommitHistory = ({
                 openRowAfterDoubleClick={() => openRowAfterDoubleClick(row)}
                 openBranchCreateModal={openBranchCreateModal}
                 openCommitMessageModal={openCommitMessageModal}
-                openChangeSummaryModal={openChangeSummaryModal}
+                openChangesDiffModal={openChangesDiffModal}
                 openBranchMergeModal={openBranchMergeModal}
                 openBranchPushModal={openBranchPushModal}
                 openCopyContextMenu={openCopyContextMenu}
@@ -5825,64 +5836,9 @@ const CommitHistory = ({
         <RowDiffDialog
           rowDiffTarget={rowDiffTarget}
           rowDiffLoadState={rowDiffLoadState}
+          openCodePath={openCodePath}
           closeRowDiffModal={closeRowDiffModal}
         />
-        <Dialog
-          open={changeSummaryTarget !== null}
-          onOpenChange={(isOpen) => {
-            if (isOpen) {
-              return;
-            }
-
-            closeChangeSummaryModal();
-          }}
-        >
-          {changeSummaryTarget === null ? null : (
-            <DialogContent className="change-summary-modal">
-              <DialogHeader>
-                <DialogTitle>Change Summary</DialogTitle>
-              </DialogHeader>
-              <div className="change-summary-breakdown">
-                <div
-                  className={
-                    changeSummaryTarget.changeSummary.staged
-                      .changedFileCount === 0
-                      ? "change-summary-row change-summary-row-empty"
-                      : "change-summary-row"
-                  }
-                >
-                  <span>Staged</span>
-                  <GitChangeCountText
-                    changeCounts={changeSummaryTarget.changeSummary.staged}
-                  />
-                </div>
-                <div
-                  className={
-                    changeSummaryTarget.changeSummary.unstaged
-                      .changedFileCount === 0
-                      ? "change-summary-row change-summary-row-empty"
-                      : "change-summary-row"
-                  }
-                >
-                  <span>Unstaged</span>
-                  <GitChangeCountText
-                    changeCounts={changeSummaryTarget.changeSummary.unstaged}
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  type="button"
-                  onClick={() => {
-                    void openCodePath(changeSummaryTarget.path);
-                  }}
-                >
-                  Open Repository
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          )}
-        </Dialog>
         <ConfirmationDialog
           isOpen={gitRefDeleteTarget !== null}
           closeConfirmationDialog={closeGitRefDeleteModal}
