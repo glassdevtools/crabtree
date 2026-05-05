@@ -9,6 +9,7 @@ import type {
   GitCheckoutCommitRequest,
   GitCommitChangesRequest,
   GitCreateBranchRequest,
+  GitDiffRequest,
   GitCreatePullRequestRequest,
   GitCreateRefRequest,
   GitDeleteBranchRequest,
@@ -164,6 +165,9 @@ const api: CrabtreeApi = {
   },
   mergeGitBranch: async (gitMergeBranchRequest: GitMergeBranchRequest) => {
     return await ipcRenderer.invoke("git:mergeBranch", gitMergeBranchRequest);
+  },
+  readGitDiff: async (gitDiffRequest: GitDiffRequest) => {
+    return await ipcRenderer.invoke("git:readDiff", gitDiffRequest);
   },
   createGitPullRequest: async (
     gitCreatePullRequestRequest: GitCreatePullRequestRequest,
