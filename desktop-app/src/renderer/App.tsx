@@ -95,8 +95,10 @@ import { cn } from "@/lib/utils";
 import cursorAppIconUrl from "./assets/cursor-app-icon.png";
 import finderAppIconUrl from "./assets/finder-app-icon.png";
 import {
+  readChangedWorkingTreeCwdsOfSha,
   readDisplayedThreadGroups,
   readGitChangeCleanState,
+  readIsCwdInsidePath,
   readIsWorktreeCwd,
   readShouldShowChatOnlyCommitGraphRow,
 } from "./threadGroups";
@@ -1164,11 +1166,13 @@ const readPushedBranchNames = ({
 const createCommitGraph = ({
   commits,
   threadOfId,
+  mainWorktreePath,
   worktrees,
   gitChangesOfCwd,
 }: {
   commits: GitCommit[];
   threadOfId: { [id: string]: CodexThread };
+  mainWorktreePath: string;
   worktrees: GitWorktree[];
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
 }) => {
@@ -1205,6 +1209,13 @@ const createCommitGraph = ({
       break;
     }
   }
+
+  const changedWorkingTreeCwdsOfSha = readChangedWorkingTreeCwdsOfSha({
+    headSha,
+    mainWorktreePath,
+    worktrees,
+    gitChangesOfCwd,
+  });
 
   const displayedThreadIdsOfSha: { [sha: string]: string[] } = {};
 
@@ -1277,6 +1288,7 @@ const createCommitGraph = ({
       .filter((thread): thread is CodexThread => thread !== undefined);
     const threadGroups = readDisplayedThreadGroups({
       threads,
+      changedWorkingTreeCwds: changedWorkingTreeCwdsOfSha[commit.sha] ?? [],
       worktrees,
       gitChangesOfCwd,
     });
@@ -1572,10 +1584,6 @@ const readIsLocalBranch = ({
   }
 
   return false;
-};
-
-const readIsCwdInsidePath = ({ cwd, path }: { cwd: string; path: string }) => {
-  return cwd === path || cwd.startsWith(`${path}/`);
 };
 
 const readBranchPointerRowPath = ({
@@ -2303,6 +2311,7 @@ const CommitHistoryRow = ({
     row.threadGroup === null
       ? readDisplayedThreadGroups({
           threads,
+          changedWorkingTreeCwds: [],
           worktrees,
           gitChangesOfCwd,
         })
@@ -2346,6 +2355,13 @@ const CommitHistoryRow = ({
       return false;
     }
 
+    if (
+      readGitChangeCleanState({ gitChangesOfCwd, cwd: worktree.path }) ===
+      "dirty"
+    ) {
+      return false;
+    }
+
     for (const worktreeThreadId of worktree.threadIds) {
       if (rowThreadIdOfId[worktreeThreadId] !== true) {
         return false;
@@ -2358,7 +2374,11 @@ const CommitHistoryRow = ({
   const excludedLocalBranchOfName: { [branch: string]: boolean } = {};
   const rowLocalBranches: string[] = [];
   const isRowLocalBranchAddedOfBranch: { [branch: string]: boolean } = {};
-  let hasChangedMainWorktreeThreadGroup = false;
+  const shouldMoveMainWorktreeRefsToChangedRow =
+    row.threadGroup === null &&
+    commit.refs.some((ref) => readIsHeadRef(ref)) &&
+    readGitChangeCleanState({ gitChangesOfCwd, cwd: mainWorktreePath }) ===
+      "dirty";
 
   const pushRowLocalBranch = (branch: string) => {
     if (isRowLocalBranchAddedOfBranch[branch] === true) {
@@ -2398,15 +2418,6 @@ const CommitHistoryRow = ({
         readIsCwdInsidePath({ cwd: thread.cwd, path: mainWorktreePath }) &&
         !readIsWorktreeCwd({ cwd: thread.cwd, worktrees });
 
-      if (
-        !hasChangedMainWorktreeThreadGroup &&
-        isMainWorktreeThread &&
-        readGitChangeCleanState({ gitChangesOfCwd, cwd: thread.cwd }) ===
-          "dirty"
-      ) {
-        hasChangedMainWorktreeThreadGroup = true;
-      }
-
       if (rowThreadIdOfId[commitThreadId] === true) {
         continue;
       }
@@ -2425,7 +2436,7 @@ const CommitHistoryRow = ({
       }
     }
 
-    if (currentBranch !== null && hasChangedMainWorktreeThreadGroup) {
+    if (currentBranch !== null && shouldMoveMainWorktreeRefsToChangedRow) {
       excludedLocalBranchOfName[currentBranch] = true;
     }
   }
@@ -2477,7 +2488,7 @@ const CommitHistoryRow = ({
       ? commit.refs.filter((ref) => {
           const refName = cleanRefName(ref);
 
-          if (hasChangedMainWorktreeThreadGroup && readIsHeadRef(ref)) {
+          if (shouldMoveMainWorktreeRefsToChangedRow && readIsHeadRef(ref)) {
             return false;
           }
 
@@ -3631,10 +3642,11 @@ const CommitHistory = ({
       createCommitGraph({
         commits,
         threadOfId,
+        mainWorktreePath,
         worktrees,
         gitChangesOfCwd,
       }),
-    [commits, gitChangesOfCwd, threadOfId, worktrees],
+    [commits, gitChangesOfCwd, mainWorktreePath, threadOfId, worktrees],
   );
   const pullRequestBaseBranches = useMemo(
     () => readPushedBranchNames({ commits, defaultBranch }),

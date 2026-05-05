@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  readChangedWorkingTreeCwdsOfSha,
   readDisplayedThreadGroups,
   readGitChangeCleanState,
   readIsGitChangeSummaryEmpty,
@@ -108,6 +109,7 @@ test("orders changed cwd chat groups before unchanged groups", () => {
       createThread({ id: "empty-root", cwd: "/repo/empty" }),
       createThread({ id: "unchanged-worktree", cwd: "/repo/worktree-clean" }),
     ],
+    changedWorkingTreeCwds: [],
     worktrees: [
       {
         path: "/repo/worktree",
@@ -145,6 +147,102 @@ test("orders changed cwd chat groups before unchanged groups", () => {
   assert.deepEqual(
     threadGroups[0].threads.map((thread) => thread.id),
     ["changed-root-a", "changed-root-b"],
+  );
+});
+
+test("adds changed working tree groups without chats", () => {
+  const threadGroups = readDisplayedThreadGroups({
+    threads: [],
+    changedWorkingTreeCwds: ["/repo/root"],
+    worktrees: [],
+    gitChangesOfCwd: {
+      "/repo/root": ADDED_CHANGE_SUMMARY,
+    },
+  });
+
+  assert.deepEqual(
+    threadGroups.map((threadGroup) => ({
+      key: threadGroup.key,
+      cwd: threadGroup.cwd,
+      threadIds: threadGroup.threads.map((thread) => thread.id),
+    })),
+    [{ key: "cwd:/repo/root", cwd: "/repo/root", threadIds: [] }],
+  );
+});
+
+test("moves chats into their changed working tree group", () => {
+  const threadGroups = readDisplayedThreadGroups({
+    threads: [
+      createThread({ id: "repo-thread", cwd: "/repo/root/package" }),
+      createThread({ id: "other-thread", cwd: "/repo/other" }),
+    ],
+    changedWorkingTreeCwds: ["/repo/root"],
+    worktrees: [],
+    gitChangesOfCwd: {
+      "/repo/root": ADDED_CHANGE_SUMMARY,
+    },
+  });
+
+  assert.deepEqual(
+    threadGroups.map((threadGroup) => ({
+      key: threadGroup.key,
+      cwd: threadGroup.cwd,
+      threadIds: threadGroup.threads.map((thread) => thread.id),
+    })),
+    [
+      {
+        key: "cwd:/repo/root",
+        cwd: "/repo/root",
+        threadIds: ["repo-thread"],
+      },
+      {
+        key: "cwd:/repo/other",
+        cwd: "/repo/other",
+        threadIds: ["other-thread"],
+      },
+    ],
+  );
+});
+
+test("maps changed main and linked worktree paths to their commits", () => {
+  assert.deepEqual(
+    readChangedWorkingTreeCwdsOfSha({
+      headSha: "main-sha",
+      mainWorktreePath: "/repo/main",
+      worktrees: [
+        {
+          path: "/repo/worktree",
+          head: "worktree-sha",
+          branch: "topic",
+          isDetached: false,
+          threadIds: [],
+        },
+        {
+          path: "/repo/clean-worktree",
+          head: "clean-sha",
+          branch: "clean",
+          isDetached: false,
+          threadIds: [],
+        },
+        {
+          path: "/repo/missing-head",
+          head: null,
+          branch: null,
+          isDetached: true,
+          threadIds: [],
+        },
+      ],
+      gitChangesOfCwd: {
+        "/repo/main": ADDED_CHANGE_SUMMARY,
+        "/repo/worktree": REMOVED_CHANGE_SUMMARY,
+        "/repo/clean-worktree": EMPTY_CHANGE_SUMMARY,
+        "/repo/missing-head": ADDED_CHANGE_SUMMARY,
+      },
+    }),
+    {
+      "main-sha": ["/repo/main"],
+      "worktree-sha": ["/repo/worktree"],
+    },
   );
 });
 

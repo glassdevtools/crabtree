@@ -12,6 +12,16 @@ export type ThreadGroup = {
 
 export type GitChangeCleanState = "clean" | "dirty" | "unknown";
 
+export const readIsCwdInsidePath = ({
+  cwd,
+  path,
+}: {
+  cwd: string;
+  path: string;
+}) => {
+  return cwd === path || cwd.startsWith(`${path}/`);
+};
+
 export const readIsGitChangeSummaryEmpty = (
   changeSummary: GitChangeSummary,
 ) => {
@@ -46,7 +56,7 @@ export const readIsWorktreeCwd = ({
   worktrees: GitWorktree[];
 }) => {
   for (const worktree of worktrees) {
-    if (cwd === worktree.path || cwd.startsWith(`${worktree.path}/`)) {
+    if (readIsCwdInsidePath({ cwd, path: worktree.path })) {
       return true;
     }
   }
@@ -74,38 +84,142 @@ export const readShouldShowChatOnlyCommitGraphRow = ({
   return false;
 };
 
+export const readChangedWorkingTreeCwdsOfSha = ({
+  headSha,
+  mainWorktreePath,
+  worktrees,
+  gitChangesOfCwd,
+}: {
+  headSha: string | null;
+  mainWorktreePath: string;
+  worktrees: GitWorktree[];
+  gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
+}) => {
+  const changedWorkingTreeCwdsOfSha: { [sha: string]: string[] } = {};
+
+  const pushChangedWorkingTreeCwd = ({
+    sha,
+    cwd,
+  }: {
+    sha: string | null;
+    cwd: string;
+  }) => {
+    if (
+      sha === null ||
+      cwd.length === 0 ||
+      readGitChangeCleanState({ gitChangesOfCwd, cwd }) !== "dirty"
+    ) {
+      return;
+    }
+
+    if (changedWorkingTreeCwdsOfSha[sha] === undefined) {
+      changedWorkingTreeCwdsOfSha[sha] = [];
+    }
+
+    changedWorkingTreeCwdsOfSha[sha].push(cwd);
+  };
+
+  pushChangedWorkingTreeCwd({ sha: headSha, cwd: mainWorktreePath });
+
+  for (const worktree of worktrees) {
+    pushChangedWorkingTreeCwd({ sha: worktree.head, cwd: worktree.path });
+  }
+
+  return changedWorkingTreeCwdsOfSha;
+};
+
 export const readDisplayedThreadGroups = ({
   threads,
+  changedWorkingTreeCwds,
   worktrees,
   gitChangesOfCwd,
 }: {
   threads: CodexThread[];
+  changedWorkingTreeCwds: string[];
   worktrees: GitWorktree[];
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
 }) => {
   const threadGroups: ThreadGroup[] = [];
   const groupIndexOfKey: { [key: string]: number } = {};
+  const changedWorkingTreeCwdsWithChanges: string[] = [];
 
-  // Chats are grouped by cwd so chats that share a working directory also share one change count.
-  for (const thread of threads) {
-    const groupKey =
-      thread.cwd.length === 0 ? `thread:${thread.id}` : `cwd:${thread.cwd}`;
-    const groupIndex = groupIndexOfKey[groupKey];
+  const pushThreadGroup = ({
+    key,
+    cwd,
+    thread,
+  }: {
+    key: string;
+    cwd: string;
+    thread: CodexThread | null;
+  }) => {
+    const groupIndex = groupIndexOfKey[key];
 
     if (groupIndex !== undefined) {
-      threadGroups[groupIndex].threads.push(thread);
+      if (thread !== null) {
+        threadGroups[groupIndex].threads.push(thread);
+      }
+
+      return;
+    }
+
+    groupIndexOfKey[key] = threadGroups.length;
+    threadGroups.push({
+      key,
+      cwd,
+      threads: thread === null ? [] : [thread],
+    });
+  };
+
+  const readIsCwdChanged = (cwd: string) => {
+    return readGitChangeCleanState({ gitChangesOfCwd, cwd }) === "dirty";
+  };
+
+  for (const cwd of changedWorkingTreeCwds) {
+    if (readIsCwdChanged(cwd)) {
+      changedWorkingTreeCwdsWithChanges.push(cwd);
+      pushThreadGroup({ key: `cwd:${cwd}`, cwd, thread: null });
+    }
+  }
+
+  const readChangedWorkingTreeCwdForThread = (thread: CodexThread) => {
+    let changedWorkingTreeCwd: string | null = null;
+
+    for (const cwd of changedWorkingTreeCwdsWithChanges) {
+      if (!readIsCwdInsidePath({ cwd: thread.cwd, path: cwd })) {
+        continue;
+      }
+
+      if (
+        changedWorkingTreeCwd === null ||
+        cwd.length > changedWorkingTreeCwd.length
+      ) {
+        changedWorkingTreeCwd = cwd;
+      }
+    }
+
+    return changedWorkingTreeCwd;
+  };
+
+  // Chats are grouped by cwd unless a changed working tree owns the whole path.
+  for (const thread of threads) {
+    const changedWorkingTreeCwd = readChangedWorkingTreeCwdForThread(thread);
+
+    if (changedWorkingTreeCwd !== null) {
+      pushThreadGroup({
+        key: `cwd:${changedWorkingTreeCwd}`,
+        cwd: changedWorkingTreeCwd,
+        thread,
+      });
       continue;
     }
 
-    groupIndexOfKey[groupKey] = threadGroups.length;
-    threadGroups.push({ key: groupKey, cwd: thread.cwd, threads: [thread] });
+    const groupKey =
+      thread.cwd.length === 0 ? `thread:${thread.id}` : `cwd:${thread.cwd}`;
+    pushThreadGroup({ key: groupKey, cwd: thread.cwd, thread });
   }
 
   const readIsThreadGroupChanged = (threadGroup: ThreadGroup) => {
-    return (
-      readGitChangeCleanState({ gitChangesOfCwd, cwd: threadGroup.cwd }) ===
-      "dirty"
-    );
+    return readIsCwdChanged(threadGroup.cwd);
   };
 
   threadGroups.sort((leftThreadGroup, rightThreadGroup) => {
