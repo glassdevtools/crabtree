@@ -807,164 +807,8 @@ textarea,
   pointer-events: none;
 }
 
-.row-diff-modal {
-  width: min(1180px, calc(100vw - 24px));
-  max-width: calc(100vw - 24px);
-  height: min(820px, calc(100vh - 24px));
-  max-height: calc(100vh - 24px);
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
-}
-
-.row-diff-body {
-  min-height: 0;
-  display: grid;
-}
-
-.row-diff-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-}
-
-.row-diff-action-button {
-  gap: 6px;
-  font-size: 12px;
-}
-
-.row-diff-scroll {
-  min-height: 0;
-  height: 100%;
-  overflow: auto;
-  border: 1px solid #d9dee6;
-  border-radius: 6px;
-  background: #fbfcfd;
-  user-select: text;
-}
-
-.row-diff-file {
-  border-bottom: 1px solid #e1e5ec;
-  user-select: text;
-}
-
-.row-diff-file:last-child {
-  border-bottom: 0;
-}
-
-.row-diff-file-header {
-  min-width: max-content;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  text-align: left;
-  gap: 8px;
-  padding: 7px 10px;
-  border: 0;
-  border-bottom: 1px solid #edf0f4;
-  background: #ffffff;
-  color: #343a43;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 760;
-  user-select: text;
-}
-
-.row-diff-file-header:hover {
-  background: #f6f8fb;
-}
-
-.row-diff-file-toggle {
-  flex: 0 0 auto;
-  width: 18px;
-  height: 18px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #5f6670;
-}
-
-.row-diff-file-header code {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
-
-.row-diff-file-line-counts {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
-  font-weight: 780;
-}
-
-.row-diff-file-line-count-added {
-  color: #166534;
-}
-
-.row-diff-file-line-count-removed {
-  color: #b42318;
-}
-
-.row-diff-file-section {
-  flex: 0 0 auto;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: #eef2f7;
-  color: #5f6670;
-  font-size: 11px;
-  font-weight: 780;
-}
-
-.row-diff-pre {
-  min-width: max-content;
-  margin: 0;
-  padding: 6px 0;
-  color: #202124;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
-  line-height: 1.45;
-  user-select: text;
-}
-
-.row-diff-line {
-  min-height: 1.45em;
-  display: block;
-  padding: 0 10px;
-  white-space: pre;
-  user-select: text;
-}
-
-.row-diff-line-added {
-  background: #eaf7ef;
-  color: #166534;
-}
-
-.row-diff-line-removed {
-  background: #fff0f0;
-  color: #b42318;
-}
-
-.row-diff-message {
-  min-height: 120px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border: 1px solid #d9dee6;
-  border-radius: 6px;
-  color: #5f6670;
-  font-size: 13px;
-  font-weight: 650;
-}
-
-.row-diff-error-message {
-  color: #b42318;
-}
-
-.row-diff-loading-icon {
-  animation: initial-loading-spin 900ms linear infinite;
+.change-summary-modal {
+  width: min(360px, calc(100vw - 32px));
 }
 
 .git-pull-request-modal {
@@ -1029,11 +873,11 @@ textarea,
   font-weight: 650;
 }
 
-/* TODO: AI-PICKED-VALUE: These menu dimensions fit the longer diff actions without covering much of the graph. */
-.context-menu {
+/* TODO: AI-PICKED-VALUE: These menu dimensions match the compact Git table controls without covering much of the graph. */
+.git-ref-create-menu {
   position: fixed;
   z-index: 80;
-  min-width: 176px;
+  min-width: 138px;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -1044,7 +888,7 @@ textarea,
   box-shadow: 0 12px 26px rgba(15, 23, 42, 0.18);
 }
 
-.context-menu-item {
+.git-ref-create-menu-item {
   width: 100%;
   justify-content: flex-start;
   gap: 8px;
@@ -1053,15 +897,9 @@ textarea,
   line-height: 1.2;
 }
 
-.context-menu-item:disabled {
+.git-ref-create-menu-item:disabled {
   color: #9aa1aa;
   cursor: not-allowed;
-}
-
-.context-menu-separator {
-  height: 1px;
-  margin: 2px 4px;
-  background: #e1e5ec;
 }
 
 .branch-merge-preview-message {
@@ -1077,6 +915,53 @@ textarea,
 
 .branch-merge-conflict-count-empty {
   color: #343a43;
+}
+
+.change-summary-breakdown {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #e0e5ec;
+  border-radius: 6px;
+}
+
+.change-summary-row {
+  display: grid;
+  grid-template-columns: 1fr 58px 58px;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border-bottom: 1px solid #edf0f4;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.change-summary-row:last-child {
+  border-bottom: 0;
+}
+
+.change-summary-row-empty .commit-thread-change-added,
+.change-summary-row-empty .commit-thread-change-removed,
+.change-summary-row-empty .commit-thread-change-file-count {
+  color: #8b929c;
+}
+
+.change-summary-modal-link {
+  width: auto;
+  height: auto;
+  align-self: flex-start;
+  justify-self: start;
+  justify-content: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #0a64c9;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .branch-tag-change-list {
