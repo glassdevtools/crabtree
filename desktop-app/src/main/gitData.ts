@@ -9,6 +9,7 @@ import type {
   GitWorktree,
   RepoGraph,
 } from "../shared/types";
+import { readGitChildProcessEnv } from "./gitEnv";
 
 // Git is the source of truth for graph structure. Codex only tells us which thread belongs near a branch, commit, or worktree.
 const COMMIT_READ_LIMIT = 2000;
@@ -94,7 +95,7 @@ const runGit = async ({ cwd, args }: { cwd: string; args: string[] }) => {
     baseDir: cwd,
     timeout: { block: GIT_COMMAND_TIMEOUT_MS },
   })
-    .env("GIT_TERMINAL_PROMPT", "0")
+    .env(readGitChildProcessEnv())
     .raw(args);
 
   return { stdout };
@@ -1019,6 +1020,7 @@ const readGitChangeCwds = ({
 
   for (const repo of repos) {
     pushCwd(repo.root);
+    pushCwd(repo.mainWorktreePath);
 
     for (const worktree of repo.worktrees) {
       pushCwd(worktree.path);

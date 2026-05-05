@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   readDisplayedThreadGroups,
+  readGitChangeCleanState,
   readIsGitChangeSummaryEmpty,
+  readShouldShowChatOnlyCommitGraphRow,
 } from "../src/renderer/threadGroups";
 import type { CodexThread, GitChangeSummary } from "../src/shared/types";
 
@@ -146,10 +148,50 @@ test("orders changed cwd chat groups before unchanged groups", () => {
   );
 });
 
+test("reads clean, dirty, and unknown git change states", () => {
+  const gitChangesOfCwd: { [cwd: string]: GitChangeSummary } = {
+    "/repo/clean": EMPTY_CHANGE_SUMMARY,
+    "/repo/dirty": ADDED_CHANGE_SUMMARY,
+  };
+
+  assert.equal(
+    readGitChangeCleanState({ gitChangesOfCwd, cwd: "/repo/clean" }),
+    "clean",
+  );
+  assert.equal(
+    readGitChangeCleanState({ gitChangesOfCwd, cwd: "/repo/dirty" }),
+    "dirty",
+  );
+  assert.equal(
+    readGitChangeCleanState({ gitChangesOfCwd, cwd: "/repo/missing" }),
+    "unknown",
+  );
+});
+
 test("treats file-only change summaries as changed", () => {
   assert.equal(readIsGitChangeSummaryEmpty(BINARY_CHANGE_SUMMARY), false);
 });
 
 test("treats merge conflicts as changed", () => {
   assert.equal(readIsGitChangeSummaryEmpty(CONFLICT_CHANGE_SUMMARY), false);
+});
+
+test("keeps HEAD rows visible in chat-only history", () => {
+  assert.equal(
+    readShouldShowChatOnlyCommitGraphRow({
+      refs: ["HEAD -> main"],
+      threadIds: [],
+    }),
+    true,
+  );
+});
+
+test("hides normal no-chat rows in chat-only history", () => {
+  assert.equal(
+    readShouldShowChatOnlyCommitGraphRow({
+      refs: ["origin/main"],
+      threadIds: [],
+    }),
+    false,
+  );
 });

@@ -111,6 +111,7 @@ export type GitCheckoutCommitRequest = {
 
 export type GitMergeBranchRequest = {
   repoRoot: string;
+  path: string;
   branch: string;
 };
 

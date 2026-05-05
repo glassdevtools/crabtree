@@ -18,6 +18,7 @@ import type {
   GitMoveTagRequest,
   GitSwitchBranchRequest,
 } from "../shared/types";
+import { readGitChildProcessEnv } from "./gitEnv";
 
 const FIELD_SEPARATOR = "\u001f";
 const ZERO_SHA = "0000000000000000000000000000000000000000";
@@ -38,7 +39,7 @@ const createGitClientForPath = ({ path }: { path: string }) => {
   return simpleGit({
     baseDir: path,
     timeout: { block: GIT_COMMAND_TIMEOUT_MS },
-  }).env("GIT_TERMINAL_PROMPT", "0");
+  }).env(readGitChildProcessEnv());
 };
 
 const runGitCommandForPath = async ({
@@ -59,6 +60,40 @@ const readGitTextForPath = async ({
   args: string[];
 }) => {
   return (await createGitClientForPath({ path }).raw(args)).trim();
+};
+
+const assertWorktreeCleanForGitAction = async ({
+  path,
+  actionDescription,
+}: {
+  path: string;
+  actionDescription: string;
+}) => {
+  const statusText = await readGitTextForPath({
+    path,
+    args: ["status", "--porcelain"],
+  });
+
+  if (statusText.length > 0) {
+    throw new Error(`Working tree must be clean before ${actionDescription}.`);
+  }
+};
+
+const assertWorktreeHasNoTrackedChangesForGitAction = async ({
+  path,
+  actionDescription,
+}: {
+  path: string;
+  actionDescription: string;
+}) => {
+  const statusText = await readGitTextForPath({
+    path,
+    args: ["status", "--porcelain", "--untracked-files=no"],
+  });
+
+  if (statusText.length > 0) {
+    throw new Error(`Working tree must be clean before ${actionDescription}.`);
+  }
 };
 
 const readNullableGitTextForPath = async ({
@@ -1011,6 +1046,7 @@ export const createGitPullRequest = async ({
 
 const readGitMergeBranchTarget = async ({
   repoRoot,
+  path,
   branch,
 }: GitMergeBranchRequest) => {
   await runGitCommandForPath({
@@ -1020,7 +1056,7 @@ const readGitMergeBranchTarget = async ({
 
   const branchRef = `refs/heads/${branch}`;
   const currentBranch = await readGitTextForPath({
-    path: repoRoot,
+    path,
     args: ["branch", "--show-current"],
   });
 
@@ -1033,7 +1069,7 @@ const readGitMergeBranchTarget = async ({
     args: ["rev-parse", "--verify", `${branchRef}^{commit}`],
   });
   const headSha = await readGitTextForPath({
-    path: repoRoot,
+    path,
     args: ["rev-parse", "HEAD"],
   });
 
@@ -1056,12 +1092,12 @@ export const previewGitMerge = async (
 ) => {
   const { branchRef } = await readGitMergeBranchTarget(gitMergeBranchRequest);
   const diffText = await readGitTextForPath({
-    path: gitMergeBranchRequest.repoRoot,
+    path: gitMergeBranchRequest.path,
     args: ["diff", "--numstat", `HEAD...${branchRef}`, "--", "."],
   });
   const lineCounts = parseGitChangeLineCounts(diffText);
   const mergeTreeText = await readGitTextForPath({
-    path: gitMergeBranchRequest.repoRoot,
+    path: gitMergeBranchRequest.path,
     args: [
       "merge-tree",
       "--write-tree",
@@ -1090,22 +1126,18 @@ export const mergeGitBranch = async (
   const { branchRef, currentBranch, oldSha } = await readGitMergeBranchTarget(
     gitMergeBranchRequest,
   );
-  const statusText = await readGitTextForPath({
-    path: gitMergeBranchRequest.repoRoot,
-    args: ["status", "--porcelain"],
+  await assertWorktreeHasNoTrackedChangesForGitAction({
+    path: gitMergeBranchRequest.path,
+    actionDescription: "starting a merge",
   });
 
-  if (statusText.length > 0) {
-    throw new Error("Working tree must be clean before starting a merge.");
-  }
-
   await runGitCommandForPath({
-    path: gitMergeBranchRequest.repoRoot,
+    path: gitMergeBranchRequest.path,
     args: ["merge", "--no-edit", branchRef],
   });
 
   const newSha = await readGitTextForPath({
-    path: gitMergeBranchRequest.repoRoot,
+    path: gitMergeBranchRequest.path,
     args: ["rev-parse", "--verify", "HEAD"],
   });
 
@@ -1796,14 +1828,10 @@ export const revertGitBranchSyncChanges = async (
       continue;
     }
 
-    const statusText = await readGitTextForPath({
+    await assertWorktreeCleanForGitAction({
       path: worktreePath,
-      args: ["status", "--porcelain"],
+      actionDescription: `resetting ${name}`,
     });
-
-    if (statusText.length > 0) {
-      throw new Error(`Working tree must be clean before resetting ${name}.`);
-    }
 
     const worktreeHead = await readGitTextForPath({
       path: worktreePath,

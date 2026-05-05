@@ -96,8 +96,9 @@ import cursorAppIconUrl from "./assets/cursor-app-icon.png";
 import finderAppIconUrl from "./assets/finder-app-icon.png";
 import {
   readDisplayedThreadGroups,
-  readIsGitChangeSummaryEmpty,
+  readGitChangeCleanState,
   readIsWorktreeCwd,
+  readShouldShowChatOnlyCommitGraphRow,
 } from "./threadGroups";
 import { readBranchSyncPushWarningMessages } from "./branchSyncWarnings";
 import type { ThreadGroup } from "./threadGroups";
@@ -1234,11 +1235,9 @@ const createCommitGraph = ({
   }
 
   const readIsThreadGroupChanged = (threadGroup: ThreadGroup) => {
-    const gitChangeSummary = gitChangesOfCwd[threadGroup.cwd];
-
     return (
-      gitChangeSummary !== undefined &&
-      !readIsGitChangeSummaryEmpty(gitChangeSummary)
+      readGitChangeCleanState({ gitChangesOfCwd, cwd: threadGroup.cwd }) ===
+      "dirty"
     );
   };
 
@@ -1676,6 +1675,7 @@ const BranchTags = ({
   commitShortSha,
   commitSubject,
   branchPointerSourcePath,
+  branchPointerSourcePathOfBranch,
   deleteWarningMessageOfBranch,
   deleteWarningMessageOfTag,
   shouldBlockDeleteOfBranch,
@@ -1690,6 +1690,7 @@ const BranchTags = ({
   commitShortSha: string;
   commitSubject: string;
   branchPointerSourcePath: string | null;
+  branchPointerSourcePathOfBranch: { [branch: string]: string };
   deleteWarningMessageOfBranch: { [branch: string]: string };
   deleteWarningMessageOfTag: { [tag: string]: string };
   shouldBlockDeleteOfBranch: { [branch: string]: boolean };
@@ -1804,6 +1805,8 @@ const BranchTags = ({
           : (deleteWarningMessageOfBranch[refName] ?? null);
         const shouldBlockDelete =
           !isTag && shouldBlockDeleteOfBranch[refName] === true;
+        const branchPointerRefSourcePath =
+          branchPointerSourcePathOfBranch[refName] ?? branchPointerSourcePath;
 
         if (isOriginBranch) {
           refClassName = "commit-ref commit-ref-origin";
@@ -1856,7 +1859,7 @@ const BranchTags = ({
                 event,
                 gitRefType: isHead ? "head" : isTag ? "tag" : "branch",
                 refName,
-                sourcePath: isTag ? null : branchPointerSourcePath,
+                sourcePath: isTag ? null : branchPointerRefSourcePath,
                 oldSha: commitSha,
                 oldShortSha: commitShortSha,
                 oldSubject: commitSubject,
@@ -2191,7 +2194,6 @@ const CommitHistoryRow = ({
   mainWorktreePath,
   worktrees,
   currentBranch,
-  isHeadClean,
   threadOfId,
   gitChangesOfCwd,
   pathLauncher,
@@ -2225,7 +2227,6 @@ const CommitHistoryRow = ({
   mainWorktreePath: string;
   worktrees: GitWorktree[];
   currentBranch: string | null;
-  isHeadClean: boolean;
   threadOfId: { [id: string]: CodexThread };
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   pathLauncher: PathLauncher;
@@ -2392,7 +2393,6 @@ const CommitHistoryRow = ({
         continue;
       }
 
-      const gitChangeSummary = gitChangesOfCwd[thread.cwd];
       const isMainWorktreeThread =
         thread.cwd.length > 0 &&
         readIsCwdInsidePath({ cwd: thread.cwd, path: mainWorktreePath }) &&
@@ -2401,8 +2401,8 @@ const CommitHistoryRow = ({
       if (
         !hasChangedMainWorktreeThreadGroup &&
         isMainWorktreeThread &&
-        gitChangeSummary !== undefined &&
-        !readIsGitChangeSummaryEmpty(gitChangeSummary)
+        readGitChangeCleanState({ gitChangesOfCwd, cwd: thread.cwd }) ===
+          "dirty"
       ) {
         hasChangedMainWorktreeThreadGroup = true;
       }
@@ -2526,8 +2526,11 @@ const CommitHistoryRow = ({
   const actionTotalChangeSummary =
     readTotalGitChangeSummary(actionChangeSummary);
   const shouldShowActionChangeCount =
-    storedActionChangeSummary !== undefined &&
-    !readIsGitChangeSummaryEmpty(actionChangeSummary);
+    actionThreadGroup !== null &&
+    readGitChangeCleanState({
+      gitChangesOfCwd,
+      cwd: actionThreadGroup.cwd,
+    }) === "dirty";
   const actionCommitBranchTarget =
     actionThreadGroup === null
       ? null
@@ -2621,12 +2624,7 @@ const CommitHistoryRow = ({
           title: commit.subject,
         }
       : null;
-  let mergeDisabledReason: string | null = null;
   let rowClassName = "commit-history-row";
-
-  if (mergeBranch !== null && isHeadClean === false) {
-    mergeDisabledReason = "Before merging, resolve your changes";
-  }
 
   const mergeBranchButtonTitle =
     mergeBranch === null || currentBranch === null
@@ -2665,6 +2663,17 @@ const CommitHistoryRow = ({
         repoRoot,
         worktrees,
       });
+  const branchPointerSourcePathOfBranch: { [branch: string]: string } = {};
+
+  if (currentBranch !== null && rowRefs.some((ref) => readIsHeadRef(ref))) {
+    branchPointerSourcePathOfBranch[currentBranch] = mainWorktreePath;
+  }
+
+  for (const worktree of worktreesForRow) {
+    if (worktree.branch !== null) {
+      branchPointerSourcePathOfBranch[worktree.branch] = worktree.path;
+    }
+  }
 
   return (
     <div
@@ -2793,13 +2802,7 @@ const CommitHistoryRow = ({
                 </Button>
               </TitleTooltip>
             ) : mergeBranch === null ? null : (
-              <TitleTooltip
-                title={
-                  mergeDisabledReason === null
-                    ? mergeBranchButtonTitle
-                    : mergeDisabledReason
-                }
-              >
+              <TitleTooltip title={mergeBranchButtonTitle}>
                 <span className="title-tooltip-trigger">
                   <Button
                     className="commit-graph-merge-action"
@@ -2807,7 +2810,6 @@ const CommitHistoryRow = ({
                     size="icon-xs"
                     type="button"
                     aria-label={mergeBranchButtonTitle}
-                    disabled={mergeDisabledReason !== null}
                     onMouseDown={(event) => event.stopPropagation()}
                     onDoubleClick={(event) => event.stopPropagation()}
                     onClick={(event) =>
@@ -2844,6 +2846,7 @@ const CommitHistoryRow = ({
             commitShortSha={commit.shortSha}
             commitSubject={commit.subject}
             branchPointerSourcePath={branchPointerSourcePath}
+            branchPointerSourcePathOfBranch={branchPointerSourcePathOfBranch}
             deleteWarningMessageOfBranch={deleteWarningMessageOfBranch}
             deleteWarningMessageOfTag={deleteWarningMessageOfTag}
             shouldBlockDeleteOfBranch={shouldBlockDeleteOfBranch}
@@ -3637,14 +3640,6 @@ const CommitHistory = ({
     () => readPushedBranchNames({ commits, defaultBranch }),
     [commits, defaultBranch],
   );
-  const headChangeSummary = gitChangesOfCwd[repoRoot];
-  const headTotalChangeSummary =
-    headChangeSummary === undefined
-      ? EMPTY_GIT_CHANGE_SUMMARY
-      : headChangeSummary;
-  const isHeadClean =
-    headChangeSummary !== undefined &&
-    readIsGitChangeSummaryEmpty(headTotalChangeSummary);
   const mergeability = useMemo(() => {
     const commitOfSha: { [sha: string]: GitCommit } = {};
     const branchShaOfBranch: { [branch: string]: string } = {};
@@ -4037,7 +4032,12 @@ const CommitHistory = ({
     const rowIndexOfOldRowIndex: { [rowIndex: number]: number } = {};
 
     for (const row of graph.rows) {
-      if (row.threadIds.length === 0) {
+      if (
+        !readShouldShowChatOnlyCommitGraphRow({
+          refs: row.commit.refs,
+          threadIds: row.threadIds,
+        })
+      ) {
         continue;
       }
 
@@ -4888,6 +4888,7 @@ const CommitHistory = ({
     try {
       const preview = await window.crabtree.previewGitMerge({
         repoRoot,
+        path: mainWorktreePath,
         branch,
       });
       setBranchMergeConfirmation({
@@ -4918,6 +4919,7 @@ const CommitHistory = ({
         try {
           await window.crabtree.mergeGitBranch({
             repoRoot,
+            path: mainWorktreePath,
             branch: request.branch,
           });
           trackDesktopAction({
@@ -5376,7 +5378,6 @@ const CommitHistory = ({
                 mainWorktreePath={mainWorktreePath}
                 worktrees={worktrees}
                 currentBranch={currentBranch}
-                isHeadClean={isHeadClean}
                 threadOfId={threadOfId}
                 gitChangesOfCwd={gitChangesOfCwd}
                 pathLauncher={pathLauncher}
