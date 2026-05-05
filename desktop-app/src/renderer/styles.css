@@ -971,6 +971,86 @@ textarea,
   width: min(460px, calc(100vw - 32px));
 }
 
+/* TODO: AI-PICKED-VALUE: The terminal modal is wider than normal dialogs so command output has room while still leaving a small margin around the app window. */
+.terminal-modal-content {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 50;
+  display: grid;
+  width: min(1180px, calc(100vw - 24px));
+  height: min(760px, calc(100vh - 24px));
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 8px;
+  outline: none;
+  background: #f6f8fb;
+  box-shadow: 0 24px 72px rgba(15, 23, 42, 0.24);
+  color: #111827;
+  transform: translate(-50%, -50%);
+}
+
+.terminal-modal-header {
+  min-width: 0;
+  padding-right: 30px;
+}
+
+.terminal-modal-title {
+  padding: 0 0 4px;
+}
+
+.terminal-modal-path {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  color: #4f5660;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.terminal-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.terminal-modal-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: transparent;
+  color: #5f6670;
+}
+
+.terminal-modal-close:hover {
+  background: #e3e7ed;
+  color: #343a43;
+}
+
+/* TODO: AI-PICKED-VALUE: This dark terminal surface matches common terminal themes without adding a new app-wide color scale. */
+.terminal-surface {
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid #252b33;
+  border-radius: 6px;
+  background: #0c0f14;
+  cursor: text;
+  padding: 8px;
+}
+
+.terminal-surface .xterm {
+  width: 100%;
+  height: 100%;
+}
+
+.terminal-surface .xterm-viewport,
+.terminal-surface .xterm-screen {
+  border-radius: 4px;
+}
+
 .git-pull-request-field {
   display: grid;
   gap: 5px;
@@ -1399,6 +1479,7 @@ textarea,
 
 .commit-thread-group .commit-thread-chat,
 .commit-thread-group .commit-thread-code-location,
+.commit-thread-group .commit-thread-terminal,
 .commit-thread-group .commit-thread-change-count,
 .commit-thread-group .commit-branch-create-action,
 .commit-thread-group .commit-thread-commit-action {
@@ -1441,12 +1522,51 @@ textarea,
   background: #e3e7ed;
 }
 
+.commit-thread-terminal {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid #d4dae3;
+  border-radius: 4px;
+  background: #eef0f3;
+  color: #343a43;
+  flex: 0 0 auto;
+}
+
+.commit-thread-terminal:hover {
+  background: #e3e7ed;
+}
+
+.commit-thread-terminal-busy {
+  width: 27px;
+  gap: 2px;
+}
+
 .commit-thread-code-location .path-launcher-icon,
 .commit-thread-code-location .path-launcher-icon-image,
 .commit-thread-code-location .path-launcher-icon svg {
   width: 11px;
   height: 11px;
   flex-basis: 11px;
+}
+
+.commit-thread-terminal-icon {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+}
+
+.commit-thread-terminal-loading-icon {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  color: #5f6670;
+  opacity: 0.62;
+  animation: initial-loading-spin 900ms linear infinite;
 }
 
 .commit-thread-chat-icon {

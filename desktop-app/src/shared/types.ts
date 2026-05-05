@@ -171,6 +171,47 @@ export type OpenPathRequest = {
   launcher: PathLauncher;
 };
 
+export type TerminalSessionStartRequest = {
+  cwd: string;
+  cols: number;
+  rows: number;
+};
+
+export type TerminalSessionWriteRequest = {
+  cwd: string;
+  data: string;
+};
+
+export type TerminalSessionResizeRequest = {
+  cwd: string;
+  cols: number;
+  rows: number;
+};
+
+export type TerminalSessionSnapshot = {
+  cwd: string;
+  output: string;
+  isRunning: boolean;
+  isBusy: boolean;
+  cursor: number;
+};
+
+export type TerminalSessionSummary = {
+  cwd: string;
+  isRunning: boolean;
+  isBusy: boolean;
+};
+
+export type TerminalSessionEvent =
+  | { type: "data"; cwd: string; data: string; cursor: number }
+  | {
+      type: "status";
+      cwd: string;
+      isRunning: boolean;
+      isBusy: boolean;
+      cursor: number;
+    };
+
 export type GitCommit = {
   sha: string;
   shortSha: string;
@@ -251,6 +292,22 @@ export type CrabtreeApi = {
   openNewCodexThread: () => Promise<void>;
   openExternalUrl: (url: string) => Promise<void>;
   openPath: (openPathRequest: OpenPathRequest) => Promise<void>;
+  readTerminalSessions: () => Promise<TerminalSessionSummary[]>;
+  watchTerminalSession: (
+    onTerminalSessionEvent: (
+      terminalSessionEvent: TerminalSessionEvent,
+    ) => void,
+  ) => () => void;
+  startTerminalSession: (
+    terminalSessionStartRequest: TerminalSessionStartRequest,
+  ) => Promise<TerminalSessionSnapshot>;
+  writeTerminalSession: (
+    terminalSessionWriteRequest: TerminalSessionWriteRequest,
+  ) => Promise<void>;
+  resizeTerminalSession: (
+    terminalSessionResizeRequest: TerminalSessionResizeRequest,
+  ) => Promise<void>;
+  stopTerminalSession: (cwd: string) => Promise<void>;
   copyText: (text: string) => Promise<void>;
   stageGitChanges: (path: string) => Promise<void>;
   unstageGitChanges: (path: string) => Promise<void>;

@@ -20,6 +20,10 @@ import type {
   GitSwitchBranchRequest,
   CrabtreeApi,
   OpenPathRequest,
+  TerminalSessionEvent,
+  TerminalSessionResizeRequest,
+  TerminalSessionStartRequest,
+  TerminalSessionWriteRequest,
 } from "../shared/types";
 
 const api: CrabtreeApi = {
@@ -103,6 +107,50 @@ const api: CrabtreeApi = {
   },
   openPath: async (openPathRequest: OpenPathRequest) => {
     await ipcRenderer.invoke("path:open", openPathRequest);
+  },
+  readTerminalSessions: async () => {
+    return await ipcRenderer.invoke("terminal:readSessions");
+  },
+  watchTerminalSession: (onTerminalSessionEvent) => {
+    const listener = (
+      _event: IpcRendererEvent,
+      terminalSessionEvent: TerminalSessionEvent,
+    ) => {
+      onTerminalSessionEvent(terminalSessionEvent);
+    };
+
+    ipcRenderer.on("terminal:sessionEvent", listener);
+
+    return () => {
+      ipcRenderer.removeListener("terminal:sessionEvent", listener);
+    };
+  },
+  startTerminalSession: async (
+    terminalSessionStartRequest: TerminalSessionStartRequest,
+  ) => {
+    return await ipcRenderer.invoke(
+      "terminal:startSession",
+      terminalSessionStartRequest,
+    );
+  },
+  writeTerminalSession: async (
+    terminalSessionWriteRequest: TerminalSessionWriteRequest,
+  ) => {
+    await ipcRenderer.invoke(
+      "terminal:writeSession",
+      terminalSessionWriteRequest,
+    );
+  },
+  resizeTerminalSession: async (
+    terminalSessionResizeRequest: TerminalSessionResizeRequest,
+  ) => {
+    await ipcRenderer.invoke(
+      "terminal:resizeSession",
+      terminalSessionResizeRequest,
+    );
+  },
+  stopTerminalSession: async (cwd: string) => {
+    await ipcRenderer.invoke("terminal:stopSession", cwd);
   },
   copyText: async (text: string) => {
     await ipcRenderer.invoke("clipboard:writeText", text);

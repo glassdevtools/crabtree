@@ -7,6 +7,7 @@ const config = {
     output: "dist",
   },
   files: ["out/**/*", "package.json"],
+  asarUnpack: ["node_modules/@lydell/node-pty-*/prebuilds/**/*"],
   extraMetadata: {
     main: "out/main/main.js",
   },

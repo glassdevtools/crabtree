@@ -31,7 +31,8 @@ type DesktopAnalyticsEventName =
   | "tag_created"
   | "tag_deleted"
   | "tag_dragged"
-  | "tag_moved";
+  | "tag_moved"
+  | "terminal_opened";
 
 type AnalyticsProperties = { [key: string]: string | number | boolean };
 
