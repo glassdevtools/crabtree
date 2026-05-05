@@ -113,6 +113,25 @@ export type GitMergeBranchRequest = {
   branch: string;
 };
 
+export type GitDiffRowTarget =
+  | { type: "commit"; repoRoot: string; sha: string }
+  | { type: "path"; path: string };
+
+export type GitDiffRequest = {
+  mode: "changesMadeHere" | "diffAgainstHead";
+  target: GitDiffRowTarget;
+};
+
+export type GitDiffFile = {
+  path: string;
+  section: string | null;
+  diff: string;
+};
+
+export type GitDiff = {
+  files: GitDiffFile[];
+};
+
 export type GitCreatePullRequestRequest = {
   repoRoot: string;
   baseBranch: string;
@@ -266,6 +285,7 @@ export type CrabtreeApi = {
   mergeGitBranch: (
     gitMergeBranchRequest: GitMergeBranchRequest,
   ) => Promise<GitMergeBranchResult>;
+  readGitDiff: (gitDiffRequest: GitDiffRequest) => Promise<GitDiff>;
   createGitPullRequest: (
     gitCreatePullRequestRequest: GitCreatePullRequestRequest,
   ) => Promise<string>;
