@@ -1233,7 +1233,6 @@ textarea,
 .commit-thread-group .commit-thread-chat,
 .commit-thread-group .commit-thread-code-location,
 .commit-thread-group .commit-thread-change-count,
-.commit-thread-group .commit-branch-create-action,
 .commit-thread-group .commit-thread-commit-action {
   position: relative;
   z-index: 1;
@@ -1331,7 +1330,6 @@ textarea,
   cursor: pointer;
 }
 
-.commit-thread-group .commit-branch-create-action,
 .commit-thread-group .commit-thread-commit-action {
   margin: 0 2px;
 }
