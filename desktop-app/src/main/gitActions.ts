@@ -218,8 +218,12 @@ const readGitWorktreePathForBranch = async ({
 };
 
 const readCurrentBranch = async ({ repoRoot }: { repoRoot: string }) => {
+  return await readCurrentBranchForPath({ path: repoRoot });
+};
+
+const readCurrentBranchForPath = async ({ path }: { path: string }) => {
   const branch = await readGitTextForPath({
-    path: repoRoot,
+    path,
     args: ["branch", "--show-current"],
   });
 
@@ -357,8 +361,7 @@ const readLocalBranchesAtSha = async ({
   return localBranchText.split("\n").filter((branch) => branch.length > 0);
 };
 
-// Detached HEAD should reattach when a local branch already points at the same commit.
-const readAvailableLocalBranchAtSha = async ({
+const readLocalBranchAtSha = async ({
   repoRoot,
   sha,
 }: {
@@ -367,54 +370,27 @@ const readAvailableLocalBranchAtSha = async ({
 }) => {
   const localBranches = await readLocalBranchesAtSha({ repoRoot, sha });
 
-  if (localBranches.length === 0) {
-    return null;
-  }
-
-  const worktrees = await readGitWorktrees({ repoRoot });
-  const isCheckedOutBranchOfBranch: { [branch: string]: boolean } = {};
-
-  for (const worktree of worktrees) {
-    if (worktree.branch !== null) {
-      isCheckedOutBranchOfBranch[worktree.branch] = true;
-    }
-  }
-
-  const localDefaultBranch = await readLocalDefaultBranch({ repoRoot });
-
-  if (
-    localDefaultBranch !== null &&
-    localBranches.includes(localDefaultBranch) &&
-    isCheckedOutBranchOfBranch[localDefaultBranch] !== true
-  ) {
-    return localDefaultBranch;
-  }
-
-  for (const localBranch of localBranches) {
-    if (isCheckedOutBranchOfBranch[localBranch] !== true) {
-      return localBranch;
-    }
-  }
-
-  return null;
+  return localBranches[0] ?? null;
 };
 
-const attachHeadToLocalBranchAtCurrentSha = async ({
+const attachWorktreeHeadToLocalBranchAtCurrentSha = async ({
   repoRoot,
+  path,
 }: {
   repoRoot: string;
+  path: string;
 }) => {
-  const currentBranch = await readCurrentBranch({ repoRoot });
+  const currentBranch = await readCurrentBranchForPath({ path });
 
   if (currentBranch !== null) {
     return;
   }
 
   const headSha = await readGitTextForPath({
-    path: repoRoot,
+    path,
     args: ["rev-parse", "HEAD"],
   });
-  const branch = await readAvailableLocalBranchAtSha({
+  const branch = await readLocalBranchAtSha({
     repoRoot,
     sha: headSha,
   });
@@ -423,7 +399,18 @@ const attachHeadToLocalBranchAtCurrentSha = async ({
     return;
   }
 
-  await runGitCommandForPath({ path: repoRoot, args: ["switch", branch] });
+  await attachWorktreeHeadToBranch({ path, branch, expectedHeadSha: headSha });
+};
+
+const attachHeadToLocalBranchAtCurrentSha = async ({
+  repoRoot,
+}: {
+  repoRoot: string;
+}) => {
+  await attachWorktreeHeadToLocalBranchAtCurrentSha({
+    repoRoot,
+    path: repoRoot,
+  });
 };
 
 export const readGitMainWorktreePathForPath = async ({
@@ -1208,6 +1195,13 @@ export const moveGitBranch = async ({
       expectedHeadSha: targetSha,
     });
   }
+
+  if (shouldDetachSource && sourcePath !== null) {
+    await attachWorktreeHeadToLocalBranchAtCurrentSha({
+      repoRoot,
+      path: sourcePath,
+    });
+  }
 };
 
 export const moveGitTag = async ({
@@ -1365,20 +1359,11 @@ export const checkoutGitCommit = async ({
     );
   }
 
-  const branch = await readAvailableLocalBranchAtSha({
-    repoRoot,
-    sha: targetSha,
-  });
-
-  if (branch !== null) {
-    await runGitCommandForPath({ path: repoRoot, args: ["switch", branch] });
-    return;
-  }
-
   await runGitCommandForPath({
     path: repoRoot,
     args: ["switch", "--detach", targetSha],
   });
+  await attachHeadToLocalBranchAtCurrentSha({ repoRoot });
 };
 
 // -------------------------- Origin ref sync actions ---------------

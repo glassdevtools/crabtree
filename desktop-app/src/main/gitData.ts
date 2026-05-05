@@ -237,6 +237,54 @@ const readMainWorktreePath = async ({ root }: { root: string }) => {
   throw new Error("Git worktree list did not include a main worktree.");
 };
 
+const readCurrentBranchAfterAttachingDetachedHead = async ({
+  root,
+}: {
+  root: string;
+}) => {
+  const currentBranch = await readNullableGitText({
+    cwd: root,
+    args: ["branch", "--show-current"],
+  });
+
+  if (currentBranch !== null) {
+    return currentBranch;
+  }
+
+  const headSha = await readNullableGitText({
+    cwd: root,
+    args: ["rev-parse", "HEAD"],
+  });
+
+  if (headSha === null) {
+    return null;
+  }
+
+  const branchText = await readGitText({
+    cwd: root,
+    args: [
+      "for-each-ref",
+      "--sort=refname",
+      "--points-at",
+      headSha,
+      "--format=%(refname:short)",
+      "refs/heads",
+    ],
+  });
+  const branch = splitLines(branchText)[0] ?? null;
+
+  if (branch === null) {
+    return null;
+  }
+
+  await runGit({
+    cwd: root,
+    args: ["switch", "--ignore-other-worktrees", branch],
+  });
+
+  return branch;
+};
+
 const readRepoSeedForThread = async ({ thread }: { thread: CodexThread }) => {
   if (thread.cwd.length === 0) {
     const repoSeedReadResult: RepoSeedReadResult = {
@@ -257,9 +305,8 @@ const readRepoSeedForThread = async ({ thread }: { thread: CodexThread }) => {
       cwd: root,
       args: ["config", "--get", "remote.origin.url"],
     });
-    const currentBranch = await readNullableGitText({
-      cwd: root,
-      args: ["branch", "--show-current"],
+    const currentBranch = await readCurrentBranchAfterAttachingDetachedHead({
+      root,
     });
     const defaultBranch = await readLocalDefaultBranch({ root });
 
@@ -1328,9 +1375,8 @@ const readRepoSeedForExistingRepo = async ({ repo }: { repo: RepoGraph }) => {
       cwd: repo.root,
       args: ["config", "--get", "remote.origin.url"],
     }),
-    readNullableGitText({
-      cwd: repo.root,
-      args: ["branch", "--show-current"],
+    readCurrentBranchAfterAttachingDetachedHead({
+      root: repo.root,
     }),
     readDefaultBranch({ root: repo.root }),
   ]);
