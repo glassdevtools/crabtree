@@ -374,7 +374,7 @@ const readBranchSyncActionText = (
       return {
         title: "Sync",
         message:
-          "Revert local tag changes so they match origin? This will revert these tag changes:",
+          "Revert local tag changes so they match origin? This will undo these tag changes from happening:",
         buttonText: "Sync",
         loadingDescription: "Syncing",
         successMessage: "Successfully synced with origin.",
