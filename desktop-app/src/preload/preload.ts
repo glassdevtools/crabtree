@@ -149,9 +149,6 @@ const api: CrabtreeApi = {
       terminalSessionResizeRequest,
     );
   },
-  stopTerminalSession: async (cwd: string) => {
-    await ipcRenderer.invoke("terminal:stopSession", cwd);
-  },
   copyText: async (text: string) => {
     await ipcRenderer.invoke("clipboard:writeText", text);
   },

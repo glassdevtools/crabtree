@@ -822,13 +822,15 @@ textarea,
 
 .row-diff-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 6px;
 }
 
 .row-diff-action-button {
-  gap: 6px;
-  font-size: 12px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 11px;
 }
 
 .row-diff-scroll {
@@ -842,7 +844,7 @@ textarea,
 }
 
 .row-diff-file {
-  border-bottom: 1px solid #e1e5ec;
+  border-bottom: 1px solid #cbd5e1;
   user-select: text;
 }
 
@@ -859,8 +861,8 @@ textarea,
   gap: 8px;
   padding: 7px 10px;
   border: 0;
-  border-bottom: 1px solid #edf0f4;
-  background: #ffffff;
+  border-bottom: 1px solid #cbd5e1;
+  background: #e7ebf1;
   color: #343a43;
   cursor: pointer;
   font-size: 12px;
@@ -869,7 +871,7 @@ textarea,
 }
 
 .row-diff-file-header:hover {
-  background: #f6f8fb;
+  background: #dde3eb;
 }
 
 .row-diff-file-toggle {

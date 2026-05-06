@@ -52,10 +52,6 @@ const readTerminalSessionCwd = (value: unknown) => {
   return value;
 };
 
-export const readTerminalSessionStopRequest = (value: unknown) => {
-  return readTerminalSessionCwd(value);
-};
-
 const readTerminalDimension = (value: unknown, name: string) => {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1) {
     throw new Error(`Terminal session needs a positive ${name}.`);

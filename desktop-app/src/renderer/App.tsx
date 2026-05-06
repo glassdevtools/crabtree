@@ -2098,7 +2098,9 @@ const ChatRobotTags = ({
               const tooltipLabel = `Open in ${chatProviderLabel}: ${title}`;
               const tooltipTitle = (
                 <>
+                  {`"`}
                   {title}
+                  {`"`}
                   <br />
                   Open in {chatProviderLabel}
                 </>
@@ -3086,6 +3088,51 @@ const RowDiffDialog = ({
   let isEveryRowDiffFileExpanded = false;
   let isEveryRowDiffFileCollapsed = false;
   const rowDiffRepositoryPath = rowDiffTarget?.repositoryPath ?? null;
+  const shouldShowSectionOfFileIndex = useMemo(() => {
+    const shouldShowSectionOfFileIndex: { [fileIndex: number]: boolean } = {};
+
+    if (rowDiffLoadState.type !== "loaded") {
+      return shouldShowSectionOfFileIndex;
+    }
+
+    const sectionOfFilePath: {
+      [path: string]: { [section: string]: boolean };
+    } = {};
+
+    for (const file of rowDiffLoadState.files) {
+      if (file.section === null) {
+        continue;
+      }
+
+      sectionOfFilePath[file.path] = {
+        ...(sectionOfFilePath[file.path] ?? {}),
+        [file.section]: true,
+      };
+    }
+
+    for (
+      let fileIndex = 0;
+      fileIndex < rowDiffLoadState.files.length;
+      fileIndex += 1
+    ) {
+      const file = rowDiffLoadState.files[fileIndex];
+
+      if (file.section === null) {
+        continue;
+      }
+
+      const sectionOfSection = sectionOfFilePath[file.path];
+
+      if (sectionOfSection === undefined) {
+        continue;
+      }
+
+      shouldShowSectionOfFileIndex[fileIndex] =
+        Object.keys(sectionOfSection).length > 1;
+    }
+
+    return shouldShowSectionOfFileIndex;
+  }, [rowDiffLoadState]);
 
   if (rowDiffLoadState.type === "loaded" && rowDiffLoadState.files.length > 0) {
     shouldShowRowDiffFileActions = true;
@@ -3132,23 +3179,19 @@ const RowDiffDialog = ({
                 <Button
                   className="row-diff-action-button"
                   variant="outline"
-                  size="sm"
+                  size="xs"
                   type="button"
-                  disabled={isEveryRowDiffFileExpanded}
                   onClick={() => setAllRowDiffFilesExpanded(true)}
                 >
-                  <ChevronDown size={12} strokeWidth={1.8} />
                   <span>Expand all</span>
                 </Button>
                 <Button
                   className="row-diff-action-button"
                   variant="outline"
-                  size="sm"
+                  size="xs"
                   type="button"
-                  disabled={isEveryRowDiffFileCollapsed}
                   onClick={() => setAllRowDiffFilesExpanded(false)}
                 >
-                  <ChevronRight size={12} strokeWidth={1.8} />
                   <span>Collapse all</span>
                 </Button>
               </>
@@ -3199,11 +3242,11 @@ const RowDiffDialog = ({
                             <ChevronDown size={12} strokeWidth={1.8} />
                           )}
                         </span>
-                        {file.section === null ? null : (
+                        {shouldShowSectionOfFileIndex[fileIndex] === true ? (
                           <span className="row-diff-file-section">
                             {file.section}
                           </span>
-                        )}
+                        ) : null}
                         <code>{file.path}</code>
                         <span className="row-diff-file-line-counts">
                           <span className="row-diff-file-line-count-added">
@@ -3333,21 +3376,17 @@ const TerminalModalContent = ({ children }: { children: ReactNode }) => {
 // The terminal modal renders the browser terminal while the main process owns the shell and cwd.
 const TerminalDialog = ({
   terminalTarget,
-  isTerminalRunning,
   closeTerminalModal,
   updateTerminalStatusState,
   showErrorMessage,
 }: {
   terminalTarget: TerminalTarget | null;
-  isTerminalRunning: boolean;
   closeTerminalModal: () => void;
   updateTerminalStatusState: ({
     cwd,
-    isRunning,
     isBusy,
   }: {
     cwd: string;
-    isRunning: boolean;
     isBusy: boolean;
   }) => void;
   showErrorMessage: (message: string) => void;
@@ -3532,7 +3571,6 @@ const TerminalDialog = ({
           case "status":
             updateTerminalStatusState({
               cwd,
-              isRunning: terminalSessionEvent.isRunning,
               isBusy: terminalSessionEvent.isBusy,
             });
             return;
@@ -3581,7 +3619,6 @@ const TerminalDialog = ({
           didWriteSnapshot = true;
           updateTerminalStatusState({
             cwd,
-            isRunning: terminalSessionSnapshot.isRunning,
             isBusy: terminalSessionSnapshot.isBusy,
           });
 
@@ -3615,7 +3652,7 @@ const TerminalDialog = ({
             error instanceof Error ? error.message : "Failed to open terminal.";
           terminalWriter.push(`\r\n${message}\r\n`);
           terminalWriter.flush(undefined);
-          updateTerminalStatusState({ cwd, isRunning: false, isBusy: false });
+          updateTerminalStatusState({ cwd, isBusy: false });
           showErrorMessage(message);
         });
     });
@@ -3642,20 +3679,6 @@ const TerminalDialog = ({
     terminalTarget,
     updateTerminalStatusState,
   ]);
-
-  const stopTerminal = async () => {
-    if (terminalTarget === null) {
-      return;
-    }
-
-    try {
-      await window.crabtree.stopTerminalSession(terminalTarget.cwd);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to stop terminal.";
-      showErrorMessage(message);
-    }
-  };
 
   return (
     <Dialog
@@ -3685,16 +3708,6 @@ const TerminalDialog = ({
             }}
           />
           <div className="terminal-modal-footer">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={!isTerminalRunning}
-              onClick={() => {
-                void stopTerminal();
-              }}
-            >
-              Stop Terminal
-            </Button>
             <Button type="button" onClick={closeTerminalModal}>
               Close
             </Button>
@@ -4253,9 +4266,6 @@ const CommitHistory = ({
   const [terminalTarget, setTerminalTarget] = useState<TerminalTarget | null>(
     null,
   );
-  const [isTerminalRunningOfCwd, setIsTerminalRunningOfCwd] = useState<{
-    [cwd: string]: boolean;
-  }>({});
   const [isTerminalBusyOfCwd, setIsTerminalBusyOfCwd] = useState<{
     [cwd: string]: boolean;
   }>({});
@@ -4272,25 +4282,7 @@ const CommitHistory = ({
   const [branchPointerDropTargetRowId, setBranchPointerDropTargetRowId] =
     useState<string | null>(null);
   const updateTerminalStatusState = useCallback(
-    ({
-      cwd,
-      isRunning,
-      isBusy,
-    }: {
-      cwd: string;
-      isRunning: boolean;
-      isBusy: boolean;
-    }) => {
-      setIsTerminalRunningOfCwd((currentIsTerminalRunningOfCwd) => {
-        if (currentIsTerminalRunningOfCwd[cwd] === isRunning) {
-          return currentIsTerminalRunningOfCwd;
-        }
-
-        return {
-          ...currentIsTerminalRunningOfCwd,
-          [cwd]: isRunning,
-        };
-      });
+    ({ cwd, isBusy }: { cwd: string; isBusy: boolean }) => {
       setIsTerminalBusyOfCwd((currentIsTerminalBusyOfCwd) => {
         if (currentIsTerminalBusyOfCwd[cwd] === isBusy) {
           return currentIsTerminalBusyOfCwd;
@@ -4314,7 +4306,6 @@ const CommitHistory = ({
           case "status":
             updateTerminalStatusState({
               cwd: terminalSessionEvent.cwd,
-              isRunning: terminalSessionEvent.isRunning,
               isBusy: terminalSessionEvent.isBusy,
             });
             return;
@@ -4329,17 +4320,13 @@ const CommitHistory = ({
           return;
         }
 
-        const nextIsTerminalRunningOfCwd: { [cwd: string]: boolean } = {};
         const nextIsTerminalBusyOfCwd: { [cwd: string]: boolean } = {};
 
         for (const terminalSessionSummary of terminalSessionSummaries) {
-          nextIsTerminalRunningOfCwd[terminalSessionSummary.cwd] =
-            terminalSessionSummary.isRunning;
           nextIsTerminalBusyOfCwd[terminalSessionSummary.cwd] =
             terminalSessionSummary.isBusy;
         }
 
-        setIsTerminalRunningOfCwd(nextIsTerminalRunningOfCwd);
         setIsTerminalBusyOfCwd(nextIsTerminalBusyOfCwd);
       })
       .catch((error) => {
@@ -6312,10 +6299,6 @@ const CommitHistory = ({
         />
         <TerminalDialog
           terminalTarget={terminalTarget}
-          isTerminalRunning={
-            terminalTarget !== null &&
-            isTerminalRunningOfCwd[terminalTarget.cwd] === true
-          }
           closeTerminalModal={closeTerminalModal}
           updateTerminalStatusState={updateTerminalStatusState}
           showErrorMessage={showErrorMessage}
