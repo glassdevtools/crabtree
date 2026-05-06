@@ -2017,7 +2017,19 @@ export const revertGitBranchSyncChanges = async (
           "Deleting this branch would hide commits from the graph. Move or tag another branch first.",
       });
 
-      await deleteGitBranch({ repoRoot, branch: name, oldSha: localSha });
+      // If the branch is checked out in a linked worktree, delete it through that worktree so HEAD detaches there first.
+      const checkedOutWorktreePath = await readGitWorktreePathForBranch({
+        repoRoot,
+        branch: name,
+      });
+      const branchDeleteRepoRoot =
+        checkedOutWorktreePath === null ? repoRoot : checkedOutWorktreePath;
+
+      await deleteGitBranch({
+        repoRoot: branchDeleteRepoRoot,
+        branch: name,
+        oldSha: localSha,
+      });
       continue;
     }
 

@@ -3103,6 +3103,37 @@ test("revert deletes a local-only branch when another ref keeps its tip visible"
   });
 });
 
+test("revert deletes a local-only branch checked out in a linked worktree by detaching that worktree", async () => {
+  await withOriginRepo(async ({ parentRoot, repoRoot, mainSha }) => {
+    await runGit({ cwd: repoRoot, args: ["branch", "local-only", mainSha] });
+    const worktreeRoot = join(parentRoot, "local-only-worktree");
+    await runGit({
+      cwd: repoRoot,
+      args: ["worktree", "add", worktreeRoot, "local-only"],
+    });
+
+    await revertGitBranchSyncChanges([
+      {
+        repoRoot,
+        gitRefType: "branch",
+        name: "local-only",
+        localSha: mainSha,
+        originSha: null,
+      },
+    ]);
+
+    assert.equal(
+      await readOptionalSha({ cwd: repoRoot, ref: "local-only" }),
+      null,
+    );
+    assert.equal(
+      await runGit({ cwd: worktreeRoot, args: ["branch", "--show-current"] }),
+      "",
+    );
+    assert.equal(await readSha({ cwd: worktreeRoot, ref: "HEAD" }), mainSha);
+  });
+});
+
 test("revert recreates an origin-only tag sync change locally", async () => {
   await withOriginRepo(async ({ repoRoot, mainSha }) => {
     await runGit({ cwd: repoRoot, args: ["tag", "remote-tag", mainSha] });

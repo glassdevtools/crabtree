@@ -1330,6 +1330,8 @@ textarea,
 .commit-history-row-multiline .commit-author-cell,
 .commit-history-row-multiline .commit-date-cell {
   align-items: flex-start;
+  /* TODO: AI-PICKED-VALUE: This matches the top space a compact row item gets when centered in a 25px row. */
+  padding-top: 4px;
 }
 
 .commit-branch-tags-cell,

@@ -3956,7 +3956,7 @@ const CommitChangesDialog = ({
             </DialogHeader>
             <Input
               autoFocus
-              placeholder="Optional"
+              placeholder="Optional."
               value={commitMessage}
               onChange={(event) => setCommitMessage(event.target.value)}
             />
