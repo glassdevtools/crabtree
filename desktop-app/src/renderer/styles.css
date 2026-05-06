@@ -1324,6 +1324,7 @@ textarea,
 }
 
 .commit-history-row-multiline .commit-branch-tags-cell,
+.commit-history-row-multiline .commit-actors-cell,
 .commit-history-row-multiline .commit-description-cell,
 .commit-history-row-multiline .commit-hash-cell,
 .commit-history-row-multiline .commit-author-cell,
