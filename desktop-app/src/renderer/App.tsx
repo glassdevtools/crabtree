@@ -2698,6 +2698,10 @@ const CommitHistoryRow = ({
   let mergeDisabledReason: string | null = null;
   let rowClassName = "commit-history-row";
 
+  if (row.lineCount > 1) {
+    rowClassName = `${rowClassName} commit-history-row-multiline`;
+  }
+
   if (mergeBranch !== null && isHeadClean === false) {
     mergeDisabledReason = "Before merging, resolve your changes";
   }
