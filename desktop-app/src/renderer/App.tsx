@@ -1909,7 +1909,7 @@ const BranchTags = ({
         const originBranchTooltip =
           originBranchName === null
             ? null
-            : `${originBranchName} is here on origin. Push or Sync to update origin.`;
+            : `${originBranchName} is here on origin, but not here locally. Push or Sync to update origin.`;
         const deleteWarningMessage = isTag
           ? (deleteWarningMessageOfTag[cleanName] ?? null)
           : (deleteWarningMessageOfBranch[refName] ?? null);
