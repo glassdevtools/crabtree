@@ -2068,47 +2068,6 @@ const ChatRobotTags = ({
       {threadGroups.map((threadGroup) => {
         return (
           <span className="commit-thread-group" key={threadGroup.key}>
-            {threadGroup.threads.map((thread) => {
-              const title = threadTitle(thread);
-              const isThreadActive = readIsThreadActive(thread);
-              const isOpenCodeThread = readIsOpenCodeThread(thread);
-              const chatProviderLabel = isOpenCodeThread ? "OpenCode" : "Codex";
-              const tooltipLabel = `Open in ${chatProviderLabel}: ${title}`;
-              const tooltipTitle = (
-                <>
-                  {`"`}
-                  {title}
-                  {`"`}
-                  <br />
-                  Open in {chatProviderLabel}
-                </>
-              );
-
-              return (
-                <TitleTooltip title={tooltipTitle} key={thread.id}>
-                  <Button
-                    aria-label={
-                      isThreadActive
-                        ? `${tooltipLabel} is loading`
-                        : tooltipLabel
-                    }
-                    className="commit-thread-chat"
-                    variant="ghost"
-                    size="xs"
-                    type="button"
-                    onMouseDown={(event) => event.stopPropagation()}
-                    onDoubleClick={(event) => event.stopPropagation()}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      void openThread(thread);
-                    }}
-                  >
-                    <ChatProviderIcon isOpenCodeThread={isOpenCodeThread} />
-                  </Button>
-                </TitleTooltip>
-              );
-            })}
             {threadGroup.cwd.length === 0 ? null : (
               <span className="commit-thread-location-actions">
                 <TitleTooltip title={`Open in ${pathLauncherLabel}`}>
@@ -2169,6 +2128,47 @@ const ChatRobotTags = ({
                 </TitleTooltip>
               </span>
             )}
+            {threadGroup.threads.map((thread) => {
+              const title = threadTitle(thread);
+              const isThreadActive = readIsThreadActive(thread);
+              const isOpenCodeThread = readIsOpenCodeThread(thread);
+              const chatProviderLabel = isOpenCodeThread ? "OpenCode" : "Codex";
+              const tooltipLabel = `Open in ${chatProviderLabel}: ${title}`;
+              const tooltipTitle = (
+                <>
+                  {`"`}
+                  {title}
+                  {`"`}
+                  <br />
+                  Open in {chatProviderLabel}
+                </>
+              );
+
+              return (
+                <TitleTooltip title={tooltipTitle} key={thread.id}>
+                  <Button
+                    aria-label={
+                      isThreadActive
+                        ? `${tooltipLabel} is loading`
+                        : tooltipLabel
+                    }
+                    className="commit-thread-chat"
+                    variant="ghost"
+                    size="xs"
+                    type="button"
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      void openThread(thread);
+                    }}
+                  >
+                    <ChatProviderIcon isOpenCodeThread={isOpenCodeThread} />
+                  </Button>
+                </TitleTooltip>
+              );
+            })}
           </span>
         );
       })}
