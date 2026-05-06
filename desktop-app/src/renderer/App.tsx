@@ -637,7 +637,7 @@ const TitleTooltip = ({
   title,
   children,
 }: {
-  title: string;
+  title: ReactNode;
   children: ReactElement;
 }) => {
   return (
@@ -654,7 +654,7 @@ const BottomTitleTooltip = ({
   title,
   children,
 }: {
-  title: string;
+  title: ReactNode;
   children: ReactElement;
 }) => {
   return (
@@ -2090,34 +2090,48 @@ const ChatRobotTags = ({
       {threadGroups.map((threadGroup) => {
         return (
           <span className="commit-thread-group" key={threadGroup.key}>
-            {threadGroup.cwd.length === 0 ? null : (
-              <>
-                <TitleTooltip title={`Open in ${pathLauncherLabel}`}>
+            {threadGroup.threads.map((thread) => {
+              const title = threadTitle(thread);
+              const isThreadActive = readIsThreadActive(thread);
+              const isOpenCodeThread = readIsOpenCodeThread(thread);
+              const chatProviderLabel = isOpenCodeThread ? "OpenCode" : "Codex";
+              const tooltipLabel = `Open in ${chatProviderLabel}: ${title}`;
+              const tooltipTitle = (
+                <>
+                  {title}
+                  <br />
+                  Open in {chatProviderLabel}
+                </>
+              );
+
+              return (
+                <TitleTooltip title={tooltipTitle} key={thread.id}>
                   <Button
-                    aria-label={`Open ${threadGroup.cwd}`}
-                    className="commit-thread-code-location"
+                    aria-label={
+                      isThreadActive
+                        ? `${tooltipLabel} is loading`
+                        : tooltipLabel
+                    }
+                    className="commit-thread-chat"
                     variant="ghost"
-                    size="icon-xs"
+                    size="xs"
                     type="button"
                     onMouseDown={(event) => event.stopPropagation()}
                     onDoubleClick={(event) => event.stopPropagation()}
-                    onContextMenu={(event) => {
-                      openCopyContextMenu(
-                        event,
-                        threadGroup.cwd,
-                        "Failed to copy path.",
-                      );
-                    }}
                     onClick={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
-                      void openCodePath(threadGroup.cwd);
+                      void openThread(thread);
                     }}
                   >
-                    <PathLauncherIcon pathLauncher={pathLauncher} />
+                    <ChatProviderIcon isOpenCodeThread={isOpenCodeThread} />
                   </Button>
                 </TitleTooltip>
-                <TitleTooltip title="Open Terminal">
+              );
+            })}
+            {threadGroup.cwd.length === 0 ? null : (
+              <>
+                <TitleTooltip title="Open in Terminal">
                   <Button
                     aria-label={`Open terminal in ${threadGroup.cwd}`}
                     className={
@@ -2148,40 +2162,33 @@ const ChatRobotTags = ({
                     ) : null}
                   </Button>
                 </TitleTooltip>
-              </>
-            )}
-            {threadGroup.threads.map((thread) => {
-              const title = threadTitle(thread);
-              const isThreadActive = readIsThreadActive(thread);
-              const isOpenCodeThread = readIsOpenCodeThread(thread);
-              const chatProviderLabel = isOpenCodeThread ? "OpenCode" : "Codex";
-              const tooltipTitle = `Open in ${chatProviderLabel}: "${title}"`;
-
-              return (
-                <TitleTooltip title={tooltipTitle} key={thread.id}>
+                <TitleTooltip title={`Open in ${pathLauncherLabel}`}>
                   <Button
-                    aria-label={
-                      isThreadActive
-                        ? `${tooltipTitle} is loading`
-                        : tooltipTitle
-                    }
-                    className="commit-thread-chat"
+                    aria-label={`Open ${threadGroup.cwd}`}
+                    className="commit-thread-code-location"
                     variant="ghost"
-                    size="xs"
+                    size="icon-xs"
                     type="button"
                     onMouseDown={(event) => event.stopPropagation()}
                     onDoubleClick={(event) => event.stopPropagation()}
+                    onContextMenu={(event) => {
+                      openCopyContextMenu(
+                        event,
+                        threadGroup.cwd,
+                        "Failed to copy path.",
+                      );
+                    }}
                     onClick={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
-                      void openThread(thread);
+                      void openCodePath(threadGroup.cwd);
                     }}
                   >
-                    <ChatProviderIcon isOpenCodeThread={isOpenCodeThread} />
+                    <PathLauncherIcon pathLauncher={pathLauncher} />
                   </Button>
                 </TitleTooltip>
-              );
-            })}
+              </>
+            )}
           </span>
         );
       })}
