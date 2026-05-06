@@ -156,7 +156,7 @@ import "@xterm/xterm/css/xterm.css";
 
 // The history view is a SourceTree-style row table. Git owns the commits; the renderer only assigns lanes.
 // TODO: AI-PICKED-VALUE: These graph sizes and colors are initial SourceTree-like choices for dense commit rows.
-const COMMIT_GRAPH_ROW_HEIGHT = 20;
+const COMMIT_GRAPH_ROW_HEIGHT = 25;
 const COMMIT_GRAPH_LANE_WIDTH = 14;
 const COMMIT_GRAPH_PADDING_LEFT = 16;
 const COMMIT_GRAPH_MIN_WIDTH = 96;
