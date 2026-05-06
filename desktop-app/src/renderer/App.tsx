@@ -129,6 +129,10 @@ import {
   readDirtyCommitHistoryCheckoutBranches,
   readDuplicateCheckedOutBranchOfBranch,
 } from "./commitHistoryCheckouts";
+import {
+  readCommitHistoryRowHeight,
+  readCommitHistoryRowLayouts,
+} from "./commitHistoryLayout";
 import { readBranchSyncPushWarningMessages } from "./branchSyncWarnings";
 import type { ThreadGroup } from "./threadGroups";
 import {
@@ -982,6 +986,7 @@ type CommitGraphRow = {
   lane: number;
   color: string;
   rowIndex: number;
+  lineCount: number;
   childCount: number;
 };
 
@@ -991,6 +996,7 @@ type CommitGraphItem = {
   sha: string;
   parents: string[];
   threadIds: string[];
+  unchangedThreadGroupCount: number;
   changedThreadGroups: ThreadGroup[];
 };
 
@@ -1080,10 +1086,6 @@ const readCommitGraphColorIndex = (graphKey: string) => {
 
 const readCommitGraphX = (lane: number) => {
   return COMMIT_GRAPH_PADDING_LEFT + lane * COMMIT_GRAPH_LANE_WIDTH;
-};
-
-const readCommitGraphY = (rowIndex: number) => {
-  return rowIndex * COMMIT_GRAPH_ROW_HEIGHT + COMMIT_GRAPH_ROW_HEIGHT / 2;
 };
 
 const readCommitGraphWidth = ({ laneCount }: { laneCount: number }) => {
@@ -1396,12 +1398,15 @@ const createCommitGraph = ({
     });
     const changedThreadGroups: ThreadGroup[] = [];
     const unchangedThreadIds: string[] = [];
+    let unchangedThreadGroupCount = 0;
 
     for (const threadGroup of threadGroups) {
       if (readIsThreadGroupChanged(threadGroup)) {
         changedThreadGroups.push(threadGroup);
         continue;
       }
+
+      unchangedThreadGroupCount += 1;
 
       for (const thread of threadGroup.threads) {
         unchangedThreadIds.push(thread.id);
@@ -1414,6 +1419,7 @@ const createCommitGraph = ({
       sha: commit.sha,
       parents: commit.parents,
       threadIds: unchangedThreadIds,
+      unchangedThreadGroupCount,
       changedThreadGroups,
     });
   }
@@ -1508,6 +1514,7 @@ const createCommitGraph = ({
         lane: threadGroupLane,
         color: COMMIT_GRAPH_CWD_CHANGE_COLOR,
         rowIndex,
+        lineCount: 1,
         childCount: childCountOfSha[graphItem.sha] ?? 0,
       });
       addPassthroughSegmentsForThreadGroupRow({
@@ -1541,6 +1548,7 @@ const createCommitGraph = ({
       lane,
       color: readCommitGraphColor(commitLane.colorIndex),
       rowIndex,
+      lineCount: Math.max(1, graphItem.unchangedThreadGroupCount),
       childCount: childCountOfSha[graphItem.sha] ?? 0,
     });
     colorIndexOfSha[graphItem.sha] = commitLane.colorIndex;
@@ -2070,9 +2078,15 @@ const ChatRobotTags = ({
   };
 
   const pathLauncherLabel = readPathLauncherLabel(pathLauncher);
+  const shouldStackThreadGroups = threadGroups.length > 1;
 
   return (
-    <div className="commit-label-list commit-thread-group-list">
+    <div
+      className={cn(
+        "commit-label-list commit-thread-group-list",
+        shouldStackThreadGroups && "commit-thread-group-list-multiline",
+      )}
+    >
       {threadGroups.map((threadGroup) => {
         return (
           <span className="commit-thread-group" key={threadGroup.key}>
@@ -2182,16 +2196,30 @@ const CommitGraphSvg = ({
   graph: CommitGraph;
   graphWidth: number;
 }) => {
-  const graphHeight = Math.max(
-    COMMIT_GRAPH_ROW_HEIGHT,
-    graph.rows.length * COMMIT_GRAPH_ROW_HEIGHT,
-  );
+  const graphRowLayout = readCommitHistoryRowLayouts({
+    rows: graph.rows,
+    rowHeight: COMMIT_GRAPH_ROW_HEIGHT,
+  });
+  const graphHeight = graphRowLayout.totalHeight;
   const readSegmentY = (rowIndex: number) => {
-    if (rowIndex >= graph.rows.length) {
+    const rowLayout = graphRowLayout.rowLayouts[rowIndex];
+
+    if (rowLayout === undefined) {
       return graphHeight;
     }
 
-    return readCommitGraphY(rowIndex);
+    return rowLayout.center;
+  };
+  const readSegmentConnectionY = (rowIndex: number) => {
+    const rowLayout = graphRowLayout.rowLayouts[rowIndex];
+
+    if (rowLayout === undefined) {
+      return graphHeight;
+    }
+
+    return (
+      rowLayout.top + rowLayout.height * COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO
+    );
   };
 
   return (
@@ -2208,8 +2236,7 @@ const CommitGraphSvg = ({
         const fromY = readSegmentY(segment.fromRowIndex);
         const toY = readSegmentY(segment.toRowIndex);
         const rowTopConnectionY = Math.min(
-          segment.toRowIndex * COMMIT_GRAPH_ROW_HEIGHT +
-            COMMIT_GRAPH_ROW_HEIGHT * COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO,
+          readSegmentConnectionY(segment.toRowIndex),
           toY,
         );
         const path =
@@ -2230,9 +2257,15 @@ const CommitGraphSvg = ({
         );
       })}
 
-      {graph.rows.map((row) => {
+      {graph.rows.map((row, rowIndex) => {
+        const rowLayout = graphRowLayout.rowLayouts[rowIndex];
+
+        if (rowLayout === undefined) {
+          return null;
+        }
+
         const centerX = readCommitGraphX(row.lane);
-        const centerY = readCommitGraphY(row.rowIndex);
+        const centerY = rowLayout.center;
 
         return (
           <g key={row.id}>
@@ -2680,6 +2713,12 @@ const CommitHistoryRow = ({
   return (
     <div
       className={rowClassName}
+      style={{
+        height: readCommitHistoryRowHeight({
+          lineCount: row.lineCount,
+          rowHeight: COMMIT_GRAPH_ROW_HEIGHT,
+        }),
+      }}
       onDoubleClick={row.isCommitRow ? openRowAfterDoubleClick : undefined}
       onContextMenu={(event) => openRowContextMenu(event, row)}
       onDragOver={updateBranchPointerDropTarget}
