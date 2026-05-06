@@ -5,7 +5,6 @@ import {
   CircleArrowDown,
   CircleArrowUp,
   Copy,
-  ExternalLink,
   FileDiff,
   GitCompareArrows,
   LoaderCircle,
@@ -26,7 +25,6 @@ import {
   LuGitCommitHorizontal,
   LuGitPullRequestArrow,
 } from "react-icons/lu";
-import { MdOutlineCallSplit } from "react-icons/md";
 import { PiTerminalWindowFill } from "react-icons/pi";
 import { VscVscode } from "react-icons/vsc";
 import { Resizable } from "react-resizable";
@@ -779,23 +777,21 @@ const readRepoFolderName = (repo: RepoGraph) => {
 // TODO: AI-PICKED-VALUE: These column widths match the current table layout closely enough while making drag resizing concrete.
 const COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS = {
   graph: COMMIT_GRAPH_MIN_WIDTH,
-  actors: 480,
-  branchTags: 408,
+  actors: 128,
+  branchTags: 240,
   description: 294,
   commit: 84,
   author: 150,
   date: 170,
-  codeLocations: 160,
 };
 // TODO: AI-PICKED-VALUE: These smaller resize limits keep columns usable while allowing the page to compress much further.
 const COMMIT_HISTORY_MIN_COLUMN_WIDTHS = {
   actors: 44,
-  branchTags: 120,
+  branchTags: 72,
   description: 120,
   commit: 52,
   author: 64,
   date: 82,
-  codeLocations: 96,
 };
 const COMMIT_HISTORY_MIN_DETAILS_WIDTH =
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.actors +
@@ -803,8 +799,7 @@ const COMMIT_HISTORY_MIN_DETAILS_WIDTH =
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.description +
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.commit +
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.author +
-  COMMIT_HISTORY_MIN_COLUMN_WIDTHS.date +
-  COMMIT_HISTORY_MIN_COLUMN_WIDTHS.codeLocations;
+  COMMIT_HISTORY_MIN_COLUMN_WIDTHS.date;
 
 type CommitHistoryColumnKey =
   | "actors"
@@ -812,8 +807,7 @@ type CommitHistoryColumnKey =
   | "description"
   | "commit"
   | "author"
-  | "date"
-  | "codeLocations";
+  | "date";
 
 type CommitHistoryColumnWidths = {
   graph: number;
@@ -823,7 +817,6 @@ type CommitHistoryColumnWidths = {
   commit: number;
   author: number;
   date: number;
-  codeLocations: number;
 };
 
 type CommitHistoryColumnResize = {
@@ -1103,7 +1096,7 @@ const readCommitGraphWidth = ({ laneCount }: { laneCount: number }) => {
 const readCommitGridTemplateColumns = (
   columnWidths: CommitHistoryColumnWidths,
 ) => {
-  return `${columnWidths.graph}px ${columnWidths.actors}px ${columnWidths.branchTags}px ${columnWidths.description}px ${columnWidths.commit}px ${columnWidths.author}px ${columnWidths.date}px ${columnWidths.codeLocations}px`;
+  return `${columnWidths.graph}px ${columnWidths.actors}px ${columnWidths.branchTags}px ${columnWidths.description}px ${columnWidths.commit}px ${columnWidths.author}px ${columnWidths.date}px`;
 };
 
 const readCommitHistoryTableWidth = (
@@ -1116,8 +1109,7 @@ const readCommitHistoryTableWidth = (
     columnWidths.description +
     columnWidths.commit +
     columnWidths.author +
-    columnWidths.date +
-    columnWidths.codeLocations
+    columnWidths.date
   );
 };
 
@@ -1133,8 +1125,6 @@ const replaceCommitHistoryColumnWidth = ({
   switch (columnKey) {
     case "branchTags":
       return { ...columnWidths, branchTags: width };
-    case "codeLocations":
-      return { ...columnWidths, codeLocations: width };
     case "actors":
       return { ...columnWidths, actors: width };
     case "description":
@@ -2020,98 +2010,8 @@ const BranchTags = ({
   );
 };
 
-const CodeLocations = ({
-  refs,
-  worktreesForRow,
-  mainWorktreePath,
-  pathLauncher,
-  openCopyContextMenu,
-  openCodePath,
-}: {
-  refs: string[];
-  worktreesForRow: GitWorktree[];
-  mainWorktreePath: string;
-  pathLauncher: PathLauncher;
-  openCopyContextMenu: (
-    event: MouseEvent<Element>,
-    text: string,
-    errorMessage: string,
-  ) => void;
-  openCodePath: (path: string) => Promise<void>;
-}) => {
-  const hasHead = refs.some((ref) => readIsHeadRef(ref));
-  const pathLauncherLabel = readPathLauncherLabel(pathLauncher);
-
-  if (!hasHead && worktreesForRow.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="commit-label-list">
-      {hasHead ? (
-        <TitleTooltip title={`Open in ${pathLauncherLabel}`}>
-          <Button
-            className="commit-ref commit-ref-head commit-ref-clickable"
-            variant="ghost"
-            size="xs"
-            type="button"
-            onMouseDown={(event) => event.stopPropagation()}
-            onDoubleClick={(event) => event.stopPropagation()}
-            onContextMenu={(event) => {
-              openCopyContextMenu(
-                event,
-                mainWorktreePath,
-                "Failed to copy path.",
-              );
-            }}
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              void openCodePath(mainWorktreePath);
-            }}
-          >
-            <ExternalLink aria-hidden="true" size={10} strokeWidth={1.75} />
-            <span>HEAD</span>
-          </Button>
-        </TitleTooltip>
-      ) : null}
-      {worktreesForRow.map((worktree) => (
-        <TitleTooltip
-          title={`Open in ${pathLauncherLabel}`}
-          key={worktree.path}
-        >
-          <Button
-            className="commit-ref commit-ref-head commit-ref-clickable commit-ref-worktree"
-            variant="ghost"
-            size="xs"
-            type="button"
-            onMouseDown={(event) => event.stopPropagation()}
-            onDoubleClick={(event) => event.stopPropagation()}
-            onContextMenu={(event) => {
-              openCopyContextMenu(event, worktree.path, "Failed to copy path.");
-            }}
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              void openCodePath(worktree.path);
-            }}
-          >
-            <MdOutlineCallSplit
-              aria-hidden="true"
-              className="commit-ref-worktree-icon"
-              size={10}
-            />
-            <span>Worktree</span>
-          </Button>
-        </TitleTooltip>
-      ))}
-    </div>
-  );
-};
-
 const ChatRobotTags = ({
   threadGroups,
-  worktrees,
   pathLauncher,
   isTerminalBusyOfCwd,
   openCopyContextMenu,
@@ -2120,7 +2020,6 @@ const ChatRobotTags = ({
   showErrorMessage,
 }: {
   threadGroups: ThreadGroup[];
-  worktrees: GitWorktree[];
   pathLauncher: PathLauncher;
   isTerminalBusyOfCwd: { [cwd: string]: boolean };
   openCopyContextMenu: (
@@ -2175,11 +2074,6 @@ const ChatRobotTags = ({
   return (
     <div className="commit-label-list commit-thread-group-list">
       {threadGroups.map((threadGroup) => {
-        const isThreadGroupWorktree = readIsWorktreeCwd({
-          cwd: threadGroup.cwd,
-          worktrees,
-        });
-
         return (
           <span className="commit-thread-group" key={threadGroup.key}>
             {threadGroup.cwd.length === 0 ? null : (
@@ -2246,15 +2140,16 @@ const ChatRobotTags = ({
               const title = threadTitle(thread);
               const isThreadActive = readIsThreadActive(thread);
               const isOpenCodeThread = readIsOpenCodeThread(thread);
-              const tooltipTitle = isOpenCodeThread
-                ? "Open in OpenCode"
-                : "Open in Codex";
+              const chatProviderLabel = isOpenCodeThread ? "OpenCode" : "Codex";
+              const tooltipTitle = `Open in ${chatProviderLabel}: "${title}"`;
 
               return (
                 <TitleTooltip title={tooltipTitle} key={thread.id}>
                   <Button
                     aria-label={
-                      isThreadActive ? `${title} is loading` : `Open ${title}`
+                      isThreadActive
+                        ? `${tooltipTitle} is loading`
+                        : tooltipTitle
                     }
                     className="commit-thread-chat"
                     variant="ghost"
@@ -2269,21 +2164,6 @@ const ChatRobotTags = ({
                     }}
                   >
                     <ChatProviderIcon isOpenCodeThread={isOpenCodeThread} />
-                    {isThreadActive ? (
-                      <LoaderCircle
-                        aria-hidden="true"
-                        className="commit-thread-chat-loading-icon"
-                        size={10}
-                      />
-                    ) : null}
-                    <span className="commit-thread-chat-title">{title}</span>
-                    {isThreadGroupWorktree ? (
-                      <MdOutlineCallSplit
-                        aria-hidden="true"
-                        className="commit-thread-chat-icon commit-ref-worktree-icon"
-                        size={10}
-                      />
-                    ) : null}
                   </Button>
                 </TitleTooltip>
               );
@@ -2789,10 +2669,6 @@ const CommitHistoryRow = ({
     branchTagsCellClassName = `${branchTagsCellClassName} commit-branch-tags-cell-branch-drop-target`;
   }
 
-  const shouldShowCodeLocations =
-    row.isCommitRow ||
-    rowRefs.some((ref) => readIsHeadRef(ref)) ||
-    worktreesForRow.length > 0;
   const branchPointerSourcePath = rowRefs.some((ref) => readIsHeadRef(ref))
     ? mainWorktreePath
     : readBranchPointerRowPath({
@@ -2962,7 +2838,6 @@ const CommitHistoryRow = ({
       <div className="commit-actors-cell">
         <ChatRobotTags
           threadGroups={threadGroups}
-          worktrees={worktrees}
           pathLauncher={pathLauncher}
           isTerminalBusyOfCwd={isTerminalBusyOfCwd}
           openCopyContextMenu={openCopyContextMenu}
@@ -3058,18 +2933,6 @@ const CommitHistoryRow = ({
         }
       >
         {row.isCommitRow ? commitDateText : null}
-      </div>
-      <div className="commit-code-locations-cell">
-        {shouldShowCodeLocations ? (
-          <CodeLocations
-            refs={rowRefs}
-            worktreesForRow={worktreesForRow}
-            mainWorktreePath={mainWorktreePath}
-            pathLauncher={pathLauncher}
-            openCopyContextMenu={openCopyContextMenu}
-            openCodePath={openCodePath}
-          />
-        ) : null}
       </div>
     </div>
   );
@@ -6249,7 +6112,7 @@ const CommitHistory = ({
                   });
                 }}
               >
-                Codex Chats
+                Code Locations
               </Button>
               <CommitHistoryColumnResizeHandle
                 columnKey="actors"
@@ -6298,15 +6161,6 @@ const CommitHistory = ({
               <span>Date</span>
               <CommitHistoryColumnResizeHandle
                 columnKey="date"
-                startColumnResize={startColumnResize}
-                updateColumnResize={updateColumnResize}
-                finishColumnResize={finishColumnResize}
-              />
-            </div>
-            <div className="commit-history-header-cell">
-              <span>Code Locations</span>
-              <CommitHistoryColumnResizeHandle
-                columnKey="codeLocations"
                 startColumnResize={startColumnResize}
                 updateColumnResize={updateColumnResize}
                 finishColumnResize={finishColumnResize}

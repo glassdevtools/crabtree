@@ -635,9 +635,9 @@ textarea,
 }
 
 .commit-history {
-  --commit-history-grid-template-columns: 300px 260px 340px 420px 84px 150px
-    170px 160px;
-  --commit-history-table-width: 1884px;
+  --commit-history-grid-template-columns: 300px 128px 240px 420px 84px 150px
+    170px;
+  --commit-history-table-width: 1492px;
   min-height: 0;
   flex: 1;
   overflow: visible;
@@ -1297,7 +1297,6 @@ textarea,
 }
 
 .commit-branch-tags-cell,
-.commit-code-locations-cell,
 .commit-actors-cell,
 .commit-description-cell,
 .commit-hash-cell,
@@ -1310,14 +1309,12 @@ textarea,
 }
 
 .commit-branch-tags-cell,
-.commit-code-locations-cell,
 .commit-actors-cell,
 .commit-description-cell {
   overflow: hidden;
 }
 
 .commit-branch-tags-cell,
-.commit-code-locations-cell,
 .commit-actors-cell {
   overflow-x: auto;
   overflow-y: hidden;
@@ -1325,13 +1322,11 @@ textarea,
 }
 
 .commit-branch-tags-cell::-webkit-scrollbar,
-.commit-code-locations-cell::-webkit-scrollbar,
 .commit-actors-cell::-webkit-scrollbar {
   display: none;
 }
 
 .commit-branch-tags-cell .commit-label-list,
-.commit-code-locations-cell .commit-label-list,
 .commit-actors-cell .commit-label-list {
   min-width: max-content;
   flex: 0 0 auto;
@@ -1406,20 +1401,6 @@ textarea,
 .commit-ref-head {
   background: #eef0f3;
   color: #343a43;
-}
-
-.commit-ref-clickable,
-.commit-ref-worktree {
-  cursor: pointer;
-}
-
-.commit-ref-clickable:hover,
-.commit-ref-worktree:hover {
-  background: #e3e7ed;
-}
-
-.commit-ref-worktree-icon {
-  transform: rotate(90deg);
 }
 
 .commit-ref-draggable {
@@ -1501,18 +1482,18 @@ textarea,
 }
 
 .commit-thread-chat {
+  width: 16px;
   height: 16px;
-  min-width: max-content;
+  min-width: 16px;
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  padding: 0 4px;
-  border: 1px solid #d5b55f;
+  padding: 0;
+  border: 1px solid #d4dae3;
   border-radius: 4px;
-  background: #fff4cf;
-  color: #202124;
+  background: #eef0f3;
+  color: #343a43;
   cursor: pointer;
   flex: 0 0 auto;
   font-size: 10px;
@@ -1582,15 +1563,6 @@ textarea,
   animation: initial-loading-spin 900ms linear infinite;
 }
 
-.commit-thread-chat-icon {
-  width: 10px;
-  height: 10px;
-  flex: 0 0 auto;
-  overflow: visible;
-  color: #5f6670;
-  opacity: 0.62;
-}
-
 .commit-thread-provider-icon {
   width: 11px;
   height: 11px;
@@ -1604,29 +1576,12 @@ textarea,
   box-sizing: border-box;
 }
 
-.commit-thread-chat-loading-icon {
-  width: 10px;
-  height: 10px;
-  flex: 0 0 auto;
-  color: #5f6670;
-  opacity: 0.62;
-  animation: initial-loading-spin 900ms linear infinite;
-}
-
 .commit-thread-chat:focus {
   outline: none;
 }
 
 .commit-thread-chat:hover {
-  background: #f6e8aa;
-}
-
-.commit-thread-chat-title {
-  display: inline-block;
-  max-width: 50ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  background: #e3e7ed;
 }
 
 .commit-thread-change-count {
