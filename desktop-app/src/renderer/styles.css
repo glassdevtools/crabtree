@@ -1503,6 +1503,12 @@ textarea,
   z-index: 1;
 }
 
+.commit-thread-location-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
 .commit-thread-chat {
   width: 16px;
   height: 16px;
@@ -1571,17 +1577,22 @@ textarea,
 }
 
 .commit-thread-terminal-icon {
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   flex: 0 0 auto;
+  padding: 2px;
+  border-radius: 3px;
+  background: #111827;
+  color: #ffffff;
+  box-sizing: border-box;
 }
 
 .commit-thread-terminal-loading-icon {
   width: 9px;
   height: 9px;
   flex: 0 0 auto;
-  color: #5f6670;
-  opacity: 0.62;
+  color: #ffffff;
+  opacity: 0.72;
   animation: initial-loading-spin 900ms linear infinite;
 }
 

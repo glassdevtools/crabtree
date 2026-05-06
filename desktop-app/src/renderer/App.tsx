@@ -17,6 +17,7 @@ import {
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XtermTerminal } from "@xterm/xterm";
 import { Dialog as RadixDialog } from "radix-ui";
+import { FaTerminal } from "react-icons/fa";
 import { GoDotFill } from "react-icons/go";
 import {
   LuCheck,
@@ -25,7 +26,6 @@ import {
   LuGitCommitHorizontal,
   LuGitPullRequestArrow,
 } from "react-icons/lu";
-import { PiTerminalWindowFill } from "react-icons/pi";
 import { VscVscode } from "react-icons/vsc";
 import { Resizable } from "react-resizable";
 import { toast } from "sonner";
@@ -2110,38 +2110,7 @@ const ChatRobotTags = ({
               );
             })}
             {threadGroup.cwd.length === 0 ? null : (
-              <>
-                <TitleTooltip title="Open in Terminal">
-                  <Button
-                    aria-label={`Open terminal in ${threadGroup.cwd}`}
-                    className={
-                      isTerminalBusyOfCwd[threadGroup.cwd] === true
-                        ? "commit-thread-terminal commit-thread-terminal-busy"
-                        : "commit-thread-terminal"
-                    }
-                    variant="ghost"
-                    size="icon-xs"
-                    type="button"
-                    onMouseDown={(event) => event.stopPropagation()}
-                    onDoubleClick={(event) => event.stopPropagation()}
-                    onClick={(event) =>
-                      openTerminalModal(event, threadGroup.cwd)
-                    }
-                  >
-                    <PiTerminalWindowFill
-                      aria-hidden="true"
-                      className="commit-thread-terminal-icon"
-                      size={10}
-                    />
-                    {isTerminalBusyOfCwd[threadGroup.cwd] === true ? (
-                      <LoaderCircle
-                        aria-hidden="true"
-                        className="commit-thread-terminal-loading-icon"
-                        size={9}
-                      />
-                    ) : null}
-                  </Button>
-                </TitleTooltip>
+              <span className="commit-thread-location-actions">
                 <TitleTooltip title={`Open in ${pathLauncherLabel}`}>
                   <Button
                     aria-label={`Open ${threadGroup.cwd}`}
@@ -2167,7 +2136,38 @@ const ChatRobotTags = ({
                     <PathLauncherIcon pathLauncher={pathLauncher} />
                   </Button>
                 </TitleTooltip>
-              </>
+                <TitleTooltip title="Open in Terminal">
+                  <Button
+                    aria-label={`Open terminal in ${threadGroup.cwd}`}
+                    className={
+                      isTerminalBusyOfCwd[threadGroup.cwd] === true
+                        ? "commit-thread-terminal commit-thread-terminal-busy"
+                        : "commit-thread-terminal"
+                    }
+                    variant="ghost"
+                    size="icon-xs"
+                    type="button"
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                    onClick={(event) =>
+                      openTerminalModal(event, threadGroup.cwd)
+                    }
+                  >
+                    <FaTerminal
+                      aria-hidden="true"
+                      className="commit-thread-terminal-icon"
+                      size={8}
+                    />
+                    {isTerminalBusyOfCwd[threadGroup.cwd] === true ? (
+                      <LoaderCircle
+                        aria-hidden="true"
+                        className="commit-thread-terminal-loading-icon"
+                        size={9}
+                      />
+                    ) : null}
+                  </Button>
+                </TitleTooltip>
+              </span>
             )}
           </span>
         );
@@ -6174,7 +6174,7 @@ const CommitHistory = ({
                   });
                 }}
               >
-                Code Locations
+                Code
               </Button>
               <CommitHistoryColumnResizeHandle
                 columnKey="actors"
