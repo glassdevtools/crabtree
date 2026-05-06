@@ -34,6 +34,9 @@ const config = {
       },
     ],
     icon: "packaging/macos/icon.icon",
+    // node-pty ships both mac architecture packages in each app build, so universal merging should leave those prebuilds as separate files.
+    x64ArchFiles:
+      "Contents/Resources/app.asar.unpacked/node_modules/@lydell/node-pty-*/prebuilds/**/*",
     extendInfo: {
       NSDesktopFolderUsageDescription:
         "Crabtree needs access to repositories stored on your Desktop so it can read their Git history.",
