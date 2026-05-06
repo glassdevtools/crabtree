@@ -24,8 +24,8 @@ import type {
 
 const FIELD_SEPARATOR = "\u001f";
 const ZERO_SHA = "0000000000000000000000000000000000000000";
-const CHECKED_OUT_BY_WORKTREE_MESSAGE =
-  "This branch is checked out in a worktree. Delete the worktree or switch its branch first.";
+const BRANCH_MOVE_CHECKED_OUT_BY_WORKTREE_MESSAGE =
+  "This branch is checked out in another worktree. Move it from that worktree or drop it onto that worktree first.";
 // TODO: AI-PICKED-VALUE: This prevents Git mutations and remote reads from waiting forever on a blocked process.
 const GIT_COMMAND_TIMEOUT_MS = 20_000;
 // TODO: AI-PICKED-VALUE: This lets large untracked-file diffs render without letting one IPC read consume unbounded memory.
@@ -1120,7 +1120,22 @@ export const deleteGitBranch = async ({
   });
 
   if (checkoutPlace === "worktree") {
-    throw new Error(CHECKED_OUT_BY_WORKTREE_MESSAGE);
+    // A checked-out branch can only detach through the worktree that owns it.
+    const checkedOutWorktreePath = await readGitWorktreePathForBranch({
+      repoRoot,
+      branch,
+    });
+
+    if (checkedOutWorktreePath === null) {
+      throw new Error("Branch moved. Refresh and try again.");
+    }
+
+    await deleteGitBranch({
+      repoRoot: checkedOutWorktreePath,
+      branch,
+      oldSha,
+    });
+    return;
   }
 
   const gitRef = `refs/heads/${branch}`;
@@ -1446,7 +1461,7 @@ export const moveGitBranch = async ({
     checkedOutWorktreePath !== sourcePath &&
     checkedOutWorktreePath !== targetPath
   ) {
-    throw new Error(CHECKED_OUT_BY_WORKTREE_MESSAGE);
+    throw new Error(BRANCH_MOVE_CHECKED_OUT_BY_WORKTREE_MESSAGE);
   }
 
   if (shouldDetachSource) {
@@ -2017,19 +2032,7 @@ export const revertGitBranchSyncChanges = async (
           "Deleting this branch would hide commits from the graph. Move or tag another branch first.",
       });
 
-      // If the branch is checked out in a linked worktree, delete it through that worktree so HEAD detaches there first.
-      const checkedOutWorktreePath = await readGitWorktreePathForBranch({
-        repoRoot,
-        branch: name,
-      });
-      const branchDeleteRepoRoot =
-        checkedOutWorktreePath === null ? repoRoot : checkedOutWorktreePath;
-
-      await deleteGitBranch({
-        repoRoot: branchDeleteRepoRoot,
-        branch: name,
-        oldSha: localSha,
-      });
+      await deleteGitBranch({ repoRoot, branch: name, oldSha: localSha });
       continue;
     }
 

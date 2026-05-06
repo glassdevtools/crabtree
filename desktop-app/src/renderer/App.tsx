@@ -184,8 +184,6 @@ const USER_GIT_UPDATE_TOAST_ID_PREFIX = "user-git-update";
 const DASHBOARD_WARNING_TOAST_ID_PREFIX = "dashboard-warning";
 const GITHUB_REPOSITORY_URL = packageInfo.repository.url.replace(/\.git$/, "");
 console.log("[Crabtree renderer]", { version: packageInfo.version });
-const CHECKED_OUT_BY_WORKTREE_MESSAGE =
-  "This branch is checked out in a worktree. Delete the worktree or switch its branch first.";
 const DUPLICATE_CHECKOUT_BRANCH_WARNING =
   "This is checked out in multiple places, which often leads to confusion. We recommend adding a new branch here instead.";
 const COMMIT_GRAPH_ACTION_ICON_SIZE = 10;
@@ -4550,7 +4548,6 @@ const CommitHistory = ({
     const commitOfSha: { [sha: string]: GitCommit } = {};
     const branchShaOfBranch: { [branch: string]: string } = {};
     const tagShaOfTag: { [tag: string]: string } = {};
-    const checkedOutBranchOfBranch: { [branch: string]: boolean } = {};
     const rootShas: {
       sha: string;
       ignoredRefKey: string | null;
@@ -4634,12 +4631,6 @@ const CommitHistory = ({
       }
     }
 
-    for (const worktree of worktrees) {
-      if (worktree.branch !== null) {
-        checkedOutBranchOfBranch[worktree.branch] = true;
-      }
-    }
-
     // Then collect the refs that would keep commits visible.
     for (const commit of commits) {
       for (const localBranch of commit.localBranches) {
@@ -4683,12 +4674,6 @@ const CommitHistory = ({
 
     for (const branch of Object.keys(branchShaOfBranch)) {
       const reasons: string[] = [];
-
-      if (checkedOutBranchOfBranch[branch] === true) {
-        shouldBlockDeleteOfBranch[branch] = true;
-        deleteWarningMessageOfBranch[branch] = CHECKED_OUT_BY_WORKTREE_MESSAGE;
-        continue;
-      }
 
       if (branch === defaultBranch) {
         shouldBlockDeleteOfBranch[branch] = true;

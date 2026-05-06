@@ -1767,7 +1767,7 @@ test("deletes the current branch and reattaches HEAD to the default branch at th
   });
 });
 
-test("rejects deleting a branch checked out in a linked worktree", async () => {
+test("deletes a branch checked out in a linked worktree by detaching that worktree", async () => {
   await withOriginRepo(async ({ parentRoot, repoRoot }) => {
     await runGit({ cwd: repoRoot, args: ["switch", "-c", "topic"] });
     const topicSha = await commitRepoFile({
@@ -1783,15 +1783,17 @@ test("rejects deleting a branch checked out in a linked worktree", async () => {
       args: ["worktree", "add", worktreeRoot, "topic"],
     });
 
-    await assert.rejects(async () => {
-      await deleteGitBranch({
-        repoRoot,
-        branch: "topic",
-        oldSha: topicSha,
-      });
-    }, /checked out in a worktree/);
+    await deleteGitBranch({
+      repoRoot,
+      branch: "topic",
+      oldSha: topicSha,
+    });
 
-    assert.equal(await readSha({ cwd: repoRoot, ref: "topic" }), topicSha);
+    assert.equal(await readOptionalSha({ cwd: repoRoot, ref: "topic" }), null);
+    assert.equal(
+      await runGit({ cwd: worktreeRoot, args: ["branch", "--show-current"] }),
+      "",
+    );
     assert.equal(await readSha({ cwd: worktreeRoot, ref: "HEAD" }), topicSha);
   });
 });
@@ -2413,7 +2415,7 @@ test("rejects moving a branch checked out in another worktree", async () => {
         sourcePath: null,
         targetPath: null,
       });
-    }, /checked out in a worktree/);
+    }, /checked out in another worktree/);
   });
 });
 
