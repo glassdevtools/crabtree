@@ -1,5 +1,5 @@
 import {
-  CircleCheck,
+  Check,
   ChevronDown,
   ChevronRight,
   CircleArrowDown,
@@ -510,11 +510,11 @@ const ChatProviderDetectionStatus = ({
       )}
     >
       {isDetected ? (
-        <CircleCheck aria-hidden="true" size={15} strokeWidth={2.25} />
+        <Check aria-hidden="true" size={15} strokeWidth={2.25} />
       ) : (
         <X aria-hidden="true" size={15} strokeWidth={2.25} />
       )}
-      <span>{isDetected ? "auto detected" : "not detected"}</span>
+      {isDetected ? null : <span>missing</span>}
     </span>
   );
 };
@@ -5294,7 +5294,7 @@ const CommitHistory = ({
     const readRowDiffTarget = (mode: GitDiffRequest["mode"]): RowDiffTarget => {
       return {
         title:
-          mode === "changesMadeHere" ? "See changes here" : "Diff against HEAD",
+          mode === "changesMadeHere" ? "See changes" : "Diff against HEAD",
         description:
           mode === "changesMadeHere"
             ? gitDiffDescription
@@ -6007,7 +6007,7 @@ const CommitHistory = ({
             }
           >
             <FileDiff size={10} strokeWidth={1.75} />
-            <span>See changes here</span>
+            <span>See changes</span>
           </Button>
           <Button
             className="context-menu-item"
@@ -7629,7 +7629,7 @@ const CrabtreeDesktopApp = () => {
               </div>
             </div>
             <section className="chat-provider-detection-section">
-              <h3 className="chat-provider-detection-title">Chat sources</h3>
+              <h3 className="chat-provider-detection-title">Chat Sources</h3>
               <div className="chat-provider-detection-list">
                 {chatProviderDetections.map((chatProviderDetection) => (
                   <div
