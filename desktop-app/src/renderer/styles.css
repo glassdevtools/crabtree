@@ -1430,6 +1430,19 @@ textarea,
   cursor: grabbing;
 }
 
+.commit-ref .commit-ref-duplicate-checkout-warning {
+  width: 9px;
+  min-width: 9px;
+  display: inline-flex;
+  align-items: center;
+  color: #b65f00;
+  overflow: visible;
+}
+
+.commit-ref-duplicate-checkout-warning svg {
+  display: block;
+}
+
 /* TODO: AI-PICKED-VALUE: This keeps the delete affordance small enough to fit inside compact branch tags. */
 .commit-branch-create-action,
 .commit-branch-push-action,

@@ -11,6 +11,7 @@ import {
   LoaderCircle,
   Settings,
   Tag,
+  TriangleAlert,
   Trash2,
   X,
 } from "lucide-react";
@@ -124,6 +125,12 @@ import {
   readIsWorktreeCwd,
   readShouldShowChatOnlyCommitGraphRow,
 } from "./threadGroups";
+import {
+  readCommitHistoryCheckoutsForCommit,
+  readCommitHistoryRowCheckouts,
+  readDirtyCommitHistoryCheckoutBranches,
+  readDuplicateCheckedOutBranchOfBranch,
+} from "./commitHistoryCheckouts";
 import { readBranchSyncPushWarningMessages } from "./branchSyncWarnings";
 import type { ThreadGroup } from "./threadGroups";
 import {
@@ -167,6 +174,8 @@ const GITHUB_REPOSITORY_URL = packageInfo.repository.url.replace(/\.git$/, "");
 console.log("[Crabtree renderer]", { version: packageInfo.version });
 const CHECKED_OUT_BY_WORKTREE_MESSAGE =
   "This branch is checked out in a worktree. Delete the worktree or switch its branch first.";
+const DUPLICATE_CHECKOUT_BRANCH_WARNING =
+  "This is checked out in multiple places, which often leads to confusion. We recommend adding a new branch here instead.";
 const COMMIT_GRAPH_ACTION_ICON_SIZE = 10;
 // TODO: AI-PICKED-VALUE: A light stroke makes the graph actions read as buttons instead of status markers.
 const COMMIT_GRAPH_ACTION_ICON_STROKE_WIDTH = 2;
@@ -547,29 +556,6 @@ const readGitWarningReasonText = (reasons: string[]) => {
 const TAG_STABILITY_WARNING_REASON =
   "people and build pipelines often expect tags not to move";
 
-const readBranchPointerOperation = ({
-  checkedOutBranchPath,
-  sourcePath,
-  targetPath,
-}: {
-  checkedOutBranchPath: string | null;
-  sourcePath: string | null;
-  targetPath: string | null;
-}): BranchPointerOperation => {
-  if (checkedOutBranchPath === null) {
-    return "moveBranchPointer";
-  }
-
-  if (
-    checkedOutBranchPath === sourcePath ||
-    checkedOutBranchPath === targetPath
-  ) {
-    return "moveBranchPointer";
-  }
-
-  return "blockedCheckedOutByWorktree";
-};
-
 const GitRefModalBadge = ({
   gitRefType,
   name,
@@ -592,11 +578,9 @@ const GitRefModalBadge = ({
 };
 
 const readBranchPointerOperationText = ({
-  operation,
   gitRefType,
   refName,
 }: {
-  operation: BranchPointerOperation;
   gitRefType: "branch" | "tag";
   refName: string;
 }) => {
@@ -616,38 +600,20 @@ const readBranchPointerOperationText = ({
     };
   }
 
-  switch (operation) {
-    case "moveBranchPointer":
-      return {
-        title: "Move Branch Pointer",
-        message: (
-          <span className="dialog-description-inline">
-            Move <GitRefModalBadge gitRefType="branch" name={refName} /> branch
-            pointer?
-          </span>
-        ),
-        description: null,
-        loadingDescription: "Moving branch",
-        successMessage: "Moved branch.",
-        buttonText: "Move",
-        shouldBlock: false,
-      };
-    case "blockedCheckedOutByWorktree":
-      return {
-        title: "Move Branch Pointer",
-        message: (
-          <span className="dialog-description-inline">
-            Move <GitRefModalBadge gitRefType="branch" name={refName} /> branch
-            pointer?
-          </span>
-        ),
-        description: CHECKED_OUT_BY_WORKTREE_MESSAGE,
-        loadingDescription: "Moving branch",
-        successMessage: "Moved branch.",
-        buttonText: "Move",
-        shouldBlock: true,
-      };
-  }
+  return {
+    title: "Move Branch Pointer",
+    message: (
+      <span className="dialog-description-inline">
+        Move <GitRefModalBadge gitRefType="branch" name={refName} /> branch
+        pointer?
+      </span>
+    ),
+    description: null,
+    loadingDescription: "Moving branch",
+    successMessage: "Moved branch.",
+    buttonText: "Move",
+    shouldBlock: false,
+  };
 };
 
 const readActionableBranchSyncChanges = ({
@@ -878,10 +844,6 @@ type BranchPointerDrag = {
   oldSubject: string;
 };
 
-type BranchPointerOperation =
-  | "moveBranchPointer"
-  | "blockedCheckedOutByWorktree";
-
 type BranchPointerMove = {
   repoRoot: string;
   gitRefType: "branch" | "tag";
@@ -894,7 +856,6 @@ type BranchPointerMove = {
   newSubject: string;
   sourcePath: string | null;
   targetPath: string | null;
-  operation: BranchPointerOperation;
   warningMessage: string | null;
 };
 
@@ -1834,6 +1795,7 @@ const BranchTags = ({
   commitShortSha,
   commitSubject,
   branchPointerSourcePath,
+  duplicateCheckedOutBranchOfBranch,
   deleteWarningMessageOfBranch,
   deleteWarningMessageOfTag,
   shouldBlockDeleteOfBranch,
@@ -1848,6 +1810,7 @@ const BranchTags = ({
   commitShortSha: string;
   commitSubject: string;
   branchPointerSourcePath: string | null;
+  duplicateCheckedOutBranchOfBranch: { [branch: string]: boolean };
   deleteWarningMessageOfBranch: { [branch: string]: string };
   deleteWarningMessageOfTag: { [tag: string]: string };
   shouldBlockDeleteOfBranch: { [branch: string]: boolean };
@@ -1962,6 +1925,8 @@ const BranchTags = ({
           : (deleteWarningMessageOfBranch[refName] ?? null);
         const shouldBlockDelete =
           !isTag && shouldBlockDeleteOfBranch[refName] === true;
+        const shouldShowDuplicateCheckoutWarning =
+          isLocalBranch && duplicateCheckedOutBranchOfBranch[refName] === true;
 
         if (isOriginBranch) {
           refClassName = "commit-ref commit-ref-origin";
@@ -2022,6 +1987,21 @@ const BranchTags = ({
             }}
             onDragEnd={finishBranchPointerDrag}
           >
+            {shouldShowDuplicateCheckoutWarning ? (
+              <TitleTooltip title={DUPLICATE_CHECKOUT_BRANCH_WARNING}>
+                <span
+                  className="commit-ref-duplicate-checkout-warning"
+                  role="img"
+                  aria-label={DUPLICATE_CHECKOUT_BRANCH_WARNING}
+                >
+                  <TriangleAlert
+                    aria-hidden="true"
+                    size={9}
+                    strokeWidth={2.25}
+                  />
+                </span>
+              </TitleTooltip>
+            ) : null}
             <span>{refName}</span>
           </Badge>
         );
@@ -2414,7 +2394,7 @@ const CommitHistoryRow = ({
   pathLauncher,
   isTerminalBusyOfCwd,
   isBranchPointerDropTarget,
-  shouldOwnMainWorktreeHead,
+  duplicateCheckedOutBranchOfBranch,
   isBranchMergeableOfBranch,
   isCommitMergeableOfSha,
   deleteWarningMessageOfBranch,
@@ -2450,7 +2430,7 @@ const CommitHistoryRow = ({
   pathLauncher: PathLauncher;
   isTerminalBusyOfCwd: { [cwd: string]: boolean };
   isBranchPointerDropTarget: boolean;
-  shouldOwnMainWorktreeHead: boolean;
+  duplicateCheckedOutBranchOfBranch: { [branch: string]: boolean };
   isBranchMergeableOfBranch: { [branch: string]: boolean };
   isCommitMergeableOfSha: { [sha: string]: boolean };
   deleteWarningMessageOfBranch: { [branch: string]: string };
@@ -2537,63 +2517,27 @@ const CommitHistoryRow = ({
     rowThreadIdOfId[rowThreadId] = true;
   }
 
-  // One dirty row for the main worktree owns HEAD and the checked-out branch instead of duplicating them on the base commit row.
-  const isMainWorktreeThreadGroupRow =
-    row.threadGroup !== null &&
-    row.threadGroup.cwd.length > 0 &&
-    readIsCwdInsidePath({
-      cwd: row.threadGroup.cwd,
-      path: mainWorktreePath,
-    }) &&
-    !readIsWorktreeCwd({ cwd: row.threadGroup.cwd, worktrees });
-  const worktreesForRow = worktrees.filter((worktree) => {
-    if (worktree.head !== commit.sha) {
-      return false;
-    }
-
-    if (row.threadGroup !== null) {
-      if (
-        readIsCwdInsidePath({
-          cwd: row.threadGroup.cwd,
-          path: worktree.path,
-        })
-      ) {
-        return true;
-      }
-
-      for (const thread of row.threadGroup.threads) {
-        if (worktree.threadIds.includes(thread.id)) {
-          return true;
-        }
-      }
-
-      return false;
-    }
-
-    if (
-      readGitChangeCleanState({ gitChangesOfCwd, cwd: worktree.path }) ===
-      "dirty"
-    ) {
-      return false;
-    }
-
-    for (const worktreeThreadId of worktree.threadIds) {
-      if (rowThreadIdOfId[worktreeThreadId] !== true) {
-        return false;
-      }
-    }
-
-    return true;
+  const checkoutsForCommit = readCommitHistoryCheckoutsForCommit({
+    commitSha: commit.sha,
+    isMainHeadCommit: commit.refs.some((ref) => readIsHeadRef(ref)),
+    mainWorktreePath,
+    currentBranch,
+    worktrees,
+    gitChangesOfCwd,
   });
-  const rowWorktreePathOfPath: { [path: string]: boolean } = {};
-  const excludedLocalBranchOfName: { [branch: string]: boolean } = {};
+  const rowCheckouts = readCommitHistoryRowCheckouts({
+    checkouts: checkoutsForCommit,
+    changedWorkingTreeCwd:
+      row.threadGroup === null ? null : row.threadGroup.cwd,
+  });
+  const dirtyCheckoutBranchOfBranch =
+    readDirtyCommitHistoryCheckoutBranches(checkoutsForCommit);
+  const movedThreadBranchOfBranch: { [branch: string]: boolean } = {};
+  const rowCheckoutBranchOfBranch: { [branch: string]: boolean } = {};
+  const rowCheckoutRefs: string[] = [];
+  const worktreesForRow: GitWorktree[] = [];
   const rowLocalBranches: string[] = [];
   const isRowLocalBranchAddedOfBranch: { [branch: string]: boolean } = {};
-  const shouldMoveMainWorktreeRefsToChangedRow =
-    row.threadGroup === null &&
-    commit.refs.some((ref) => readIsHeadRef(ref)) &&
-    readGitChangeCleanState({ gitChangesOfCwd, cwd: mainWorktreePath }) ===
-      "dirty";
 
   const pushRowLocalBranch = (branch: string) => {
     if (isRowLocalBranchAddedOfBranch[branch] === true) {
@@ -2604,20 +2548,19 @@ const CommitHistoryRow = ({
     rowLocalBranches.push(branch);
   };
 
-  for (const worktree of worktreesForRow) {
-    rowWorktreePathOfPath[worktree.path] = true;
-  }
-
-  for (const worktree of worktrees) {
-    if (
-      worktree.head !== commit.sha ||
-      worktree.branch === null ||
-      rowWorktreePathOfPath[worktree.path] === true
-    ) {
-      continue;
+  for (const rowCheckout of rowCheckouts) {
+    if (rowCheckout.isMainWorktree) {
+      rowCheckoutRefs.push(
+        rowCheckout.branch === null ? "HEAD" : `HEAD -> ${rowCheckout.branch}`,
+      );
+    } else if (rowCheckout.worktree !== null) {
+      worktreesForRow.push(rowCheckout.worktree);
     }
 
-    excludedLocalBranchOfName[worktree.branch] = true;
+    if (rowCheckout.branch !== null) {
+      rowCheckoutBranchOfBranch[rowCheckout.branch] = true;
+      pushRowLocalBranch(rowCheckout.branch);
+    }
   }
 
   if (row.threadGroup === null) {
@@ -2628,73 +2571,46 @@ const CommitHistoryRow = ({
         continue;
       }
 
+      const threadBranch = thread.gitInfo?.branch ?? null;
+
+      if (
+        threadBranch === null ||
+        !readIsLocalBranch({
+          branch: threadBranch,
+          localBranches: commit.localBranches,
+        })
+      ) {
+        continue;
+      }
+
+      if (rowThreadIdOfId[commitThreadId] === true) {
+        pushRowLocalBranch(threadBranch);
+        continue;
+      }
+
       const isMainWorktreeThread =
         thread.cwd.length > 0 &&
         readIsCwdInsidePath({ cwd: thread.cwd, path: mainWorktreePath }) &&
         !readIsWorktreeCwd({ cwd: thread.cwd, worktrees });
 
-      if (rowThreadIdOfId[commitThreadId] === true) {
-        continue;
+      if (!isMainWorktreeThread) {
+        movedThreadBranchOfBranch[threadBranch] = true;
       }
-
-      const threadBranch = thread.gitInfo?.branch ?? null;
-
-      if (
-        !isMainWorktreeThread &&
-        threadBranch !== null &&
-        readIsLocalBranch({
-          branch: threadBranch,
-          localBranches: commit.localBranches,
-        })
-      ) {
-        excludedLocalBranchOfName[threadBranch] = true;
-      }
-    }
-
-    if (currentBranch !== null && shouldMoveMainWorktreeRefsToChangedRow) {
-      excludedLocalBranchOfName[currentBranch] = true;
     }
   }
 
   if (row.threadGroup === null) {
     for (const localBranch of commit.localBranches) {
-      if (excludedLocalBranchOfName[localBranch] === true) {
+      const isBranchMovedToAnotherRow =
+        (dirtyCheckoutBranchOfBranch[localBranch] === true ||
+          movedThreadBranchOfBranch[localBranch] === true) &&
+        rowCheckoutBranchOfBranch[localBranch] !== true;
+
+      if (isBranchMovedToAnotherRow) {
         continue;
       }
 
       pushRowLocalBranch(localBranch);
-    }
-  } else if (isMainWorktreeThreadGroupRow) {
-    if (currentBranch !== null) {
-      pushRowLocalBranch(currentBranch);
-    }
-  } else {
-    for (const worktree of worktreesForRow) {
-      if (worktree.branch !== null) {
-        pushRowLocalBranch(worktree.branch);
-      }
-    }
-
-    for (const thread of row.threadGroup.threads) {
-      const threadBranch = thread.gitInfo?.branch ?? null;
-
-      if (
-        threadBranch !== null &&
-        readIsLocalBranch({
-          branch: threadBranch,
-          localBranches: commit.localBranches,
-        })
-      ) {
-        pushRowLocalBranch(threadBranch);
-      }
-    }
-
-    if (
-      currentBranch !== null &&
-      worktreesForRow.length === 0 &&
-      readIsCwdInsidePath({ cwd: row.threadGroup.cwd, path: repoRoot })
-    ) {
-      pushRowLocalBranch(currentBranch);
     }
   }
 
@@ -2703,44 +2619,38 @@ const CommitHistoryRow = ({
       ? commit.refs.filter((ref) => {
           const refName = cleanRefName(ref);
 
-          if (shouldMoveMainWorktreeRefsToChangedRow && readIsHeadRef(ref)) {
+          if (
+            readIsHeadRef(ref) &&
+            rowCheckoutRefs.some((rowCheckoutRef) =>
+              readIsHeadRef(rowCheckoutRef),
+            ) === false &&
+            checkoutsForCommit.some(
+              (checkout) => checkout.isMainWorktree && checkout.isDirty,
+            )
+          ) {
             return false;
           }
 
-          return (
-            excludedLocalBranchOfName[refName] !== true ||
+          if (
             !readIsLocalBranch({
               branch: refName,
               localBranches: commit.localBranches,
             })
+          ) {
+            return true;
+          }
+
+          return (
+            (dirtyCheckoutBranchOfBranch[refName] !== true &&
+              movedThreadBranchOfBranch[refName] !== true) ||
+            rowCheckoutBranchOfBranch[refName] === true
           );
         })
       : [];
-  const rowRefNameOfName: { [name: string]: boolean } = {};
 
-  for (const rowCommitRef of rowCommitRefs) {
-    rowRefNameOfName[cleanRefName(rowCommitRef)] = true;
-  }
-
-  const rowRefs =
-    row.threadGroup === null
-      ? [
-          ...rowCommitRefs,
-          ...rowLocalBranches.filter(
-            (localBranch) => rowRefNameOfName[localBranch] !== true,
-          ),
-        ]
-      : isMainWorktreeThreadGroupRow
-        ? shouldOwnMainWorktreeHead
-          ? currentBranch === null
-            ? ["HEAD"]
-            : [`HEAD -> ${currentBranch}`]
-          : []
-        : rowLocalBranches;
+  const rowRefs = row.threadGroup === null ? rowCommitRefs : rowCheckoutRefs;
   const rowCurrentBranch =
-    row.threadGroup !== null && !isMainWorktreeThreadGroupRow
-      ? (rowLocalBranches[0] ?? null)
-      : currentBranch;
+    row.threadGroup === null ? currentBranch : (rowLocalBranches[0] ?? null);
   const isHeadRow = row.shouldShowHeadDot;
   const actionThreadGroup = row.threadGroup;
   const storedActionChangeSummary =
@@ -3070,6 +2980,9 @@ const CommitHistoryRow = ({
             commitShortSha={commit.shortSha}
             commitSubject={commit.subject}
             branchPointerSourcePath={branchPointerSourcePath}
+            duplicateCheckedOutBranchOfBranch={
+              duplicateCheckedOutBranchOfBranch
+            }
             deleteWarningMessageOfBranch={deleteWarningMessageOfBranch}
             deleteWarningMessageOfTag={deleteWarningMessageOfTag}
             shouldBlockDeleteOfBranch={shouldBlockDeleteOfBranch}
@@ -4896,6 +4809,12 @@ const CommitHistory = ({
       shouldBlockDeleteOfBranch,
     };
   }, [commits, defaultBranch, worktrees]);
+  const duplicateCheckedOutBranchOfBranch = useMemo(() => {
+    return readDuplicateCheckedOutBranchOfBranch({
+      currentBranch,
+      worktrees,
+    });
+  }, [currentBranch, worktrees]);
   const commitOfSha = useMemo(() => {
     const nextCommitOfSha: { [sha: string]: GitCommit } = {};
 
@@ -4992,19 +4911,6 @@ const CommitHistory = ({
     }
 
     return `We don't recommend moving this because ${readGitWarningReasonText(reasons)}.`;
-  };
-  const readCheckedOutBranchPath = (branch: string) => {
-    if (currentBranch === branch) {
-      return mainWorktreePath;
-    }
-
-    for (const worktree of worktrees) {
-      if (worktree.branch === branch) {
-        return worktree.path;
-      }
-    }
-
-    return null;
   };
   const readBranchPointerTarget = ({ row }: { row: CommitGraphRow }) => {
     return {
@@ -5394,19 +5300,6 @@ const CommitHistory = ({
       return;
     }
 
-    const checkedOutBranchPath =
-      activeBranchPointerDrag.gitRefType === "branch"
-        ? (readCheckedOutBranchPath(activeBranchPointerDrag.refName) ??
-          activeBranchPointerDrag.sourcePath)
-        : null;
-    const branchPointerOperation =
-      activeBranchPointerDrag.gitRefType === "branch"
-        ? readBranchPointerOperation({
-            checkedOutBranchPath,
-            sourcePath: activeBranchPointerDrag.sourcePath,
-            targetPath: branchPointerTargetPath,
-          })
-        : "moveBranchPointer";
     const warningMessage =
       activeBranchPointerDrag.gitRefType === "tag"
         ? `We don't recommend moving this because ${TAG_STABILITY_WARNING_REASON}.`
@@ -5428,7 +5321,6 @@ const CommitHistory = ({
       newSubject: branchPointerTarget.subject,
       sourcePath: activeBranchPointerDrag.sourcePath,
       targetPath: branchPointerTargetPath,
-      operation: branchPointerOperation,
       warningMessage,
     });
     finishBranchPointerDrag();
@@ -6048,14 +5940,9 @@ const CommitHistory = ({
 
     const request = branchPointerMove;
     const branchPointerOperationText = readBranchPointerOperationText({
-      operation: request.operation,
       gitRefType: request.gitRefType,
       refName: request.refName,
     });
-
-    if (branchPointerOperationText.shouldBlock) {
-      return;
-    }
 
     closeBranchPointerMoveModal();
 
@@ -6064,36 +5951,28 @@ const CommitHistory = ({
       branchPointerOperationText.successMessage,
       async () => {
         try {
-          switch (request.operation) {
-            case "moveBranchPointer":
-              if (request.gitRefType === "branch") {
-                await window.crabtree.moveGitBranch({
-                  repoRoot: request.repoRoot,
-                  branch: request.refName,
-                  oldSha: request.oldSha,
-                  newSha: request.newSha,
-                  sourcePath: request.sourcePath,
-                  targetPath: request.targetPath,
-                });
-              } else {
-                await window.crabtree.moveGitTag({
-                  repoRoot: request.repoRoot,
-                  tag: request.refName,
-                  oldSha: request.oldSha,
-                  newSha: request.newSha,
-                });
-              }
-              trackDesktopAction({
-                eventName:
-                  request.gitRefType === "branch"
-                    ? "branch_moved"
-                    : "tag_moved",
-                properties: { had_warning: request.warningMessage !== null },
-              });
-              break;
-            case "blockedCheckedOutByWorktree":
-              return branchPointerOperationText.description;
+          if (request.gitRefType === "branch") {
+            await window.crabtree.moveGitBranch({
+              repoRoot: request.repoRoot,
+              branch: request.refName,
+              oldSha: request.oldSha,
+              newSha: request.newSha,
+              sourcePath: request.sourcePath,
+              targetPath: request.targetPath,
+            });
+          } else {
+            await window.crabtree.moveGitTag({
+              repoRoot: request.repoRoot,
+              tag: request.refName,
+              oldSha: request.oldSha,
+              newSha: request.newSha,
+            });
           }
+          trackDesktopAction({
+            eventName:
+              request.gitRefType === "branch" ? "branch_moved" : "tag_moved",
+            properties: { had_warning: request.warningMessage !== null },
+          });
         } catch (error) {
           return error instanceof Error
             ? error.message
@@ -6156,7 +6035,6 @@ const CommitHistory = ({
     branchPointerMove === null
       ? null
       : readBranchPointerOperationText({
-          operation: branchPointerMove.operation,
           gitRefType: branchPointerMove.gitRefType,
           refName: branchPointerMove.refName,
         });
@@ -6464,11 +6342,11 @@ const CommitHistory = ({
                 gitChangesOfCwd={gitChangesOfCwd}
                 pathLauncher={pathLauncher}
                 isTerminalBusyOfCwd={isTerminalBusyOfCwd}
+                duplicateCheckedOutBranchOfBranch={
+                  duplicateCheckedOutBranchOfBranch
+                }
                 isBranchPointerDropTarget={
                   branchPointerDropTargetRowId === row.id
-                }
-                shouldOwnMainWorktreeHead={
-                  mainWorktreeHeadOwnerRowId === row.id
                 }
                 isBranchMergeableOfBranch={isBranchMergeableOfBranch}
                 isCommitMergeableOfSha={isCommitMergeableOfSha}
