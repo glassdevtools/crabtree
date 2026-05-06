@@ -1323,6 +1323,14 @@ textarea,
   padding: 0 6px;
 }
 
+.commit-history-row-multiline .commit-branch-tags-cell,
+.commit-history-row-multiline .commit-description-cell,
+.commit-history-row-multiline .commit-hash-cell,
+.commit-history-row-multiline .commit-author-cell,
+.commit-history-row-multiline .commit-date-cell {
+  align-items: flex-start;
+}
+
 .commit-branch-tags-cell,
 .commit-actors-cell,
 .commit-description-cell {
