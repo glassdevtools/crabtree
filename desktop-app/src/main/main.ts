@@ -3,7 +3,8 @@ import electronUpdater from "electron-updater";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type {
-  CodexThreadStatusChange,
+  ChatThreadOpenRequest,
+  ChatThreadStatusChange,
   DashboardData,
   DashboardReadRequest,
   GitBranchSyncChange,
@@ -27,7 +28,10 @@ import type { AppServerClient } from "./appServerClient";
 import { readOrCreateAnalyticsInstallId } from "./analyticsStore";
 import { createAppUpdateController } from "./appUpdates";
 import { createAppServerClient } from "./appServerClient";
-import { readChatProviderDetections } from "./chatProviderDetection";
+import {
+  readChatProviderDashboardData,
+  readChatProviderDetections,
+} from "./chatProviders";
 import {
   readCodexThreadFromAppServerReadResponse,
   readCodexThreadLoadedListFromAppServerResult,
@@ -73,12 +77,12 @@ const MAIN_WINDOW_WIDTH = 1320;
 const MAIN_WINDOW_HEIGHT = 860;
 const MAIN_WINDOW_MIN_WIDTH = 980;
 const MAIN_WINDOW_MIN_HEIGHT = 640;
-// The Codex app-server process stays warm so refreshes and status notifications do not pay the startup cost each time.
+// The Codex app-server process stays warm after Codex is detected so refreshes and status notifications share one client.
 let appServerClient: AppServerClient | null = null;
 let appServerClientPromise: Promise<AppServerClient> | null = null;
 let appServerClientVersion = 0;
 const codexThreadStatusOfId: {
-  [threadId: string]: CodexThreadStatusChange["status"];
+  [threadId: string]: ChatThreadStatusChange["status"];
 } = {};
 // TODO: AI-PICKED-VALUE: This is large enough for normal loaded Codex thread counts without making one app-server request too large.
 const APP_SERVER_LOADED_THREAD_PAGE_SIZE = 200;
@@ -180,6 +184,16 @@ const isObject = (value: unknown): value is { [key: string]: unknown } => {
   return typeof value === "object" && value !== null;
 };
 
+const readChatProviderId = (value: unknown) => {
+  switch (value) {
+    case "codex":
+    case "openCode":
+      return value;
+  }
+
+  throw new Error("providerId must be a known chat provider.");
+};
+
 const readDashboardReadRequest = (value: unknown): DashboardReadRequest => {
   if (
     !isObject(value) ||
@@ -192,15 +206,34 @@ const readDashboardReadRequest = (value: unknown): DashboardReadRequest => {
   return { repoRoot: value.repoRoot };
 };
 
+const readChatThreadOpenRequest = (value: unknown): ChatThreadOpenRequest => {
+  if (
+    !isObject(value) ||
+    typeof value.threadId !== "string" ||
+    value.threadId.length === 0 ||
+    typeof value.cwd !== "string"
+  ) {
+    throw new Error(
+      "chatThreadOpenRequest needs a provider, thread id, and cwd.",
+    );
+  }
+
+  return {
+    providerId: readChatProviderId(value.providerId),
+    threadId: value.threadId,
+    cwd: value.cwd,
+  };
+};
+
 const sendCodexThreadStatusChange = (
-  codexThreadStatusChange: CodexThreadStatusChange,
+  codexThreadStatusChange: ChatThreadStatusChange,
 ) => {
   codexThreadStatusOfId[codexThreadStatusChange.threadId] =
     codexThreadStatusChange.status;
 
   for (const browserWindow of BrowserWindow.getAllWindows()) {
     browserWindow.webContents.send(
-      "codex:threadStatusChanged",
+      "chatThreads:statusChanged",
       codexThreadStatusChange,
     );
   }
@@ -212,7 +245,7 @@ const applyCodexThreadStatuses = (dashboardData: DashboardData) => {
     threads: dashboardData.threads.map((thread) => {
       const status = codexThreadStatusOfId[thread.id];
 
-      if (status === undefined) {
+      if (thread.providerId !== "codex" || status === undefined) {
         return thread;
       }
 
@@ -355,8 +388,11 @@ const startAppServerStatusClient = () => {
 
 const dashboardRefreshCoordinator = createDashboardRefreshCoordinator({
   readFullDashboardData: async ({ repoRoot }) => {
+    const chatProviderDashboardData = await readChatProviderDashboardData({
+      readAppServerClient,
+    });
     const readResult = await readDashboardData({
-      appServerClient: await readAppServerClient(),
+      chatProviderDashboardData,
       focusedRepoRoot: repoRoot,
     });
 
@@ -552,13 +588,11 @@ const readGitMoveBranchRequest = (value: unknown) => {
     value.oldSha.length === 0 ||
     typeof value.newSha !== "string" ||
     value.newSha.length === 0 ||
-    (value.sourcePath !== null && typeof value.sourcePath !== "string") ||
-    (typeof value.sourcePath === "string" && value.sourcePath.length === 0) ||
     (value.targetPath !== null && typeof value.targetPath !== "string") ||
     (typeof value.targetPath === "string" && value.targetPath.length === 0)
   ) {
     throw new Error(
-      "gitMoveBranchRequest needs a repo root, branch, old sha, new sha, source path, and target path.",
+      "gitMoveBranchRequest needs a repo root, branch, old sha, new sha, and target path.",
     );
   }
 
@@ -567,7 +601,6 @@ const readGitMoveBranchRequest = (value: unknown) => {
     branch: value.branch,
     oldSha: value.oldSha,
     newSha: value.newSha,
-    sourcePath: value.sourcePath,
     targetPath: value.targetPath,
   };
 
@@ -901,18 +934,28 @@ ipcMain.handle("appUpdate:quitAndInstall", () => {
   appUpdateController.quitAndInstall();
 });
 
-ipcMain.handle("codex:openThread", async (_event, threadId: unknown) => {
-  if (typeof threadId !== "string" || threadId.length === 0) {
-    throw new Error("threadId must be a non-empty string.");
+ipcMain.handle("chatThreads:open", async (_event, value: unknown) => {
+  const chatThreadOpenRequest = readChatThreadOpenRequest(value);
+
+  switch (chatThreadOpenRequest.providerId) {
+    case "codex":
+      await shell.openExternal(
+        `codex://threads/${chatThreadOpenRequest.threadId}`,
+      );
+      startAppServerStatusClient();
+      return;
+    case "openCode": {
+      if (chatThreadOpenRequest.cwd.length === 0) {
+        throw new Error("OpenCode chat does not have a folder.");
+      }
+
+      const openCodeUrl = new URL("opencode://open-project");
+
+      openCodeUrl.searchParams.set("directory", chatThreadOpenRequest.cwd);
+      await shell.openExternal(openCodeUrl.toString());
+      return;
+    }
   }
-
-  await shell.openExternal(`codex://threads/${threadId}`);
-  startAppServerStatusClient();
-});
-
-ipcMain.handle("codex:openNewThread", async () => {
-  await shell.openExternal("codex://new");
-  startAppServerStatusClient();
 });
 
 ipcMain.handle("external:openUrl", async (_event, value: unknown) => {
@@ -1167,7 +1210,6 @@ ipcMain.handle("git:createPullRequest", async (_event, value: unknown) => {
 app.whenReady().then(() => {
   createMainWindow();
   appUpdateController.start();
-  startAppServerStatusClient();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {

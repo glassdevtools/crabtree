@@ -24,8 +24,6 @@ import type {
 
 const FIELD_SEPARATOR = "\u001f";
 const ZERO_SHA = "0000000000000000000000000000000000000000";
-const BRANCH_MOVE_CHECKED_OUT_BY_WORKTREE_MESSAGE =
-  "This branch is checked out in another worktree. Move it from that worktree or drop it onto that worktree first.";
 // TODO: AI-PICKED-VALUE: This prevents Git mutations and remote reads from waiting forever on a blocked process.
 const GIT_COMMAND_TIMEOUT_MS = 20_000;
 // TODO: AI-PICKED-VALUE: This lets large untracked-file diffs render without letting one IPC read consume unbounded memory.
@@ -1422,7 +1420,6 @@ export const moveGitBranch = async ({
   branch,
   oldSha,
   newSha,
-  sourcePath,
   targetPath,
 }: GitMoveBranchRequest) => {
   await runGitCommandForPath({
@@ -1451,22 +1448,14 @@ export const moveGitBranch = async ({
     repoRoot,
     branch,
   });
-  const shouldDetachSource =
-    sourcePath !== null &&
-    sourcePath !== targetPath &&
-    checkedOutWorktreePath === sourcePath;
+  const worktreePathToDetach =
+    checkedOutWorktreePath !== null && checkedOutWorktreePath !== targetPath
+      ? checkedOutWorktreePath
+      : null;
 
-  if (
-    checkedOutWorktreePath !== null &&
-    checkedOutWorktreePath !== sourcePath &&
-    checkedOutWorktreePath !== targetPath
-  ) {
-    throw new Error(BRANCH_MOVE_CHECKED_OUT_BY_WORKTREE_MESSAGE);
-  }
-
-  if (shouldDetachSource) {
+  if (worktreePathToDetach !== null) {
     await detachWorktreeHeadAtSha({
-      path: sourcePath,
+      path: worktreePathToDetach,
       expectedHeadSha: expectedOldSha,
       branch,
     });
@@ -1576,7 +1565,11 @@ export const switchGitBranch = async ({
     checkedOutWorktreePath !== null &&
     checkedOutWorktreePath !== worktreePath
   ) {
-    throw new Error("Branch is checked out in another worktree.");
+    await detachWorktreeHeadAtSha({
+      path: checkedOutWorktreePath,
+      expectedHeadSha: branchHead,
+      branch,
+    });
   }
 
   if (branchHead !== targetSha) {

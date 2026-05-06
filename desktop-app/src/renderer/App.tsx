@@ -51,8 +51,8 @@ import type {
   AppUpdateStatus,
   ChatProviderDetection,
   ChatProviderId,
-  CodexThread,
-  CodexThreadStatusChange,
+  ChatThread,
+  ChatThreadStatusChange,
   DashboardData,
   GitBranchSyncChange,
   GitChangeCounts,
@@ -175,7 +175,7 @@ const COMMIT_GRAPH_SEGMENT_STROKE_WIDTH = 2.25;
 const COMMIT_GRAPH_CWD_CHANGE_COLOR = "#8b929c";
 const COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO = 0;
 const COMMIT_HISTORY_HEADER_HEIGHT = 22;
-// Dashboard reads touch Codex and Git, so automatic refreshes run only when the previous read has finished.
+// Dashboard reads touch chat providers and Git, so automatic refreshes run only when the previous read has finished.
 // TODO: AI-PICKED-VALUE: Refreshing one second after each automatic read keeps branch/worktree state current without queuing Git reads.
 const DASHBOARD_REFRESH_INTERVAL_MS = 1000;
 const TOAST_POSITION = "bottom-center";
@@ -483,12 +483,15 @@ const readAppUpdateButtonText = (appUpdateStatus: AppUpdateStatus) => {
 
 const readChatProviderLabel = (providerId: ChatProviderId) => {
   switch (providerId) {
+    case "codex":
+      return "Codex";
     case "openCode":
       return "OpenCode";
   }
 };
 
 const DEFAULT_CHAT_PROVIDER_DETECTIONS: ChatProviderDetection[] = [
+  { providerId: "codex", isDetected: false },
   { providerId: "openCode", isDetected: false },
 ];
 
@@ -755,7 +758,7 @@ const readRepoFolderName = (repo: RepoGraph) => {
 // TODO: AI-PICKED-VALUE: These column widths match the current table layout closely enough while making drag resizing concrete.
 const COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS = {
   graph: COMMIT_GRAPH_MIN_WIDTH,
-  actors: 128,
+  actors: 160,
   branchTags: 240,
   description: 294,
   commit: 84,
@@ -825,7 +828,6 @@ type BranchPointerMove = {
   newSha: string;
   newShortSha: string;
   newSubject: string;
-  sourcePath: string | null;
   targetPath: string | null;
   warningMessage: string | null;
 };
@@ -1003,7 +1005,7 @@ const formatCommitDate = (date: string) => {
   }).format(new Date(date));
 };
 
-const threadTitle = (thread: CodexThread) => {
+const threadTitle = (thread: ChatThread) => {
   if (thread.name !== null && thread.name.length > 0) {
     return thread.name;
   }
@@ -1015,31 +1017,27 @@ const threadTitle = (thread: CodexThread) => {
   return thread.id;
 };
 
-const readIsOpenCodeThread = (thread: CodexThread) => {
-  return thread.source === "openCode";
+const readIsCodexThread = (thread: ChatThread) => {
+  return thread.providerId === "codex";
 };
 
-const ChatProviderIcon = ({
-  isOpenCodeThread,
-}: {
-  isOpenCodeThread: boolean;
-}) => {
+const ChatProviderIcon = ({ providerId }: { providerId: ChatProviderId }) => {
   return (
     <img
       alt=""
       aria-hidden="true"
       className={cn(
         "commit-thread-provider-icon",
-        isOpenCodeThread
+        providerId === "openCode"
           ? "commit-thread-provider-icon-opencode"
           : "commit-thread-provider-icon-codex",
       )}
-      src={isOpenCodeThread ? openCodeChatIconUrl : codexChatIconUrl}
+      src={providerId === "openCode" ? openCodeChatIconUrl : codexChatIconUrl}
     />
   );
 };
 
-const readIsThreadActive = (thread: CodexThread) => {
+const readIsThreadActive = (thread: ChatThread) => {
   return thread.status.type === "active";
 };
 
@@ -1238,7 +1236,7 @@ const createCommitGraph = ({
   gitChangesOfCwd,
 }: {
   commits: GitCommit[];
-  threadOfId: { [id: string]: CodexThread };
+  threadOfId: { [id: string]: ChatThread };
   mainWorktreePath: string;
   worktrees: GitWorktree[];
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
@@ -1365,7 +1363,7 @@ const createCommitGraph = ({
     const commitThreadIds = displayedThreadIdsOfSha[commit.sha] ?? [];
     const threads = commitThreadIds
       .map((threadId) => threadOfId[threadId])
-      .filter((thread): thread is CodexThread => thread !== undefined);
+      .filter((thread): thread is ChatThread => thread !== undefined);
     const threadGroups = readDisplayedThreadGroups({
       threads,
       changedWorkingTreeCwds: changedWorkingTreeCwdsOfSha[commit.sha] ?? [],
@@ -1646,8 +1644,8 @@ const createCommitGraph = ({
   return graph;
 };
 
-const createThreadOfId = (threads: CodexThread[]) => {
-  const threadOfId: { [id: string]: CodexThread } = {};
+const createThreadOfId = (threads: ChatThread[]) => {
+  const threadOfId: { [id: string]: ChatThread } = {};
 
   for (const thread of threads) {
     threadOfId[thread.id] = thread;
@@ -1709,7 +1707,7 @@ const readCommitBranchTarget = ({
   commitSha,
 }: {
   cwd: string;
-  groupThreads: CodexThread[];
+  groupThreads: ChatThread[];
   repoRoot: string;
   currentBranch: string | null;
   localBranches: string[];
@@ -2022,29 +2020,16 @@ const ChatRobotTags = ({
     return null;
   }
 
-  const openThread = async (thread: CodexThread) => {
+  const openThread = async (thread: ChatThread) => {
     try {
-      if (readIsOpenCodeThread(thread)) {
-        if (thread.cwd.length === 0) {
-          showErrorMessage("OpenCode chat does not have a folder.");
-          return;
-        }
-
-        const openCodeUrl = new URL("opencode://open-project");
-
-        openCodeUrl.searchParams.set("directory", thread.cwd);
-        await window.crabtree.openExternalUrl(openCodeUrl.toString());
-        trackDesktopAction({
-          eventName: "chat_opened",
-          properties: { provider: "openCode" },
-        });
-        return;
-      }
-
-      await window.crabtree.openCodexThread(thread.id);
+      await window.crabtree.openChatThread({
+        providerId: thread.providerId,
+        threadId: thread.id,
+        cwd: thread.cwd,
+      });
       trackDesktopAction({
         eventName: "chat_opened",
-        properties: { provider: "codex" },
+        properties: { provider: thread.providerId },
       });
     } catch (error) {
       const message =
@@ -2129,8 +2114,9 @@ const ChatRobotTags = ({
             {threadGroup.threads.map((thread) => {
               const title = threadTitle(thread);
               const isThreadActive = readIsThreadActive(thread);
-              const isOpenCodeThread = readIsOpenCodeThread(thread);
-              const chatProviderLabel = isOpenCodeThread ? "OpenCode" : "Codex";
+              const chatProviderLabel = readChatProviderLabel(
+                thread.providerId,
+              );
               const tooltipLabel = `Open in ${chatProviderLabel}: ${title}`;
               const tooltipTitle = (
                 <>
@@ -2162,7 +2148,7 @@ const ChatRobotTags = ({
                       void openThread(thread);
                     }}
                   >
-                    <ChatProviderIcon isOpenCodeThread={isOpenCodeThread} />
+                    <ChatProviderIcon providerId={thread.providerId} />
                   </Button>
                 </TitleTooltip>
               );
@@ -2325,7 +2311,7 @@ const CommitHistoryRow = ({
   worktrees: GitWorktree[];
   currentBranch: string | null;
   isHeadClean: boolean;
-  threadOfId: { [id: string]: CodexThread };
+  threadOfId: { [id: string]: ChatThread };
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   isBranchNameUsedOfBranch: { [branch: string]: boolean };
   isCommitMessageUsedOfMessage: { [message: string]: boolean };
@@ -2403,7 +2389,7 @@ const CommitHistoryRow = ({
   const { commit } = row;
   const threads = row.threadIds
     .map((rowThreadId) => threadOfId[rowThreadId])
-    .filter((rowThread): rowThread is CodexThread => rowThread !== undefined);
+    .filter((rowThread): rowThread is ChatThread => rowThread !== undefined);
   const threadGroups =
     row.threadGroup === null
       ? readDisplayedThreadGroups({
@@ -4202,7 +4188,7 @@ const CommitHistory = ({
   commits: GitCommit[];
   branchSyncChanges: GitBranchSyncChange[];
   worktrees: GitWorktree[];
-  threadOfId: { [id: string]: CodexThread };
+  threadOfId: { [id: string]: ChatThread };
   repoRoot: string;
   mainWorktreePath: string;
   currentBranch: string | null;
@@ -5223,7 +5209,6 @@ const CommitHistory = ({
       newSha: branchPointerTarget.sha,
       newShortSha: branchPointerTarget.shortSha,
       newSubject: branchPointerTarget.subject,
-      sourcePath: activeBranchPointerDrag.sourcePath,
       targetPath: branchPointerTargetPath,
       warningMessage,
     });
@@ -5553,7 +5538,6 @@ const CommitHistory = ({
                 branch: commitChangesTarget.branchTarget.branch,
                 oldSha: commitChangesTarget.branchTarget.oldSha,
                 newSha,
-                sourcePath: null,
                 targetPath: null,
               });
             } catch {
@@ -5871,7 +5855,6 @@ const CommitHistory = ({
               branch: request.refName,
               oldSha: request.oldSha,
               newSha: request.newSha,
-              sourcePath: request.sourcePath,
               targetPath: request.targetPath,
             });
           } else {
@@ -6549,7 +6532,7 @@ const RepoSection = ({
   showErrorMessage,
 }: {
   repo: RepoGraph;
-  threadOfId: { [id: string]: CodexThread };
+  threadOfId: { [id: string]: ChatThread };
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   repoHeaderControls: ReactElement;
   pathLauncher: PathLauncher;
@@ -6649,7 +6632,7 @@ const CrabtreeDesktopApp = () => {
     [warning: string]: boolean;
   }>({});
   const codexThreadStatusOfIdRef = useRef<{
-    [threadId: string]: CodexThreadStatusChange["status"];
+    [threadId: string]: ChatThreadStatusChange["status"];
   }>({});
   useEffect(() => {
     trackDesktopAppOpened();
@@ -6699,7 +6682,7 @@ const CrabtreeDesktopApp = () => {
     }
 
     for (const thread of nextDashboardData.threads) {
-      if (thread.status.type !== "notLoaded") {
+      if (readIsCodexThread(thread) && thread.status.type !== "notLoaded") {
         codexThreadStatusOfIdRef.current[thread.id] = thread.status;
       }
     }
@@ -6713,6 +6696,7 @@ const CrabtreeDesktopApp = () => {
               codexThreadStatusOfIdRef.current[thread.id];
 
             if (
+              !readIsCodexThread(thread) ||
               notificationStatus === undefined ||
               thread.status.type !== "notLoaded"
             ) {
@@ -6724,7 +6708,7 @@ const CrabtreeDesktopApp = () => {
         };
       }
 
-      const threadOfId: { [threadId: string]: CodexThread } = {};
+      const threadOfId: { [threadId: string]: ChatThread } = {};
 
       for (const thread of currentDashboardData.threads) {
         threadOfId[thread.id] = thread;
@@ -6737,7 +6721,7 @@ const CrabtreeDesktopApp = () => {
           const notificationStatus =
             codexThreadStatusOfIdRef.current[thread.id];
           const status =
-            thread.status.type !== "notLoaded"
+            !readIsCodexThread(thread) || thread.status.type !== "notLoaded"
               ? thread.status
               : (notificationStatus ??
                 (currentThread !== undefined
@@ -6749,7 +6733,7 @@ const CrabtreeDesktopApp = () => {
       };
     });
 
-    // Git read errors can come from old Codex threads, deleted folders, or blocked folders, so they should not block readable repos.
+    // Git read errors can come from old chat threads, deleted folders, or blocked folders, so they should not block readable repos.
     setDashboardErrorMessage(null);
   }, []);
   const selectRepoRoot = useCallback((repoRoot: string | null) => {
@@ -6987,38 +6971,40 @@ const CrabtreeDesktopApp = () => {
     };
   }, []);
   useEffect(() => {
-    const stopWatchingCodexThreadStatus =
-      window.crabtree.watchCodexThreadStatus(
-        (codexThreadStatusChange: CodexThreadStatusChange) => {
-          codexThreadStatusOfIdRef.current[codexThreadStatusChange.threadId] =
-            codexThreadStatusChange.status;
+    const stopWatchingChatThreadStatus = window.crabtree.watchChatThreadStatus(
+      (codexThreadStatusChange: ChatThreadStatusChange) => {
+        codexThreadStatusOfIdRef.current[codexThreadStatusChange.threadId] =
+          codexThreadStatusChange.status;
 
-          setDashboardData((currentDashboardData) => {
-            if (currentDashboardData === null) {
-              return currentDashboardData;
+        setDashboardData((currentDashboardData) => {
+          if (currentDashboardData === null) {
+            return currentDashboardData;
+          }
+
+          let didUpdateThread = false;
+          const threads = currentDashboardData.threads.map((thread) => {
+            if (
+              !readIsCodexThread(thread) ||
+              thread.id !== codexThreadStatusChange.threadId
+            ) {
+              return thread;
             }
 
-            let didUpdateThread = false;
-            const threads = currentDashboardData.threads.map((thread) => {
-              if (thread.id !== codexThreadStatusChange.threadId) {
-                return thread;
-              }
-
-              didUpdateThread = true;
-              return { ...thread, status: codexThreadStatusChange.status };
-            });
-
-            if (!didUpdateThread) {
-              return currentDashboardData;
-            }
-
-            return { ...currentDashboardData, threads };
+            didUpdateThread = true;
+            return { ...thread, status: codexThreadStatusChange.status };
           });
-        },
-      );
+
+          if (!didUpdateThread) {
+            return currentDashboardData;
+          }
+
+          return { ...currentDashboardData, threads };
+        });
+      },
+    );
 
     return () => {
-      stopWatchingCodexThreadStatus();
+      stopWatchingChatThreadStatus();
     };
   }, []);
   const showSuccessMessage = useCallback((message: string) => {
@@ -7428,7 +7414,7 @@ const CrabtreeDesktopApp = () => {
     dashboardData.gitErrors.length > 0 && dashboardData.threads.length > 0
       ? "Crabtree found chats, but Git could not read their folders. " +
         "They may be deleted, moved, not valid Git worktrees, or blocked by macOS permissions."
-      : "No Git repositories found from Codex or OpenCode.";
+      : "No Git repositories found from detected chat sources.";
   const repoHeaderControls = (
     <>
       {dashboardData.repos.length === 0 ? null : (

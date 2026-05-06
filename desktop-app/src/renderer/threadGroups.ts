@@ -1,5 +1,5 @@
 import type {
-  CodexThread,
+  ChatThread,
   GitChangeSummary,
   GitWorktree,
 } from "../shared/types";
@@ -7,7 +7,7 @@ import type {
 export type ThreadGroup = {
   key: string;
   cwd: string;
-  threads: CodexThread[];
+  threads: ChatThread[];
 };
 
 export type GitChangeCleanState = "clean" | "dirty" | "unknown";
@@ -169,7 +169,7 @@ export const readDisplayedThreadGroups = ({
   worktrees,
   gitChangesOfCwd,
 }: {
-  threads: CodexThread[];
+  threads: ChatThread[];
   changedWorkingTreeCwds: string[];
   worktrees: GitWorktree[];
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
@@ -185,7 +185,7 @@ export const readDisplayedThreadGroups = ({
   }: {
     key: string;
     cwd: string;
-    thread: CodexThread | null;
+    thread: ChatThread | null;
   }) => {
     const groupIndex = groupIndexOfKey[key];
 
@@ -216,7 +216,7 @@ export const readDisplayedThreadGroups = ({
     }
   }
 
-  const readChangedWorkingTreeCwdForThread = (thread: CodexThread) => {
+  const readChangedWorkingTreeCwdForThread = (thread: ChatThread) => {
     let changedWorkingTreeCwd: string | null = null;
 
     for (const cwd of changedWorkingTreeCwdsWithChanges) {

@@ -1,9 +1,9 @@
 import { openSync, readSync, statSync, closeSync, readFileSync } from "node:fs";
 import type {
-  CodexGitInfo,
-  CodexThread,
-  CodexThreadStatusChange,
-  CodexThreadStatus,
+  ChatThreadGitInfo,
+  ChatThread,
+  ChatThreadStatusChange,
+  ChatThreadStatus,
 } from "../shared/types";
 import type { AppServerClient } from "./appServerClient";
 
@@ -12,13 +12,13 @@ const MAX_THREAD_COUNT = 1000;
 // TODO: AI-PICKED-VALUE: Page size 200 matches a large sidebar batch without making one app-server response too large.
 const THREAD_PAGE_SIZE = 200;
 
-// Codex app-server is the only thread source because it owns current titles, cwd values, and running statuses.
+// Codex app-server owns current Codex titles, cwd values, and running statuses.
 // Rollout task markers fill the gap where another Codex process owns the running turn and app-server reports the thread as not loaded.
 
 // The rollout reader scans each file once, then only reads appended bytes while the dashboard polls.
 type RolloutTaskStatusCache = {
   readSize: number;
-  status: CodexThreadStatus | null;
+  status: ChatThreadStatus | null;
 };
 
 const rolloutTaskStatusCacheOfPath: { [path: string]: RolloutTaskStatusCache } =
@@ -101,7 +101,7 @@ const readCompleteRolloutText = ({
 
 const readCodexThreadStatusFromRolloutLine = (
   line: string,
-): CodexThreadStatus | null => {
+): ChatThreadStatus | null => {
   let value: unknown;
 
   try {
@@ -135,7 +135,7 @@ const readLatestCodexThreadStatusFromRolloutText = ({
   currentStatus,
 }: {
   text: string;
-  currentStatus: CodexThreadStatus | null;
+  currentStatus: ChatThreadStatus | null;
 }) => {
   let status = currentStatus;
 
@@ -192,8 +192,8 @@ const mergeCodexThreadStatusWithRolloutStatus = ({
   appServerStatus,
   rolloutStatus,
 }: {
-  appServerStatus: CodexThreadStatus;
-  rolloutStatus: CodexThreadStatus | null;
+  appServerStatus: ChatThreadStatus;
+  rolloutStatus: ChatThreadStatus | null;
 }) => {
   if (appServerStatus.type === "active") {
     return appServerStatus;
@@ -236,7 +236,7 @@ const readUnixTime = ({
   return fallback;
 };
 
-const convertGitInfo = (value: unknown): CodexGitInfo | null => {
+const convertGitInfo = (value: unknown): ChatThreadGitInfo | null => {
   if (!isObject(value)) {
     return null;
   }
@@ -250,7 +250,7 @@ const convertGitInfo = (value: unknown): CodexGitInfo | null => {
   };
 };
 
-export const convertCodexThreadStatus = (value: unknown): CodexThreadStatus => {
+export const convertCodexThreadStatus = (value: unknown): ChatThreadStatus => {
   if (typeof value === "string") {
     switch (value) {
       case "active":
@@ -350,7 +350,7 @@ export const readCodexThreadStatusChangeFromAppServerNotification = (
     return null;
   }
 
-  const codexThreadStatusChange: CodexThreadStatusChange = {
+  const codexThreadStatusChange: ChatThreadStatusChange = {
     threadId,
     status: convertCodexThreadStatus(statusValue),
   };
@@ -371,7 +371,7 @@ export const readCodexThreadStatusChangeFromAppServerTurnStartedNotification = (
     return null;
   }
 
-  const codexThreadStatusChange: CodexThreadStatusChange = {
+  const codexThreadStatusChange: ChatThreadStatusChange = {
     threadId,
     status: { type: "active", activeFlags: [] },
   };
@@ -391,7 +391,7 @@ export const readCodexThreadStatusChangeFromAppServerTurnCompletedNotification =
       return null;
     }
 
-    const codexThreadStatusChange: CodexThreadStatusChange = {
+    const codexThreadStatusChange: ChatThreadStatusChange = {
       threadId,
       status: { type: "idle" },
     };
@@ -406,8 +406,9 @@ export const readCodexThreadFromAppServerValue = (value: unknown) => {
 
   const path = readNullableString(value.path);
   const appServerStatus = convertCodexThreadStatus(value.status);
-  const thread: CodexThread = {
+  const thread: ChatThread = {
     id: value.id,
+    providerId: "codex",
     name: readNullableString(value.name),
     preview: readString({ value: value.preview, fallback: "" }),
     cwd: readString({ value: value.cwd, fallback: "" }),
@@ -466,7 +467,7 @@ export const readCodexThreadLoadedListFromAppServerResult = (
 };
 
 const readCodexThreadsFromAppServerData = (value: unknown) => {
-  const threads: CodexThread[] = [];
+  const threads: ChatThread[] = [];
 
   if (!Array.isArray(value)) {
     return threads;
@@ -492,7 +493,7 @@ const readCodexThreadsFromAppServerResult = (value: unknown) => {
 };
 
 export const readCodexThreads = async (appServerClient: AppServerClient) => {
-  const threads: CodexThread[] = [];
+  const threads: ChatThread[] = [];
   let cursor: string | null = null;
 
   while (threads.length < MAX_THREAD_COUNT) {

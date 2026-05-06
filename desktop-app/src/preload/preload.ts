@@ -2,7 +2,8 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { IpcRendererEvent } from "electron";
 import type {
   AppUpdateStatus,
-  CodexThreadStatusChange,
+  ChatThreadOpenRequest,
+  ChatThreadStatusChange,
   DashboardData,
   DashboardReadRequest,
   GitBranchSyncChange,
@@ -76,18 +77,18 @@ const api: CrabtreeApi = {
       ipcRenderer.removeListener("appUpdate:statusChanged", listener);
     };
   },
-  watchCodexThreadStatus: (onStatusChange) => {
+  watchChatThreadStatus: (onStatusChange) => {
     const listener = (
       _event: IpcRendererEvent,
-      codexThreadStatusChange: CodexThreadStatusChange,
+      chatThreadStatusChange: ChatThreadStatusChange,
     ) => {
-      onStatusChange(codexThreadStatusChange);
+      onStatusChange(chatThreadStatusChange);
     };
 
-    ipcRenderer.on("codex:threadStatusChanged", listener);
+    ipcRenderer.on("chatThreads:statusChanged", listener);
 
     return () => {
-      ipcRenderer.removeListener("codex:threadStatusChanged", listener);
+      ipcRenderer.removeListener("chatThreads:statusChanged", listener);
     };
   },
   checkForAppUpdate: async () => {
@@ -96,11 +97,8 @@ const api: CrabtreeApi = {
   quitAndInstallAppUpdate: async () => {
     await ipcRenderer.invoke("appUpdate:quitAndInstall");
   },
-  openCodexThread: async (threadId: string) => {
-    await ipcRenderer.invoke("codex:openThread", threadId);
-  },
-  openNewCodexThread: async () => {
-    await ipcRenderer.invoke("codex:openNewThread");
+  openChatThread: async (chatThreadOpenRequest: ChatThreadOpenRequest) => {
+    await ipcRenderer.invoke("chatThreads:open", chatThreadOpenRequest);
   },
   openExternalUrl: async (url: string) => {
     await ipcRenderer.invoke("external:openUrl", url);

@@ -6,11 +6,11 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import {
   readOpenCodeDatabasePath,
+  readCodexDashboardData,
   readOpenCodeDashboardDataForHome,
-  readOpenCodeRepoFoldersForHome,
   readChatProviderDetectionsForHome,
   readOpenCodeProjectDataPath,
-} from "../src/main/chatProviderDetection";
+} from "../src/main/chatProviders";
 
 const readPathExists = (path: string) => {
   try {
@@ -31,6 +31,8 @@ const readIsDirectory = (path: string) => {
 };
 
 const pathInfoReader = { readPathExists, readIsDirectory };
+const readIsCodexNotDetected = async () => false;
+const readIsCodexDetected = async () => true;
 
 const withHomePath = async (runTest: (homePath: string) => Promise<void>) => {
   const homePath = await mkdtemp(join(tmpdir(), "crabtree-chat-providers-"));
@@ -49,12 +51,69 @@ test("detects OpenCode when its project data directory exists", async () => {
     });
 
     assert.deepEqual(
-      readChatProviderDetectionsForHome({
+      await readChatProviderDetectionsForHome({
         homePath,
         pathInfoReader,
+        readIsCodexDetected: readIsCodexNotDetected,
       }),
-      [{ providerId: "openCode", isDetected: true }],
+      [
+        { providerId: "codex", isDetected: false },
+        { providerId: "openCode", isDetected: true },
+      ],
     );
+  });
+});
+
+test("detects Codex when its command is available", async () => {
+  await withHomePath(async (homePath) => {
+    assert.deepEqual(
+      await readChatProviderDetectionsForHome({
+        homePath,
+        pathInfoReader,
+        readIsCodexDetected,
+      }),
+      [
+        { providerId: "codex", isDetected: true },
+        { providerId: "openCode", isDetected: false },
+      ],
+    );
+  });
+});
+
+test("does not start Codex app-server when Codex is missing", async () => {
+  let didReadAppServerClient = false;
+  const codexDashboardData = await readCodexDashboardData({
+    readIsCodexDetected: readIsCodexNotDetected,
+    readAppServerClient: async () => {
+      didReadAppServerClient = true;
+      throw new Error("Codex should not start.");
+    },
+  });
+
+  assert.equal(didReadAppServerClient, false);
+  assert.deepEqual(codexDashboardData, {
+    providerId: "codex",
+    isDetected: false,
+    repoFolders: [],
+    threads: [],
+    warnings: [],
+  });
+});
+
+test("keeps dashboard reads alive when Codex app-server fails", async () => {
+  const codexDashboardData = await readCodexDashboardData({
+    readIsCodexDetected,
+    readAppServerClient: async () => {
+      throw new Error("app-server failed");
+    },
+  });
+
+  assert.deepEqual(codexDashboardData, {
+    providerId: "codex",
+    isDetected: true,
+    repoFolders: [],
+    threads: [],
+    warnings: ["Codex: Failed to read chat data. app-server failed"],
   });
 });
 
@@ -69,11 +128,15 @@ test("detects OpenCode when its database exists", async () => {
     database.close();
 
     assert.deepEqual(
-      readChatProviderDetectionsForHome({
+      await readChatProviderDetectionsForHome({
         homePath,
         pathInfoReader,
+        readIsCodexDetected: readIsCodexNotDetected,
       }),
-      [{ providerId: "openCode", isDetected: true }],
+      [
+        { providerId: "codex", isDetected: false },
+        { providerId: "openCode", isDetected: true },
+      ],
     );
   });
 });
@@ -81,11 +144,15 @@ test("detects OpenCode when its database exists", async () => {
 test("does not detect OpenCode when its project data directory is missing", async () => {
   await withHomePath(async (homePath) => {
     assert.deepEqual(
-      readChatProviderDetectionsForHome({
+      await readChatProviderDetectionsForHome({
         homePath,
         pathInfoReader,
+        readIsCodexDetected: readIsCodexNotDetected,
       }),
-      [{ providerId: "openCode", isDetected: false }],
+      [
+        { providerId: "codex", isDetected: false },
+        { providerId: "openCode", isDetected: false },
+      ],
     );
   });
 });
@@ -118,13 +185,16 @@ test("reads OpenCode repo folders from its database", async () => {
       database.close();
     }
 
-    assert.deepEqual(
-      await readOpenCodeRepoFoldersForHome({
-        homePath,
-        pathInfoReader,
-      }),
-      { repoFolders: ["/tmp/project-one", "/tmp/project-two"], warnings: [] },
-    );
+    const openCodeDashboardData = await readOpenCodeDashboardDataForHome({
+      homePath,
+      pathInfoReader,
+    });
+
+    assert.deepEqual(openCodeDashboardData.repoFolders, [
+      { providerId: "openCode", path: "/tmp/project-one" },
+      { providerId: "openCode", path: "/tmp/project-two" },
+    ]);
+    assert.deepEqual(openCodeDashboardData.warnings, []);
   });
 });
 
@@ -160,11 +230,16 @@ test("reads OpenCode sessions from its database", async () => {
       pathInfoReader,
     });
 
-    assert.deepEqual(openCodeDashboardData.repoFolders, ["/tmp/project-one"]);
+    assert.equal(openCodeDashboardData.providerId, "openCode");
+    assert.equal(openCodeDashboardData.isDetected, true);
+    assert.deepEqual(openCodeDashboardData.repoFolders, [
+      { providerId: "openCode", path: "/tmp/project-one" },
+    ]);
     assert.equal(openCodeDashboardData.warnings.length, 0);
     assert.deepEqual(openCodeDashboardData.threads, [
       {
         id: "openCode:ses_one",
+        providerId: "openCode",
         name: "Review changes",
         preview: "Review changes",
         cwd: "/tmp/project-one",

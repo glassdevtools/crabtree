@@ -3,14 +3,19 @@ import { join } from "node:path";
 import { simpleGit } from "simple-git";
 import type {
   GitBranchSyncChange,
-  CodexThread,
+  ChatProviderRepoFolder,
+  ChatThread,
   GitChangeSummary,
   GitCommit,
   GitWorktree,
   RepoGraph,
 } from "../shared/types";
+import {
+  readChatProviderProjectFolderDescription,
+  readChatProviderThreadFolderDescription,
+} from "./chatProviders";
 
-// Git is the source of truth for graph structure. Codex only tells us which thread belongs near a branch, commit, or worktree.
+// Git is the source of truth for graph structure. Chat sources only tell us which thread belongs near a branch, commit, or worktree.
 const COMMIT_READ_LIMIT = 2000;
 // TODO: AI-PICKED-VALUE: Fetching origin every 30 seconds keeps remote branch state current without turning one-second dashboard refreshes into network polling.
 const ORIGIN_FETCH_INTERVAL_MS = 30_000;
@@ -292,38 +297,43 @@ const readRepoSeedForCwd = async ({
   }
 };
 
-const readRepoSeedForThread = async ({ thread }: { thread: CodexThread }) => {
+const readRepoSeedForThread = async ({ thread }: { thread: ChatThread }) => {
   return await readRepoSeedForCwd({
     cwd: thread.cwd,
     threadIds: [thread.id],
-    sourceDescription:
-      thread.source === "openCode"
-        ? "OpenCode session folder"
-        : "Codex thread folder",
+    sourceDescription: readChatProviderThreadFolderDescription(
+      thread.providerId,
+    ),
   });
 };
 
-const readRepoSeedForRepoPath = async ({ repoPath }: { repoPath: string }) => {
+const readRepoSeedForRepoFolder = async ({
+  repoFolder,
+}: {
+  repoFolder: ChatProviderRepoFolder;
+}) => {
   return await readRepoSeedForCwd({
-    cwd: repoPath,
+    cwd: repoFolder.path,
     threadIds: [],
-    sourceDescription: "OpenCode project folder",
+    sourceDescription: readChatProviderProjectFolderDescription(
+      repoFolder.providerId,
+    ),
   });
 };
 
 const readRepoSeeds = async ({
   threads,
-  repoPaths,
+  repoFolders,
 }: {
-  threads: CodexThread[];
-  repoPaths: string[];
+  threads: ChatThread[];
+  repoFolders: ChatProviderRepoFolder[];
 }) => {
   const repoSeedOfKey: { [key: string]: RepoSeed } = {};
-  const threadsOfCwd: { [cwd: string]: CodexThread[] } = {};
+  const threadsOfCwd: { [cwd: string]: ChatThread[] } = {};
   const gitErrors: string[] = [];
   const cwds: string[] = [];
-  const queuedRepoPaths: string[] = [];
-  const isRepoPathQueued: { [repoPath: string]: boolean } = {};
+  const queuedRepoFolders: ChatProviderRepoFolder[] = [];
+  const repoFolderOfPath: { [repoPath: string]: ChatProviderRepoFolder } = {};
 
   for (const thread of threads) {
     let threadsForCwd = threadsOfCwd[thread.cwd];
@@ -337,17 +347,17 @@ const readRepoSeeds = async ({
     threadsForCwd.push(thread);
   }
 
-  for (const repoPath of repoPaths) {
+  for (const repoFolder of repoFolders) {
     if (
-      repoPath.length === 0 ||
-      threadsOfCwd[repoPath] !== undefined ||
-      isRepoPathQueued[repoPath] === true
+      repoFolder.path.length === 0 ||
+      threadsOfCwd[repoFolder.path] !== undefined ||
+      repoFolderOfPath[repoFolder.path] !== undefined
     ) {
       continue;
     }
 
-    isRepoPathQueued[repoPath] = true;
-    queuedRepoPaths.push(repoPath);
+    repoFolderOfPath[repoFolder.path] = repoFolder;
+    queuedRepoFolders.push(repoFolder);
   }
 
   const repoSeedReadResults = await readValuesWithGitReadLimit({
@@ -367,11 +377,11 @@ const readRepoSeeds = async ({
     },
   });
   const repoPathSeedReadResults = await readValuesWithGitReadLimit({
-    items: queuedRepoPaths,
-    readItem: async (repoPath) => {
+    items: queuedRepoFolders,
+    readItem: async (repoFolder) => {
       return {
-        repoPath,
-        ...(await readRepoSeedForRepoPath({ repoPath })),
+        repoPath: repoFolder.path,
+        ...(await readRepoSeedForRepoFolder({ repoFolder })),
       };
     },
   });
@@ -437,7 +447,7 @@ const readWorktrees = async ({
   threads,
 }: {
   repoSeed: RepoSeed;
-  threads: CodexThread[];
+  threads: ChatThread[];
 }) => {
   const { stdout } = await runGit({
     cwd: repoSeed.root,
@@ -1004,7 +1014,7 @@ const readGitChangeCwds = ({
   threads,
   repos,
 }: {
-  threads: CodexThread[];
+  threads: ChatThread[];
   repos: RepoGraph[];
 }) => {
   const isCwdRead: { [cwd: string]: boolean } = {};
@@ -1082,7 +1092,7 @@ export const readGitChangesOfCwd = async ({
   threads,
   repos,
 }: {
-  threads: CodexThread[];
+  threads: ChatThread[];
   repos: RepoGraph[];
 }) => {
   return await readGitChangeSummariesOfCwds({
@@ -1096,7 +1106,7 @@ export const readGitChangesOfCwdForRepoRoots = async ({
   previousGitChangesOfCwd,
   repoRoots,
 }: {
-  threads: CodexThread[];
+  threads: ChatThread[];
   repos: RepoGraph[];
   previousGitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   repoRoots: string[];
@@ -1104,7 +1114,7 @@ export const readGitChangesOfCwdForRepoRoots = async ({
   const shouldReadRepoOfRoot: { [repoRoot: string]: boolean } = {};
   const shouldReadThreadOfId: { [threadId: string]: boolean } = {};
   const changedRepos: RepoGraph[] = [];
-  const changedThreads: CodexThread[] = [];
+  const changedThreads: ChatThread[] = [];
 
   for (const repoRoot of repoRoots) {
     shouldReadRepoOfRoot[repoRoot] = true;
@@ -1174,7 +1184,7 @@ const readCommits = async ({
   worktrees,
 }: {
   repoSeed: RepoSeed;
-  threads: CodexThread[];
+  threads: ChatThread[];
   worktrees: GitWorktree[];
 }) => {
   const format = `%H${FIELD_SEPARATOR}%P${FIELD_SEPARATOR}%D${FIELD_SEPARATOR}%an${FIELD_SEPARATOR}%ad${FIELD_SEPARATOR}%s`;
@@ -1404,7 +1414,7 @@ const readRepoGraphForSeed = async ({
   threads,
 }: {
   repoSeed: RepoSeed;
-  threads: CodexThread[];
+  threads: ChatThread[];
 }): Promise<RepoGraphReadResult> => {
   const warnings: string[] = [];
 
@@ -1477,16 +1487,16 @@ const readRepoGraphForSeed = async ({
   }
 };
 
-export const readRepoGraphsWithRepoPaths = async ({
+export const readRepoGraphsWithRepoFolders = async ({
   threads,
-  repoPaths,
+  repoFolders,
   focusedRepoRoot,
 }: {
-  threads: CodexThread[];
-  repoPaths: string[];
+  threads: ChatThread[];
+  repoFolders: ChatProviderRepoFolder[];
   focusedRepoRoot: string | null;
 }) => {
-  const repoSeedReadSummary = await readRepoSeeds({ threads, repoPaths });
+  const repoSeedReadSummary = await readRepoSeeds({ threads, repoFolders });
   const { repoSeeds } = repoSeedReadSummary;
   const repos: RepoGraph[] = [];
   const warnings: string[] = [];
@@ -1552,12 +1562,12 @@ export const readRepoGraphs = async ({
   threads,
   focusedRepoRoot,
 }: {
-  threads: CodexThread[];
+  threads: ChatThread[];
   focusedRepoRoot: string | null;
 }) => {
-  return await readRepoGraphsWithRepoPaths({
+  return await readRepoGraphsWithRepoFolders({
     threads,
-    repoPaths: [],
+    repoFolders: [],
     focusedRepoRoot,
   });
 };
@@ -1567,7 +1577,7 @@ export const readRepoGraphsForRepoRoots = async ({
   repos,
   repoRoots,
 }: {
-  threads: CodexThread[];
+  threads: ChatThread[];
   repos: RepoGraph[];
   repoRoots: string[];
 }) => {

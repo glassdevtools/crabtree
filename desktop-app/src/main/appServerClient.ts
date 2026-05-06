@@ -37,6 +37,8 @@ const CODEX_DARWIN_COMMAND_PATH =
   "/Applications/Codex.app/Contents/Resources/codex";
 // TODO: AI-PICKED-VALUE: The temp cache directory lets dev and packaged builds reuse one copied Codex binary per installed app version.
 const CODEX_DARWIN_COMMAND_CACHE_DIR = join(tmpdir(), "crabtree-codex-cli");
+// TODO: AI-PICKED-VALUE: One second is enough for a PATH lookup without slowing settings or dashboard startup when Codex is absent.
+const CODEX_COMMAND_DETECTION_TIMEOUT_MS = 1000;
 // TODO: AI-PICKED-VALUE: Ten seconds keeps startup bounded while giving Codex app-server enough time to answer normal requests.
 const APP_SERVER_REQUEST_TIMEOUT_MS = 10000;
 
@@ -46,8 +48,57 @@ const isObject = (value: unknown): value is { [key: string]: unknown } => {
   return typeof value === "object" && value !== null;
 };
 
+const readIsBundledCodexCommandDetected = () => {
+  return platform() === "darwin" && existsSync(CODEX_DARWIN_COMMAND_PATH);
+};
+
+const readCodexCommandLookup = () => {
+  switch (platform()) {
+    case "win32":
+      return { command: "where", args: ["codex"] };
+    default:
+      return { command: "which", args: ["codex"] };
+  }
+};
+
+export const readIsCodexCommandDetected = async () => {
+  if (readIsBundledCodexCommandDetected()) {
+    return true;
+  }
+
+  const codexCommandLookup = readCodexCommandLookup();
+
+  return await new Promise<boolean>((resolve) => {
+    let didFinish = false;
+    let commandDetectionTimeout: ReturnType<typeof setTimeout> | null = null;
+    const commandProcess = spawn(
+      codexCommandLookup.command,
+      codexCommandLookup.args,
+      { stdio: "ignore" },
+    );
+    const finish = (isDetected: boolean) => {
+      if (didFinish) {
+        return;
+      }
+
+      didFinish = true;
+      if (commandDetectionTimeout !== null) {
+        clearTimeout(commandDetectionTimeout);
+      }
+      resolve(isDetected);
+    };
+    commandDetectionTimeout = setTimeout(() => {
+      commandProcess.kill();
+      finish(false);
+    }, CODEX_COMMAND_DETECTION_TIMEOUT_MS);
+
+    commandProcess.on("exit", (code) => finish(code === 0));
+    commandProcess.on("error", () => finish(false));
+  });
+};
+
 const readCodexCommand = () => {
-  if (platform() === "darwin" && existsSync(CODEX_DARWIN_COMMAND_PATH)) {
+  if (readIsBundledCodexCommandDetected()) {
     const codexCommandStat = statSync(CODEX_DARWIN_COMMAND_PATH);
     const codexCommandCopyPath = join(
       CODEX_DARWIN_COMMAND_CACHE_DIR,

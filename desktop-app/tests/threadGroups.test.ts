@@ -8,7 +8,7 @@ import {
   readIsGitChangeSummaryEmpty,
   readShouldShowChatOnlyCommitGraphRow,
 } from "../src/renderer/threadGroups";
-import type { CodexThread, GitChangeSummary } from "../src/shared/types";
+import type { ChatThread, GitChangeSummary } from "../src/shared/types";
 
 const EMPTY_CHANGE_SUMMARY: GitChangeSummary = {
   staged: {
@@ -63,8 +63,9 @@ const BINARY_CHANGE_SUMMARY: GitChangeSummary = {
 };
 
 const createThread = ({ id, cwd }: { id: string; cwd: string }) => {
-  const thread: CodexThread = {
+  const thread: ChatThread = {
     id,
+    providerId: "codex",
     name: null,
     preview: "",
     cwd,

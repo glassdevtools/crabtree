@@ -1,17 +1,20 @@
-export type CodexGitInfo = {
+export type ChatProviderId = "codex" | "openCode";
+
+export type ChatThreadGitInfo = {
   sha: string | null;
   branch: string | null;
   originUrl: string | null;
 };
 
-export type CodexThreadStatus =
+export type ChatThreadStatus =
   | { type: "notLoaded" }
   | { type: "idle" }
   | { type: "systemError" }
   | { type: "active"; activeFlags: string[] };
 
-export type CodexThread = {
+export type ChatThread = {
   id: string;
+  providerId: ChatProviderId;
   name: string | null;
   preview: string;
   cwd: string;
@@ -21,13 +24,24 @@ export type CodexThread = {
   createdAt: number;
   updatedAt: number;
   archived: boolean;
-  status: CodexThreadStatus;
-  gitInfo: CodexGitInfo | null;
+  status: ChatThreadStatus;
+  gitInfo: ChatThreadGitInfo | null;
 };
 
-export type CodexThreadStatusChange = {
+export type ChatThreadStatusChange = {
   threadId: string;
-  status: CodexThreadStatus;
+  status: ChatThreadStatus;
+};
+
+export type ChatThreadOpenRequest = {
+  providerId: ChatProviderId;
+  threadId: string;
+  cwd: string;
+};
+
+export type ChatProviderRepoFolder = {
+  providerId: ChatProviderId;
+  path: string;
 };
 
 export type GitWorktree = {
@@ -84,7 +98,6 @@ export type GitMoveBranchRequest = {
   branch: string;
   oldSha: string;
   newSha: string;
-  sourcePath: string | null;
   targetPath: string | null;
 };
 
@@ -240,7 +253,7 @@ export type RepoGraph = {
 export type DashboardData = {
   generatedAt: string;
   repos: RepoGraph[];
-  threads: CodexThread[];
+  threads: ChatThread[];
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
   gitErrors: string[];
   warnings: string[];
@@ -254,8 +267,6 @@ export type DesktopRuntimeInfo = {
   platform: string;
   isPackaged: boolean;
 };
-
-export type ChatProviderId = "openCode";
 
 export type ChatProviderDetection = {
   providerId: ChatProviderId;
@@ -283,13 +294,14 @@ export type CrabtreeApi = {
   watchAppUpdateStatus: (
     onStatusChange: (appUpdateStatus: AppUpdateStatus) => void,
   ) => () => void;
-  watchCodexThreadStatus: (
-    onStatusChange: (codexThreadStatusChange: CodexThreadStatusChange) => void,
+  watchChatThreadStatus: (
+    onStatusChange: (chatThreadStatusChange: ChatThreadStatusChange) => void,
   ) => () => void;
   checkForAppUpdate: () => Promise<AppUpdateStatus>;
   quitAndInstallAppUpdate: () => Promise<void>;
-  openCodexThread: (threadId: string) => Promise<void>;
-  openNewCodexThread: () => Promise<void>;
+  openChatThread: (
+    chatThreadOpenRequest: ChatThreadOpenRequest,
+  ) => Promise<void>;
   openExternalUrl: (url: string) => Promise<void>;
   openPath: (openPathRequest: OpenPathRequest) => Promise<void>;
   readTerminalSessions: () => Promise<TerminalSessionSummary[]>;

@@ -217,6 +217,7 @@ test("reads active codex app-server thread values", () => {
     }),
     {
       id: "active-thread",
+      providerId: "codex",
       name: "Real app-server title",
       preview: "first user prompt",
       cwd: "/repo/app-server",
@@ -254,6 +255,7 @@ test("reads stopped codex app-server thread statuses", () => {
     }),
     {
       id: "idle-thread",
+      providerId: "codex",
       name: null,
       preview: "idle prompt",
       cwd: "/repo/idle",

@@ -1,30 +1,31 @@
 import type { DashboardData } from "../shared/types";
-import type { CodexThread } from "../shared/types";
-import type { AppServerClient } from "./appServerClient";
-import { readOpenCodeDashboardData } from "./chatProviderDetection";
-import { readCodexThreads } from "./codexThreads";
+import type { ChatProviderDashboardData } from "./chatProviders";
 import {
   readGitChangesOfCwdForRepoRoots,
-  readRepoGraphsWithRepoPaths,
+  readRepoGraphsWithRepoFolders,
   readRepoGraphsForRepoRoots,
 } from "./gitData";
 
 // The dashboard joins chat metadata with Git graph data into one renderer-friendly object.
 export const readDashboardData = async ({
-  appServerClient,
+  chatProviderDashboardData,
   focusedRepoRoot,
 }: {
-  appServerClient: AppServerClient;
+  chatProviderDashboardData: ChatProviderDashboardData[];
   focusedRepoRoot: string | null;
 }) => {
-  const [codexThreads, openCodeDashboardData] = await Promise.all([
-    readCodexThreads(appServerClient),
-    readOpenCodeDashboardData(),
-  ]);
-  const threads = [...codexThreads, ...openCodeDashboardData.threads];
-  const repoGraphResult = await readRepoGraphsWithRepoPaths({
+  const threads = chatProviderDashboardData.flatMap(
+    (providerData) => providerData.threads,
+  );
+  const repoFolders = chatProviderDashboardData.flatMap(
+    (providerData) => providerData.repoFolders,
+  );
+  const chatProviderWarnings = chatProviderDashboardData.flatMap(
+    (providerData) => providerData.warnings,
+  );
+  const repoGraphResult = await readRepoGraphsWithRepoFolders({
     threads,
-    repoPaths: openCodeDashboardData.repoFolders,
+    repoFolders,
     focusedRepoRoot,
   });
   const gitChangeResult = await readGitChangesOfCwdForRepoRoots({
@@ -40,7 +41,7 @@ export const readDashboardData = async ({
     threads,
     gitChangesOfCwd: gitChangeResult.gitChangesOfCwd,
     gitErrors: [...repoGraphResult.gitErrors, ...gitChangeResult.gitErrors],
-    warnings: [...openCodeDashboardData.warnings, ...repoGraphResult.warnings],
+    warnings: [...chatProviderWarnings, ...repoGraphResult.warnings],
   };
 
   return { dashboardData, readRepoRoots: repoGraphResult.readRepoRoots };

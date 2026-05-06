@@ -635,9 +635,9 @@ textarea,
 }
 
 .commit-history {
-  --commit-history-grid-template-columns: 300px 128px 240px 420px 84px 150px
+  --commit-history-grid-template-columns: 300px 160px 240px 420px 84px 150px
     170px;
-  --commit-history-table-width: 1492px;
+  --commit-history-table-width: 1524px;
   min-height: 0;
   flex: 1;
   overflow: visible;
