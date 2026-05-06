@@ -831,6 +831,19 @@ textarea,
   padding: 0 6px;
   border-radius: 4px;
   font-size: 11px;
+  gap: 4px;
+}
+
+.row-diff-action-button .path-launcher-icon {
+  width: 14px;
+  height: 14px;
+  flex-basis: 14px;
+}
+
+.row-diff-action-button .path-launcher-icon svg,
+.row-diff-action-button .path-launcher-icon-image {
+  width: 14px;
+  height: 14px;
 }
 
 .row-diff-scroll {
@@ -1485,7 +1498,6 @@ textarea,
 .commit-thread-group .commit-thread-code-location,
 .commit-thread-group .commit-thread-terminal,
 .commit-thread-group .commit-thread-change-count,
-.commit-thread-group .commit-branch-create-action,
 .commit-thread-group .commit-thread-commit-action {
   position: relative;
   z-index: 1;
@@ -1609,7 +1621,6 @@ textarea,
   cursor: pointer;
 }
 
-.commit-thread-group .commit-branch-create-action,
 .commit-thread-group .commit-thread-commit-action {
   margin: 0 2px;
 }

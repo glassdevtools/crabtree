@@ -133,6 +133,16 @@ import {
   readCommitHistoryRowHeight,
   readCommitHistoryRowLayouts,
 } from "./commitHistoryLayout";
+import {
+  readAutomaticBranchName,
+  readAutomaticCommitMessage,
+  readCreatedGitRefName,
+} from "./gitRefs";
+import {
+  readGitDiffLineCounts,
+  readGitDiffLineDisplay,
+  readGitDiffMarkerColumnCount,
+} from "./gitDiffLines";
 import { readBranchSyncPushWarningMessages } from "./branchSyncWarnings";
 import type { ThreadGroup } from "./threadGroups";
 import {
@@ -248,66 +258,32 @@ const GitChangeCountText = ({
   );
 };
 
-const GitDiffLine = ({ line }: { line: string }) => {
+const GitDiffLine = ({
+  line,
+  markerColumnCount,
+}: {
+  line: string;
+  markerColumnCount: number;
+}) => {
+  const lineDisplay = readGitDiffLineDisplay({ line, markerColumnCount });
   let className = "row-diff-line";
-  let displayLine = line;
 
-  if (
-    line.startsWith("diff --") ||
-    line.startsWith("@@") ||
-    line.startsWith("index ") ||
-    line.startsWith("old mode ") ||
-    line.startsWith("new mode ") ||
-    line.startsWith("new file mode ") ||
-    line.startsWith("deleted file mode ") ||
-    line.startsWith("copy from ") ||
-    line.startsWith("copy to ") ||
-    line.startsWith("rename from ") ||
-    line.startsWith("rename to ") ||
-    line.startsWith("similarity index ") ||
-    line.startsWith("dissimilarity index ") ||
-    line.startsWith("--- ") ||
-    line.startsWith("+++ ") ||
-    line.startsWith("\\ No newline at end of file")
-  ) {
+  if (lineDisplay === null) {
     return null;
   }
 
-  if (line.startsWith("+")) {
-    className = `${className} row-diff-line-added`;
-    displayLine = line.slice(1);
-  } else if (line.startsWith("-")) {
-    className = `${className} row-diff-line-removed`;
-    displayLine = line.slice(1);
-  } else if (line.startsWith(" ")) {
-    displayLine = line.slice(1);
+  switch (lineDisplay.changeType) {
+    case "added":
+      className = `${className} row-diff-line-added`;
+      break;
+    case "removed":
+      className = `${className} row-diff-line-removed`;
+      break;
+    case "context":
+      break;
   }
 
-  return <span className={className}>{displayLine}</span>;
-};
-
-const readGitDiffLineCounts = (diff: string) => {
-  const lineCounts = {
-    added: 0,
-    removed: 0,
-  };
-
-  for (const line of diff.split("\n")) {
-    if (line.startsWith("+") && !line.startsWith("+++ ")) {
-      lineCounts.added += 1;
-      continue;
-    }
-
-    if (line.startsWith("-") && !line.startsWith("--- ")) {
-      lineCounts.removed += 1;
-    }
-  }
-
-  return lineCounts;
-};
-
-const readCreatedGitRefName = (gitRefName: string) => {
-  return gitRefName.trim().replace(/[^A-Za-z0-9._/-]+/g, "-");
+  return <span className={className}>{lineDisplay.text}</span>;
 };
 
 const readUserFacingErrorMessage = (message: string) => {
@@ -864,19 +840,12 @@ type GitRefDeleteTarget = {
   shouldBlockDelete: boolean;
 };
 
-type BranchCreateTarget =
-  | {
-      type: "path";
-      path: string;
-      sha: string;
-      title: string;
-    }
-  | {
-      type: "commit";
-      repoRoot: string;
-      sha: string;
-      title: string;
-    };
+type BranchCreateTarget = {
+  type: "commit";
+  repoRoot: string;
+  sha: string;
+  title: string;
+};
 
 type RowDiffTarget = {
   title: string;
@@ -935,11 +904,20 @@ type CommitBranchTarget = {
   oldSha: string;
 };
 
-type CommitMessageTarget = {
-  path: string;
-  title: string;
-  branchTarget: CommitBranchTarget | null;
-};
+type CommitChangesTarget =
+  | {
+      type: "commit";
+      path: string;
+      fallbackMessage: string;
+      branchTarget: CommitBranchTarget;
+    }
+  | {
+      type: "createBranchAndCommit";
+      path: string;
+      branch: string;
+      expectedHeadSha: string;
+      fallbackMessage: string;
+    };
 
 type TerminalTarget = {
   cwd: string;
@@ -2313,6 +2291,8 @@ const CommitHistoryRow = ({
   isHeadClean,
   threadOfId,
   gitChangesOfCwd,
+  isBranchNameUsedOfBranch,
+  isCommitMessageUsedOfMessage,
   pathLauncher,
   isTerminalBusyOfCwd,
   isBranchPointerDropTarget,
@@ -2328,7 +2308,7 @@ const CommitHistoryRow = ({
   openRowContextMenu,
   openRowAfterDoubleClick,
   openBranchCreateModal,
-  openCommitMessageModal,
+  openCommitChangesModal,
   openChangesDiffModal,
   openBranchMergeModal,
   openBranchPushModal,
@@ -2349,6 +2329,8 @@ const CommitHistoryRow = ({
   isHeadClean: boolean;
   threadOfId: { [id: string]: CodexThread };
   gitChangesOfCwd: { [cwd: string]: GitChangeSummary };
+  isBranchNameUsedOfBranch: { [branch: string]: boolean };
+  isCommitMessageUsedOfMessage: { [message: string]: boolean };
   pathLauncher: PathLauncher;
   isTerminalBusyOfCwd: { [cwd: string]: boolean };
   isBranchPointerDropTarget: boolean;
@@ -2370,9 +2352,9 @@ const CommitHistoryRow = ({
     event: MouseEvent<HTMLButtonElement>,
     branchCreateTarget: BranchCreateTarget,
   ) => void;
-  openCommitMessageModal: (
+  openCommitChangesModal: (
     event: MouseEvent<HTMLButtonElement>,
-    commitMessageTarget: CommitMessageTarget,
+    commitChangesTarget: CommitChangesTarget,
   ) => void;
   openChangesDiffModal: (
     event: MouseEvent<HTMLButtonElement>,
@@ -2597,24 +2579,59 @@ const CommitHistoryRow = ({
           localBranches: rowLocalBranches,
           commitSha: commit.sha,
         });
-  const shouldShowActionCommit =
+  const actionBranchThread =
+    actionThreadGroup === null ? undefined : actionThreadGroup.threads[0];
+  const actionBranchTitle =
+    actionThreadGroup === null
+      ? ""
+      : actionBranchThread === undefined
+        ? actionThreadGroup.cwd
+        : threadTitle(actionBranchThread);
+  const actionBranchFallbackTitle =
+    actionThreadGroup === null
+      ? ""
+      : actionBranchThread === undefined
+        ? actionThreadGroup.cwd
+        : actionBranchThread.id;
+  const actionBranchToCreate =
     actionThreadGroup !== null &&
-    actionThreadGroup.cwd.length > 0 &&
-    shouldShowActionChangeCount &&
-    actionCommitBranchTarget !== null;
-  const shouldShowBranchCreateActions = rowLocalBranches.length === 0;
-  const actionBranchCreateTarget: BranchCreateTarget | null =
-    actionThreadGroup !== null &&
-    shouldShowBranchCreateActions &&
+    rowLocalBranches.length === 0 &&
     actionThreadGroup.cwd.length > 0 &&
     shouldShowActionChangeCount
-      ? {
-          type: "path",
-          path: actionThreadGroup.cwd,
-          sha: commit.sha,
-          title: actionThreadGroup.cwd,
-        }
+      ? readAutomaticBranchName({
+          title: actionBranchTitle,
+          fallbackTitle: actionBranchFallbackTitle,
+          isBranchNameUsedOfBranch,
+        })
       : null;
+  const actionCommitChangesTarget: CommitChangesTarget | null =
+    actionThreadGroup === null ||
+    actionThreadGroup.cwd.length === 0 ||
+    !shouldShowActionChangeCount
+      ? null
+      : actionCommitBranchTarget !== null
+        ? {
+            type: "commit",
+            path: actionThreadGroup.cwd,
+            branchTarget: actionCommitBranchTarget,
+            fallbackMessage: readAutomaticCommitMessage({
+              branch: actionCommitBranchTarget.branch,
+              isCommitMessageUsedOfMessage,
+            }),
+          }
+        : actionBranchToCreate === null
+          ? null
+          : {
+              type: "createBranchAndCommit",
+              path: actionThreadGroup.cwd,
+              branch: actionBranchToCreate,
+              expectedHeadSha: commit.sha,
+              fallbackMessage: readAutomaticCommitMessage({
+                branch: actionBranchToCreate,
+                isCommitMessageUsedOfMessage,
+              }),
+            };
+  const shouldShowActionCommit = actionCommitChangesTarget !== null;
   const pushableGitRefSyncChanges = branchSyncChanges.filter(
     (branchSyncChange) =>
       branchSyncChange.localSha !== branchSyncChange.originSha,
@@ -2694,7 +2711,6 @@ const CommitHistoryRow = ({
   const shouldShowBranchPushAction =
     hasPushableGitRefSyncChangeOnRow &&
     !shouldShowActionCommit &&
-    actionBranchCreateTarget === null &&
     mergeBranch === null;
   const shouldShowGraphActions =
     shouldShowGraphThreadActions ||
@@ -2767,7 +2783,7 @@ const CommitHistoryRow = ({
                     />
                   </Button>
                 </TitleTooltip>
-                {shouldShowActionCommit && actionCommitBranchTarget !== null ? (
+                {actionCommitChangesTarget === null ? null : (
                   <TitleTooltip title="Commit">
                     <Button
                       className="commit-thread-commit-action"
@@ -2777,33 +2793,10 @@ const CommitHistoryRow = ({
                       onMouseDown={(event) => event.stopPropagation()}
                       onDoubleClick={(event) => event.stopPropagation()}
                       onClick={(event) =>
-                        openCommitMessageModal(event, {
-                          path: actionThreadGroup.cwd,
-                          title: actionThreadGroup.cwd,
-                          branchTarget: actionCommitBranchTarget,
-                        })
+                        openCommitChangesModal(event, actionCommitChangesTarget)
                       }
                     >
                       <LuCheck
-                        size={COMMIT_GRAPH_ACTION_ICON_SIZE}
-                        strokeWidth={COMMIT_GRAPH_ACTION_ICON_STROKE_WIDTH}
-                      />
-                    </Button>
-                  </TitleTooltip>
-                ) : actionBranchCreateTarget === null ? null : (
-                  <TitleTooltip title="Add branch here">
-                    <Button
-                      className="commit-branch-create-action"
-                      variant="ghost"
-                      size="icon-xs"
-                      type="button"
-                      onMouseDown={(event) => event.stopPropagation()}
-                      onDoubleClick={(event) => event.stopPropagation()}
-                      onClick={(event) =>
-                        openBranchCreateModal(event, actionBranchCreateTarget)
-                      }
-                    >
-                      <LuGitBranchPlus
                         size={COMMIT_GRAPH_ACTION_ICON_SIZE}
                         strokeWidth={COMMIT_GRAPH_ACTION_ICON_STROKE_WIDTH}
                       />
@@ -3020,11 +3013,13 @@ const CommitHistoryColumnResizeHandle = ({
 const RowDiffDialog = ({
   rowDiffTarget,
   rowDiffLoadState,
+  pathLauncher,
   openCodePath,
   closeRowDiffModal,
 }: {
   rowDiffTarget: RowDiffTarget | null;
   rowDiffLoadState: RowDiffLoadState;
+  pathLauncher: PathLauncher;
   openCodePath: (path: string) => Promise<void>;
   closeRowDiffModal: () => void;
 }) => {
@@ -3084,10 +3079,10 @@ const RowDiffDialog = ({
     );
   };
 
-  let shouldShowRowDiffFileActions = false;
-  let isEveryRowDiffFileExpanded = false;
-  let isEveryRowDiffFileCollapsed = false;
+  const shouldShowRowDiffFileActions =
+    rowDiffLoadState.type === "loaded" && rowDiffLoadState.files.length > 0;
   const rowDiffRepositoryPath = rowDiffTarget?.repositoryPath ?? null;
+  const pathLauncherLabel = readPathLauncherLabel(pathLauncher);
   const shouldShowSectionOfFileIndex = useMemo(() => {
     const shouldShowSectionOfFileIndex: { [fileIndex: number]: boolean } = {};
 
@@ -3134,28 +3129,6 @@ const RowDiffDialog = ({
     return shouldShowSectionOfFileIndex;
   }, [rowDiffLoadState]);
 
-  if (rowDiffLoadState.type === "loaded" && rowDiffLoadState.files.length > 0) {
-    shouldShowRowDiffFileActions = true;
-    isEveryRowDiffFileExpanded = true;
-    isEveryRowDiffFileCollapsed = true;
-
-    for (
-      let fileIndex = 0;
-      fileIndex < rowDiffLoadState.files.length;
-      fileIndex += 1
-    ) {
-      const isFileExpanded =
-        isRowDiffFileExpandedOfFileIndex[fileIndex] !== false;
-
-      if (isFileExpanded) {
-        isEveryRowDiffFileCollapsed = false;
-        continue;
-      }
-
-      isEveryRowDiffFileExpanded = false;
-    }
-  }
-
   return (
     <Dialog
       open={rowDiffTarget !== null}
@@ -3174,17 +3147,22 @@ const RowDiffDialog = ({
             <DialogDescription>{rowDiffTarget.description}</DialogDescription>
           </DialogHeader>
           <div className="row-diff-actions">
+            {rowDiffRepositoryPath === null ? null : (
+              <Button
+                className="row-diff-action-button row-diff-open-action-button"
+                variant="outline"
+                size="xs"
+                type="button"
+                onClick={() => {
+                  void openCodePath(rowDiffRepositoryPath);
+                }}
+              >
+                <PathLauncherIcon pathLauncher={pathLauncher} />
+                <span>Open in {pathLauncherLabel}</span>
+              </Button>
+            )}
             {shouldShowRowDiffFileActions ? (
               <>
-                <Button
-                  className="row-diff-action-button"
-                  variant="outline"
-                  size="xs"
-                  type="button"
-                  onClick={() => setAllRowDiffFilesExpanded(true)}
-                >
-                  <span>Expand all</span>
-                </Button>
                 <Button
                   className="row-diff-action-button"
                   variant="outline"
@@ -3193,6 +3171,15 @@ const RowDiffDialog = ({
                   onClick={() => setAllRowDiffFilesExpanded(false)}
                 >
                   <span>Collapse all</span>
+                </Button>
+                <Button
+                  className="row-diff-action-button"
+                  variant="outline"
+                  size="xs"
+                  type="button"
+                  onClick={() => setAllRowDiffFilesExpanded(true)}
+                >
+                  <span>Expand all</span>
                 </Button>
               </>
             ) : null}
@@ -3216,7 +3203,13 @@ const RowDiffDialog = ({
             ) : (
               <div className="row-diff-scroll">
                 {rowDiffLoadState.files.map((file, fileIndex) => {
-                  const lineCounts = readGitDiffLineCounts(file.diff);
+                  const markerColumnCount = readGitDiffMarkerColumnCount(
+                    file.diff,
+                  );
+                  const lineCounts = readGitDiffLineCounts({
+                    diff: file.diff,
+                    markerColumnCount,
+                  });
 
                   return (
                     <section
@@ -3262,7 +3255,11 @@ const RowDiffDialog = ({
                         <pre className="row-diff-pre">
                           <code>
                             {file.diff.split("\n").map((line, lineIndex) => (
-                              <GitDiffLine line={line} key={lineIndex} />
+                              <GitDiffLine
+                                line={line}
+                                markerColumnCount={markerColumnCount}
+                                key={lineIndex}
+                              />
                             ))}
                           </code>
                         </pre>
@@ -3274,16 +3271,6 @@ const RowDiffDialog = ({
             )}
           </div>
           <DialogFooter>
-            {rowDiffRepositoryPath === null ? null : (
-              <Button
-                type="button"
-                onClick={() => {
-                  void openCodePath(rowDiffRepositoryPath);
-                }}
-              >
-                Open Repository
-              </Button>
-            )}
             <Button type="button" variant="outline" onClick={closeRowDiffModal}>
               Close
             </Button>
@@ -3906,63 +3893,66 @@ const GitRefCreateDialog = ({
   );
 };
 
-const CommitMessageDialog = ({
-  commitMessageTarget,
-  createCommit,
-  closeCommitMessageModal,
+const CommitChangesDialog = ({
+  commitChangesTarget,
+  commitChanges,
+  closeCommitChangesModal,
 }: {
-  commitMessageTarget: CommitMessageTarget | null;
-  createCommit: ({
-    commitMessageTarget,
+  commitChangesTarget: CommitChangesTarget | null;
+  commitChanges: ({
+    commitChangesTarget,
     message,
   }: {
-    commitMessageTarget: CommitMessageTarget;
+    commitChangesTarget: CommitChangesTarget;
     message: string;
   }) => Promise<void>;
-  closeCommitMessageModal: () => void;
+  closeCommitChangesModal: () => void;
 }) => {
   const [commitMessage, setCommitMessage] = useState("");
-  const createdCommitMessage = commitMessage.trim();
 
   useEffect(() => {
-    if (commitMessageTarget !== null) {
+    if (commitChangesTarget !== null) {
       setCommitMessage("");
     }
-  }, [commitMessageTarget]);
+  }, [commitChangesTarget]);
 
-  const submitCommitMessage = async (event: FormEvent<HTMLFormElement>) => {
+  const submitCommitChanges = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (commitMessageTarget === null) {
+    if (commitChangesTarget === null) {
       return;
     }
 
-    await createCommit({
-      commitMessageTarget,
-      message: createdCommitMessage,
-    });
+    const createdCommitMessage = commitMessage.trim();
+    const message =
+      createdCommitMessage.length === 0
+        ? commitChangesTarget.fallbackMessage
+        : createdCommitMessage;
+
+    await commitChanges({ commitChangesTarget, message });
   };
 
   return (
     <Dialog
-      open={commitMessageTarget !== null}
+      open={commitChangesTarget !== null}
       onOpenChange={(isOpen) => {
         if (isOpen) {
           return;
         }
 
-        closeCommitMessageModal();
+        closeCommitChangesModal();
       }}
     >
-      {commitMessageTarget === null ? null : (
+      {commitChangesTarget === null ? null : (
         <DialogContent className="sm:max-w-sm">
-          <form className="grid gap-4" onSubmit={submitCommitMessage}>
+          <form className="grid gap-4" onSubmit={submitCommitChanges}>
             <DialogHeader>
               <DialogTitle>Commit</DialogTitle>
               <DialogDescription>Enter a commit message.</DialogDescription>
             </DialogHeader>
             <Input
               autoFocus
+              placeholder="Optional"
               value={commitMessage}
               onChange={(event) => setCommitMessage(event.target.value)}
             />
@@ -3970,16 +3960,11 @@ const CommitMessageDialog = ({
               <Button
                 type="button"
                 variant="outline"
-                onClick={closeCommitMessageModal}
+                onClick={closeCommitChangesModal}
               >
                 Cancel
               </Button>
-              <Button
-                type="submit"
-                disabled={createdCommitMessage.length === 0}
-              >
-                Commit
-              </Button>
+              <Button type="submit">Commit</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -4255,8 +4240,8 @@ const CommitHistory = ({
     useState<GitRefCreateTarget | null>(null);
   const [gitPullRequestCreateTarget, setGitPullRequestCreateTarget] =
     useState<GitPullRequestCreateTarget | null>(null);
-  const [commitMessageTarget, setCommitMessageTarget] =
-    useState<CommitMessageTarget | null>(null);
+  const [commitChangesTarget, setCommitChangesTarget] =
+    useState<CommitChangesTarget | null>(null);
   const [rowDiffTarget, setRowDiffTarget] = useState<RowDiffTarget | null>(
     null,
   );
@@ -4522,6 +4507,40 @@ const CommitHistory = ({
     };
   }, [commits, currentBranch]);
   const { isBranchMergeableOfBranch, isCommitMergeableOfSha } = mergeability;
+  const isBranchNameUsedOfBranch = useMemo(() => {
+    const nextIsBranchNameUsedOfBranch: { [branch: string]: boolean } = {};
+    const addBranchName = (branch: string) => {
+      nextIsBranchNameUsedOfBranch[branch] = true;
+      nextIsBranchNameUsedOfBranch[branch.toLowerCase()] = true;
+    };
+
+    if (currentBranch !== null) {
+      addBranchName(currentBranch);
+    }
+
+    for (const worktree of worktrees) {
+      if (worktree.branch !== null) {
+        addBranchName(worktree.branch);
+      }
+    }
+
+    for (const commit of commits) {
+      for (const localBranch of commit.localBranches) {
+        addBranchName(localBranch);
+      }
+    }
+
+    return nextIsBranchNameUsedOfBranch;
+  }, [commits, currentBranch, worktrees]);
+  const isCommitMessageUsedOfMessage = useMemo(() => {
+    const nextIsCommitMessageUsedOfMessage: { [message: string]: boolean } = {};
+
+    for (const commit of commits) {
+      nextIsCommitMessageUsedOfMessage[commit.subject] = true;
+    }
+
+    return nextIsCommitMessageUsedOfMessage;
+  }, [commits]);
   // Deletion stays available for every local branch and tag. These messages explain risky deletes in the modal.
   const gitRefDeleteWarnings = useMemo(() => {
     const commitOfSha: { [sha: string]: GitCommit } = {};
@@ -5422,16 +5441,16 @@ const CommitHistory = ({
   const closeGitPullRequestCreateModal = () => {
     setGitPullRequestCreateTarget(null);
   };
-  const openCommitMessageModal = (
+  const openCommitChangesModal = (
     event: MouseEvent<HTMLButtonElement>,
-    commitMessageTarget: CommitMessageTarget,
+    commitChangesTarget: CommitChangesTarget,
   ) => {
     event.preventDefault();
     event.stopPropagation();
-    setCommitMessageTarget(commitMessageTarget);
+    setCommitChangesTarget(commitChangesTarget);
   };
-  const closeCommitMessageModal = () => {
-    setCommitMessageTarget(null);
+  const closeCommitChangesModal = () => {
+    setCommitChangesTarget(null);
   };
   const openChangesDiffModal = (
     event: MouseEvent<HTMLButtonElement>,
@@ -5481,32 +5500,91 @@ const CommitHistory = ({
       "Created branch.",
       async () => {
         try {
-          switch (branchCreateTarget.type) {
-            case "path":
-              await window.crabtree.createGitBranch({
-                path: branchCreateTarget.path,
-                branch,
-                expectedHeadSha: branchCreateTarget.sha,
-              });
-              break;
-            case "commit":
-              await window.crabtree.createGitRef({
-                repoRoot: branchCreateTarget.repoRoot,
-                gitRefType: "branch",
-                name: branch,
-                sha: branchCreateTarget.sha,
-              });
-              break;
-          }
+          await window.crabtree.createGitRef({
+            repoRoot: branchCreateTarget.repoRoot,
+            gitRefType: "branch",
+            name: branch,
+            sha: branchCreateTarget.sha,
+          });
           trackDesktopAction({
             eventName: "branch_created",
-            properties: { target_type: branchCreateTarget.type },
+            properties: { target_type: "commit" },
           });
           closeBranchCreateModal();
         } catch (error) {
           return error instanceof Error
             ? error.message
             : "Failed to create branch.";
+        }
+
+        return null;
+      },
+    );
+  };
+  const commitChanges = async ({
+    commitChangesTarget,
+    message,
+  }: {
+    commitChangesTarget: CommitChangesTarget;
+    message: string;
+  }) => {
+    const shouldCreateBranch =
+      commitChangesTarget.type === "createBranchAndCommit";
+
+    await runUserGitUpdateThenRefreshDashboard(
+      shouldCreateBranch
+        ? "Creating branch and committing changes"
+        : "Committing changes",
+      shouldCreateBranch
+        ? "Created branch and committed changes."
+        : "Committed changes.",
+      async () => {
+        try {
+          if (commitChangesTarget.type === "createBranchAndCommit") {
+            await window.crabtree.createGitBranch({
+              path: commitChangesTarget.path,
+              branch: commitChangesTarget.branch,
+              expectedHeadSha: commitChangesTarget.expectedHeadSha,
+            });
+            trackDesktopAction({
+              eventName: "branch_created",
+              properties: { target_type: "path" },
+            });
+          }
+
+          const newSha = await window.crabtree.commitAllGitChanges({
+            path: commitChangesTarget.path,
+            message,
+          });
+
+          if (commitChangesTarget.type === "commit") {
+            try {
+              await window.crabtree.moveGitBranch({
+                repoRoot,
+                branch: commitChangesTarget.branchTarget.branch,
+                oldSha: commitChangesTarget.branchTarget.oldSha,
+                newSha,
+                sourcePath: null,
+                targetPath: null,
+              });
+            } catch {
+              // The commit already succeeded, so a stale branch tag should not turn it into an error.
+            }
+          }
+
+          trackDesktopAction({
+            eventName: "changes_committed",
+            properties: {
+              did_move_branch: commitChangesTarget.type === "commit",
+            },
+          });
+          closeCommitChangesModal();
+        } catch (error) {
+          return error instanceof Error
+            ? error.message
+            : shouldCreateBranch
+              ? "Failed to create branch and commit changes."
+              : "Failed to commit changes.";
         }
 
         return null;
@@ -5609,55 +5687,6 @@ const CommitHistory = ({
         error instanceof Error ? error.message : "Failed to open pull request.";
       showErrorMessage(message);
     }
-  };
-  const createCommit = async ({
-    commitMessageTarget,
-    message,
-  }: {
-    commitMessageTarget: CommitMessageTarget;
-    message: string;
-  }) => {
-    await runUserGitUpdateThenRefreshDashboard(
-      "Committing changes",
-      "Committed changes.",
-      async () => {
-        try {
-          const newSha = await window.crabtree.commitAllGitChanges({
-            path: commitMessageTarget.path,
-            message,
-          });
-
-          if (commitMessageTarget.branchTarget !== null) {
-            try {
-              await window.crabtree.moveGitBranch({
-                repoRoot,
-                branch: commitMessageTarget.branchTarget.branch,
-                oldSha: commitMessageTarget.branchTarget.oldSha,
-                newSha,
-                sourcePath: null,
-                targetPath: null,
-              });
-            } catch {
-              // The commit already succeeded, so a stale branch tag should not turn it into an error.
-            }
-          }
-
-          trackDesktopAction({
-            eventName: "changes_committed",
-            properties: {
-              did_move_branch: commitMessageTarget.branchTarget !== null,
-            },
-          });
-          closeCommitMessageModal();
-        } catch (error) {
-          return error instanceof Error
-            ? error.message
-            : "Failed to commit changes.";
-        }
-
-        return null;
-      },
-    );
   };
   const deleteSelectedGitRef = async () => {
     if (gitRefDeleteTarget === null) {
@@ -6227,6 +6256,8 @@ const CommitHistory = ({
                 isHeadClean={isHeadClean}
                 threadOfId={threadOfId}
                 gitChangesOfCwd={gitChangesOfCwd}
+                isBranchNameUsedOfBranch={isBranchNameUsedOfBranch}
+                isCommitMessageUsedOfMessage={isCommitMessageUsedOfMessage}
                 pathLauncher={pathLauncher}
                 isTerminalBusyOfCwd={isTerminalBusyOfCwd}
                 duplicateCheckedOutBranchOfBranch={
@@ -6256,7 +6287,7 @@ const CommitHistory = ({
                 openRowContextMenu={openRowContextMenu}
                 openRowAfterDoubleClick={() => openRowAfterDoubleClick(row)}
                 openBranchCreateModal={openBranchCreateModal}
-                openCommitMessageModal={openCommitMessageModal}
+                openCommitChangesModal={openCommitChangesModal}
                 openChangesDiffModal={openChangesDiffModal}
                 openBranchMergeModal={openBranchMergeModal}
                 openBranchPushModal={openBranchPushModal}
@@ -6286,14 +6317,15 @@ const CommitHistory = ({
           createPullRequest={createPullRequest}
           closeGitPullRequestCreateModal={closeGitPullRequestCreateModal}
         />
-        <CommitMessageDialog
-          commitMessageTarget={commitMessageTarget}
-          createCommit={createCommit}
-          closeCommitMessageModal={closeCommitMessageModal}
+        <CommitChangesDialog
+          commitChangesTarget={commitChangesTarget}
+          commitChanges={commitChanges}
+          closeCommitChangesModal={closeCommitChangesModal}
         />
         <RowDiffDialog
           rowDiffTarget={rowDiffTarget}
           rowDiffLoadState={rowDiffLoadState}
+          pathLauncher={pathLauncher}
           openCodePath={openCodePath}
           closeRowDiffModal={closeRowDiffModal}
         />
