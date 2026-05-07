@@ -29,7 +29,7 @@ export const readIsGitChangeSummaryEmpty = (
     changeSummary.staged.changedFileCount +
     changeSummary.unstaged.changedFileCount;
 
-  return changedFileCount === 0;
+  return changedFileCount === 0 && changeSummary.conflictCount === 0;
 };
 
 export const readGitChangeCleanState = ({

@@ -21,6 +21,7 @@ const EMPTY_CHANGE_SUMMARY: GitChangeSummary = {
     removed: 0,
     changedFileCount: 0,
   },
+  conflictCount: 0,
 };
 
 const ADDED_CHANGE_SUMMARY: GitChangeSummary = {
@@ -34,6 +35,7 @@ const ADDED_CHANGE_SUMMARY: GitChangeSummary = {
     removed: 0,
     changedFileCount: 0,
   },
+  conflictCount: 0,
 };
 
 const REMOVED_CHANGE_SUMMARY: GitChangeSummary = {
@@ -47,6 +49,7 @@ const REMOVED_CHANGE_SUMMARY: GitChangeSummary = {
     removed: 1,
     changedFileCount: 1,
   },
+  conflictCount: 0,
 };
 
 const BINARY_CHANGE_SUMMARY: GitChangeSummary = {
@@ -60,6 +63,21 @@ const BINARY_CHANGE_SUMMARY: GitChangeSummary = {
     removed: 0,
     changedFileCount: 1,
   },
+  conflictCount: 0,
+};
+
+const CONFLICT_CHANGE_SUMMARY: GitChangeSummary = {
+  staged: {
+    added: 0,
+    removed: 0,
+    changedFileCount: 0,
+  },
+  unstaged: {
+    added: 0,
+    removed: 0,
+    changedFileCount: 0,
+  },
+  conflictCount: 1,
 };
 
 const createThread = ({ id, cwd }: { id: string; cwd: string }) => {
@@ -289,6 +307,10 @@ test("reads clean, dirty, and unknown git change states", () => {
 
 test("treats file-only change summaries as changed", () => {
   assert.equal(readIsGitChangeSummaryEmpty(BINARY_CHANGE_SUMMARY), false);
+});
+
+test("treats conflict change summaries as changed", () => {
+  assert.equal(readIsGitChangeSummaryEmpty(CONFLICT_CHANGE_SUMMARY), false);
 });
 
 test("keeps HEAD rows visible in chat-only history", () => {

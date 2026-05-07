@@ -1657,6 +1657,10 @@ textarea,
   color: #343a43;
 }
 
+.commit-thread-change-conflict-count {
+  color: #c53a13;
+}
+
 .commit-ref svg,
 .commit-thread-group svg {
   flex: 0 0 auto;

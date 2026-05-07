@@ -61,6 +61,7 @@ export type GitChangeCounts = {
 export type GitChangeSummary = {
   staged: GitChangeCounts;
   unstaged: GitChangeCounts;
+  conflictCount: number;
 };
 
 export type GitCommitChangesRequest = {

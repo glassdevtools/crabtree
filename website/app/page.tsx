@@ -55,7 +55,7 @@ const featureItems = [
   {
     title: "Easily merge your worktrees",
     descriptionLines: [
-      "It's easy to spin up 100 chat worktrees, but merging them back together is hard. Crabtree was built to fix that. Commit, branch, merge, update main, and push without leaving the app.",
+      "It's easy to spin up 100 AI worktrees, but merging them back together is hard. Crabtree was built to fix that. Commit, branch, merge, update main, and push without leaving the app.",
     ],
   },
   {

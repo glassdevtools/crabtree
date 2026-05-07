@@ -53,7 +53,6 @@ import type {
   ChatThreadStatusChange,
   DashboardData,
   GitBranchSyncChange,
-  GitChangeCounts,
   GitChangeSummary,
   GitCommit,
   GitDiffFile,
@@ -213,6 +212,7 @@ const EMPTY_GIT_CHANGE_SUMMARY: GitChangeSummary = {
     removed: 0,
     changedFileCount: 0,
   },
+  conflictCount: 0,
 };
 
 const readTotalGitChangeSummary = (changeSummary: GitChangeSummary) => {
@@ -245,12 +245,28 @@ const readChangedFileCountText = (changedFileCount: number) => {
     : `${changedFileCount} files`;
 };
 
+const readConflictCountText = (conflictCount: number) => {
+  return conflictCount === 1
+    ? `${conflictCount} conflict`
+    : `${conflictCount} conflicts`;
+};
+
 // Binary changes can have file changes without line counts, so the graph uses this shared display for both cases.
-const GitChangeCountText = ({
-  changeCounts,
+const GitChangeSummaryText = ({
+  changeSummary,
 }: {
-  changeCounts: GitChangeCounts;
+  changeSummary: GitChangeSummary;
 }) => {
+  if (changeSummary.conflictCount > 0) {
+    return (
+      <span className="commit-thread-change-conflict-count">
+        {readConflictCountText(changeSummary.conflictCount)}
+      </span>
+    );
+  }
+
+  const changeCounts = readTotalGitChangeSummary(changeSummary);
+
   if (
     changeCounts.added === 0 &&
     changeCounts.removed === 0 &&
@@ -2560,8 +2576,6 @@ const CommitHistoryRow = ({
       : gitChangesOfCwd[actionThreadGroup.cwd];
   const actionChangeSummary =
     storedActionChangeSummary ?? EMPTY_GIT_CHANGE_SUMMARY;
-  const actionTotalChangeSummary =
-    readTotalGitChangeSummary(actionChangeSummary);
   const shouldShowActionChangeCount =
     storedActionChangeSummary !== undefined &&
     !readIsGitChangeSummaryEmpty(actionChangeSummary);
@@ -2628,7 +2642,9 @@ const CommitHistoryRow = ({
                 isCommitMessageUsedOfMessage,
               }),
             };
-  const shouldShowActionCommit = actionCommitChangesTarget !== null;
+  const isActionConflicted = actionChangeSummary.conflictCount > 0;
+  const shouldShowActionCommit =
+    actionCommitChangesTarget !== null && !isActionConflicted;
   const pushableGitRefSyncChanges = branchSyncChanges.filter(
     (branchSyncChange) =>
       branchSyncChange.localSha !== branchSyncChange.originSha,
@@ -2712,6 +2728,7 @@ const CommitHistoryRow = ({
   const shouldShowBranchPushAction =
     hasPushableGitRefSyncChangeOnRow &&
     !shouldShowActionCommit &&
+    !isActionConflicted &&
     mergeBranch === null;
   const shouldShowGraphActions =
     shouldShowGraphThreadActions ||
@@ -2779,12 +2796,11 @@ const CommitHistoryRow = ({
                       })
                     }
                   >
-                    <GitChangeCountText
-                      changeCounts={actionTotalChangeSummary}
-                    />
+                    <GitChangeSummaryText changeSummary={actionChangeSummary} />
                   </Button>
                 </TitleTooltip>
-                {actionCommitChangesTarget === null ? null : (
+                {actionCommitChangesTarget === null ||
+                !shouldShowActionCommit ? null : (
                   <TitleTooltip title="Commit">
                     <Button
                       className="commit-thread-commit-action"

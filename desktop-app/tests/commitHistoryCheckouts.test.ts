@@ -18,6 +18,7 @@ const CLEAN_CHANGE_SUMMARY: GitChangeSummary = {
     removed: 0,
     changedFileCount: 0,
   },
+  conflictCount: 0,
 };
 
 const DIRTY_CHANGE_SUMMARY: GitChangeSummary = {
@@ -31,6 +32,7 @@ const DIRTY_CHANGE_SUMMARY: GitChangeSummary = {
     removed: 0,
     changedFileCount: 0,
   },
+  conflictCount: 0,
 };
 
 const createWorktree = ({

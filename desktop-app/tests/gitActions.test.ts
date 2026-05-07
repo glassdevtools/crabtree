@@ -761,6 +761,49 @@ test("reads tracked binary file changes as changed files", async () => {
   });
 });
 
+test("reads unresolved merge conflicts in change summaries", async () => {
+  await withRepo(async ({ repoRoot }) => {
+    await commitRepoFile({
+      repoRoot,
+      filePath: "conflict.txt",
+      content: "base\n",
+      message: "base",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
+    await commitRepoFile({
+      repoRoot,
+      filePath: "conflict.txt",
+      content: "feature\n",
+      message: "feature",
+    });
+    await runGit({ cwd: repoRoot, args: ["switch", "main"] });
+    await commitRepoFile({
+      repoRoot,
+      filePath: "conflict.txt",
+      content: "main\n",
+      message: "main",
+    });
+
+    const threads = [createThread({ id: "root-thread", cwd: repoRoot })];
+    const repoGraphResult = await readRepoGraphs({
+      threads,
+      focusedRepoRoot: null,
+    });
+
+    await assert.rejects(async () => {
+      await runGit({ cwd: repoRoot, args: ["merge", "feature"] });
+    });
+
+    const { gitChangesOfCwd, gitErrors } = await readGitChangesOfCwd({
+      threads,
+      repos: repoGraphResult.repos,
+    });
+
+    assert.equal(gitErrors.length, 0);
+    assert.equal(gitChangesOfCwd[repoRoot]?.conflictCount, 1);
+  });
+});
+
 test("reads the patch introduced by a commit", async () => {
   await withRepo(async ({ repoRoot }) => {
     await commitRepoFile({
