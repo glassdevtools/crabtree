@@ -34,6 +34,6 @@ Download Crabtree on our website: https://crabtree.app.
 		src="./website/src/assets/product-screenshot.png"
 		alt="Crabtree app showing Codex chats, worktrees, branches, and Git history"
 		width="1000"
-		height="664"
+		height="755"
 	/>
 </div>
