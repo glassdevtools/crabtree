@@ -1,6 +1,18 @@
 import { Check, X } from "lucide-react";
 import type { ToasterProps } from "sonner";
-import { Toaster as Sonner } from "sonner";
+import { Toaster as Sonner, toast as sonnerToast } from "sonner";
+
+const showSonnerWarningToast = sonnerToast.warning;
+
+// Warning toasts stay visible by default because they usually need manual attention.
+sonnerToast.warning = (message, data) => {
+  return showSonnerWarningToast(message, {
+    ...data,
+    duration: data?.duration ?? Infinity,
+  });
+};
+
+const toast = sonnerToast;
 
 const Toaster = ({ ...props }: ToasterProps) => {
   return (
@@ -31,4 +43,4 @@ const Toaster = ({ ...props }: ToasterProps) => {
   );
 };
 
-export { Toaster };
+export { Toaster, toast };

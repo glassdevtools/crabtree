@@ -27,7 +27,6 @@ import {
   LuGitPullRequestArrow,
 } from "react-icons/lu";
 import { VscVscode } from "react-icons/vsc";
-import { toast } from "sonner";
 import {
   useCallback,
   useEffect,
@@ -96,7 +95,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster, toast } from "@/components/ui/sonner";
 import {
   Tooltip,
   TooltipContent,
@@ -7293,7 +7292,6 @@ const CrabtreeDesktopApp = () => {
         {
           closeButton: true,
           description: warning,
-          duration: Infinity,
           id: toastId,
           onDismiss: () => {
             delete dashboardWarningToastIdOfWarning[warning];
