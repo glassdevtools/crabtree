@@ -26,8 +26,7 @@ const featureItems = [
         View all your{" "}
         <span className="featureToken featureTokenWorktree">worktrees</span>,{" "}
         <span className="featureToken featureTokenBranch">branches</span>, and{" "}
-        <span className="featureToken featureTokenChat">chats</span> in one
-        place.
+        <span className="featureToken featureTokenChat">chats</span>.
       </>,
     ],
   },
