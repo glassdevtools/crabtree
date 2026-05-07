@@ -583,34 +583,6 @@ h1.heroTitle {
   line-height: 1.55;
 }
 
-/* Feature tokens */
-.featureToken {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 5px;
-  padding: 1px 6px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.featureTokenWorktree {
-  border: 1px solid #aeb9c7;
-  background: #eef0f3;
-  color: #101410;
-}
-
-.featureTokenBranch {
-  border: 1px solid #aeb9c7;
-  background: #eaf1ff;
-  color: #101410;
-}
-
-.featureTokenChat {
-  border: 1px solid #d5b55f;
-  background: #fff4cf;
-  color: #101410;
-}
-
 /* ============================================================
    Bottom CTA
    ============================================================ */
@@ -648,11 +620,6 @@ h1.heroTitle {
   font-weight: 500;
   line-height: 1.45;
   text-wrap: balance;
-}
-
-.bottomCta .featureToken {
-  border-radius: 8px;
-  padding: 1px 8px;
 }
 
 .bottomCtaActions {

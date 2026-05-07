@@ -4,6 +4,7 @@ import { IoLogoGithub } from "react-icons/io";
 import { ClientDownloadLink } from "./client-download-link";
 import { ClientGithubLink } from "./client-github-link";
 import { buttonVariants } from "@/components/ui/button";
+import codexChatIcon from "../src/assets/codex-chat-icon.png";
 import defaultAppIcon from "../src/assets/default-app-icon.png";
 import productScreenshot from "../src/assets/product-screenshot.png";
 
@@ -12,6 +13,44 @@ const ctaDownloadButtonClassName = "ctaButton ctaButtonDownload";
 const ctaGithubButtonClassName = "ctaButton ctaButtonGithub";
 const downloadButtonClassName = "downloadButton";
 const githubButtonClassName = "githubButton";
+const featureTokenClassName =
+  "inline-flex h-[1.45em] items-center gap-1 rounded border px-[5px] align-middle text-[0.9em] font-[720] leading-none whitespace-nowrap";
+const featureTokenBranchClassName = `${featureTokenClassName} border-[#acb9ca] bg-[#eaf1ff] text-[#162d54]`;
+const featureTokenChatClassName = `${featureTokenClassName} border-[#d4dae3] bg-[#eef0f3] text-[#343a43]`;
+const featureTokenWorktreeClassName = `${featureTokenClassName} border-[#d4dae3] bg-transparent text-[#343a43]`;
+
+const WorktreeToken = () => (
+  <span className={featureTokenWorktreeClassName}>
+    {/* dot */}
+    <span
+      className="relative block size-[13px] shrink-0 overflow-visible"
+      aria-hidden="true"
+    >
+      <span className="absolute left-1/2 top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#8b929c]" />
+    </span>
+    <span>worktrees</span>
+  </span>
+);
+
+const BranchToken = () => (
+  <span className={featureTokenBranchClassName}>branches</span>
+);
+
+const ChatToken = () => (
+  <span className={featureTokenChatClassName}>
+    <Image
+      className="block size-[13px] shrink-0"
+      src={codexChatIcon}
+      width={13}
+      height={13}
+      alt=""
+      aria-hidden="true"
+      draggable={false}
+    />
+    <span>chats</span>
+  </span>
+);
+
 const featureItems = [
   {
     title: "Easily merge your worktrees",
@@ -23,10 +62,7 @@ const featureItems = [
     title: "Everything on a single page",
     descriptionLines: [
       <>
-        View all your{" "}
-        <span className="featureToken featureTokenWorktree">worktrees</span>,{" "}
-        <span className="featureToken featureTokenBranch">branches</span>, and{" "}
-        <span className="featureToken featureTokenChat">chats</span>.
+        View all your <BranchToken />, <ChatToken />, and <WorktreeToken />.
       </>,
     ],
   },
@@ -50,47 +86,33 @@ const featureItems = [
   },
 ];
 const questionItems = [
+  <>Which chats still need to be merged in?</>,
   <>
-    What <span className="featureToken featureTokenChat">chats</span> were
-    merged?
+    Which <WorktreeToken /> have changes to review?
   </>,
   <>
-    What <span className="featureToken featureTokenWorktree">worktrees</span> do
-    I have?
+    Which <ChatToken /> are on which <BranchToken />?
   </>,
-  <>
-    Which <span className="featureToken featureTokenBranch">branches</span> are
-    on which <span className="featureToken featureTokenChat">chats</span>?
-  </>,
-  <>
-    Which <span className="featureToken featureTokenChat">chats</span> are on
-    which <span className="featureToken featureTokenWorktree">worktrees</span>?
-  </>,
-  <>
-    Which <span className="featureToken featureTokenWorktree">worktrees</span>{" "}
-    have changes?
-  </>,
-  "And more...",
 ];
 const faqItems = [
   {
-    question: "What are the core features?",
+    question: "What are Crabtree's core features?",
     answer: [
-      "It's a Git visualizer that:",
-      "- Shows you where your chats and worktrees are in Git.",
-      "- Suggests actions to take, like commit/merge/push.",
+      "Crabtree is a Git visualizer that also:",
+      "- Shows you where your chats and worktrees are.",
+      "- Suggests actions to take like commit/merge/push.",
     ],
   },
   {
     question: "How should I use it?",
     answer: [
-      "Start a bunch of worktrees in Codex. When you're ready to merge them, open Crabtree and switch to a branch by double clicking. Follow the suggestions in the Graph column: branch, commit, merge, and push.",
+      "Start a bunch of worktrees in Codex. When you're ready to merge them, open Crabtree and switch to a branch by double clicking. Then follow the suggestions in the Graph column to branch, commit, merge, and push.",
     ],
   },
   {
-    question: "Does it only support Codex?",
+    question: "What AI tools does it support?",
     answer:
-      "Yes, right now it relies on Codex to know about your repositories. In the future we may change this and show your chats from other tools.",
+      "Codex and OpenCode. We plan to support more tools in the future.",
   },
 ];
 
@@ -161,8 +183,8 @@ const HomePage = () => {
               <span>Crabtree</span>
             </h1>
             <p className="heroSubtext">
-              Easily merge your worktrees together. Crabtree lets you
-              manage your chats, worktrees, and branches, all on one page.
+              Easily merge your worktrees together. Crabtree lets you manage
+              your chats, worktrees, and branches, all on one page.
             </p>
 
             <div className="hero__actions">
