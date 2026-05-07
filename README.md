@@ -23,11 +23,11 @@ It's easy to spin up 100 worktrees in Codex, but merging them back together is h
 
 ## Contributing
 
-Feel free to submit an [Issue](https://github.com/glassdevtools/crabtree/issues) for suggestions and bugs. For safety reasons I won't accept PRs in most cases, but happily accept "prompt requests".
+Feel free to submit an [Issue](https://github.com/glassdevtools/crabtree/issues) for suggestions. 
 
 ## Download
 
-Download Crabtree on our [Website](https://crabtree.app).
+Download Crabtree on our website: https://crabtree.app.
 
 <div align="center">
 	<img
