@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { chmod, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import * as pty from "@lydell/node-pty";
@@ -33,6 +33,7 @@ const TERMINAL_SESSION_BUSY_POLL_INTERVAL_MS = 500;
 const TERMINAL_SESSION_BUSY_QUERY_TIMEOUT_MS = 1000;
 // TODO: AI-PICKED-VALUE: Two megabytes is enough for normal process listings without letting a bad query allocate unbounded output.
 const TERMINAL_SESSION_BUSY_QUERY_MAX_BUFFER_LENGTH = 1024 * 1024 * 2;
+const TERMINAL_SESSION_STOP_SIGNAL = "SIGTERM";
 let didEnsureTerminalSpawnHelperCanRun = false;
 
 type ProcessRow = {
@@ -105,6 +106,10 @@ export const readTerminalSessionResizeRequest = (
   };
 };
 
+export const readTerminalSessionStopRequest = (value: unknown) => {
+  return readTerminalSessionCwd(value);
+};
+
 const readTerminalShell = () => {
   switch (process.platform) {
     case "win32":
@@ -158,6 +163,20 @@ const readProcessRowsWithFile = ({
         resolve(stdout);
       },
     );
+  });
+};
+
+const readProcessRowsWithFileSync = ({
+  file,
+  args,
+}: {
+  file: string;
+  args: string[];
+}) => {
+  return execFileSync(file, args, {
+    timeout: TERMINAL_SESSION_BUSY_QUERY_TIMEOUT_MS,
+    maxBuffer: TERMINAL_SESSION_BUSY_QUERY_MAX_BUFFER_LENGTH,
+    encoding: "utf8",
   });
 };
 
@@ -236,6 +255,103 @@ const readProcessRows = async () => {
 
       return readProcessRowsFromPsOutput(output);
     }
+  }
+};
+
+const readProcessRowsSync = () => {
+  switch (process.platform) {
+    case "win32": {
+      const output = readProcessRowsWithFileSync({
+        file: "powershell.exe",
+        args: [
+          "-NoProfile",
+          "-Command",
+          "Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId | ConvertTo-Csv -NoTypeInformation",
+        ],
+      });
+
+      return readProcessRowsFromWindowsCsv(output);
+    }
+    default: {
+      const output = readProcessRowsWithFileSync({
+        file: "/bin/ps",
+        args: ["-axo", "pid=,ppid="],
+      });
+
+      return readProcessRowsFromPsOutput(output);
+    }
+  }
+};
+
+const readDescendantProcessIds = ({
+  rootPid,
+  processRows,
+}: {
+  rootPid: number;
+  processRows: ProcessRow[];
+}) => {
+  const childPidsOfParentPid: { [parentPid: number]: number[] } = {};
+
+  for (const processRow of processRows) {
+    const childPids = childPidsOfParentPid[processRow.parentPid];
+
+    if (childPids === undefined) {
+      childPidsOfParentPid[processRow.parentPid] = [processRow.pid];
+    } else {
+      childPids.push(processRow.pid);
+    }
+  }
+
+  const descendantPids: number[] = [];
+  const parentPidsToRead = [rootPid];
+
+  while (parentPidsToRead.length > 0) {
+    const parentPid = parentPidsToRead.pop();
+
+    if (parentPid === undefined) {
+      continue;
+    }
+
+    const childPids = childPidsOfParentPid[parentPid];
+
+    if (childPids === undefined) {
+      continue;
+    }
+
+    for (const childPid of childPids) {
+      descendantPids.push(childPid);
+      parentPidsToRead.push(childPid);
+    }
+  }
+
+  return descendantPids;
+};
+
+const readIsProcessMissingError = (error: unknown) => {
+  return isObject(error) && error.code === "ESRCH";
+};
+
+const stopProcess = (pid: number) => {
+  try {
+    process.kill(pid, TERMINAL_SESSION_STOP_SIGNAL);
+  } catch (error) {
+    if (readIsProcessMissingError(error)) {
+      return;
+    }
+
+    throw error;
+  }
+};
+
+const stopTerminalProcessTree = (rootPid: number) => {
+  const processRows = readProcessRowsSync();
+  const descendantPids = readDescendantProcessIds({
+    rootPid,
+    processRows,
+  });
+
+  for (let index = descendantPids.length - 1; index >= 0; index -= 1) {
+    stopProcess(descendantPids[index]);
   }
 };
 
@@ -457,6 +573,12 @@ export const createTerminalSessionController = ({
       });
     });
     terminalSession.exitDisposable = terminal.onExit(() => {
+      try {
+        stopTerminalProcessTree(terminal.pid);
+      } catch (error) {
+        console.error("Failed to stop terminal process tree.", error);
+      }
+
       terminalSession.isRunning = false;
       terminalSession.isBusy = false;
       terminalSession.terminal = null;
@@ -500,7 +622,23 @@ export const createTerminalSessionController = ({
       return;
     }
 
-    terminalSession.terminal?.kill();
+    const terminal = terminalSession.terminal;
+
+    if (terminal === null) {
+      return;
+    }
+
+    try {
+      stopTerminalProcessTree(terminal.pid);
+    } catch (error) {
+      console.error("Failed to stop terminal process tree.", error);
+    }
+
+    try {
+      terminal.kill();
+    } catch (error) {
+      console.error("Failed to stop terminal.", error);
+    }
   };
 
   const stopAllTerminalSessions = () => {

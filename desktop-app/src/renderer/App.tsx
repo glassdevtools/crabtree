@@ -18,6 +18,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XtermTerminal } from "@xterm/xterm";
 import { FaTerminal } from "react-icons/fa";
 import { GoDotFill } from "react-icons/go";
+import { IoStop } from "react-icons/io5";
 import {
   LuCheck,
   LuCornerRightUp,
@@ -26,7 +27,6 @@ import {
   LuGitPullRequestArrow,
 } from "react-icons/lu";
 import { VscVscode } from "react-icons/vsc";
-import { Resizable } from "react-resizable";
 import { toast } from "sonner";
 import {
   useCallback,
@@ -45,7 +45,6 @@ import type {
   ReactElement,
   ReactNode,
 } from "react";
-import type { ResizeCallbackData } from "react-resizable";
 import type {
   AppUpdateStatus,
   ChatProviderDetection,
@@ -171,7 +170,14 @@ const COMMIT_GRAPH_SEGMENT_STROKE_WIDTH = 2.25;
 // TODO: AI-PICKED-VALUE: This neutral gray makes changed cwd rows read as working-tree state instead of Git history.
 const COMMIT_GRAPH_CWD_CHANGE_COLOR = "#8b929c";
 const COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO = 0;
-const COMMIT_HISTORY_HEADER_HEIGHT = COMMIT_GRAPH_ROW_HEIGHT;
+// TODO: AI-PICKED-VALUE: This initial pane height gives command output room while leaving most of the commit graph visible.
+const TERMINAL_PANE_INITIAL_HEIGHT = 260;
+// TODO: AI-PICKED-VALUE: This minimum keeps the terminal usable after dragging it smaller.
+const TERMINAL_PANE_MIN_HEIGHT = 150;
+// TODO: AI-PICKED-VALUE: This reserved graph height keeps the terminal from collapsing the commit table.
+const TERMINAL_PANE_MIN_GRID_HEIGHT = 180;
+// TODO: AI-PICKED-VALUE: This is small enough to fit more terminal output while keeping command text readable.
+const TERMINAL_FONT_SIZE = 13;
 // Dashboard reads touch chat providers and Git, so automatic refreshes run only when the previous read has finished.
 // TODO: AI-PICKED-VALUE: Refreshing one second after each automatic read keeps branch/worktree state current without queuing Git reads.
 const DASHBOARD_REFRESH_INTERVAL_MS = 1000;
@@ -217,6 +223,20 @@ const readTotalGitChangeSummary = (changeSummary: GitChangeSummary) => {
       changeSummary.staged.changedFileCount +
       changeSummary.unstaged.changedFileCount,
   };
+};
+
+const readTerminalPaneMaxHeight = () => {
+  return Math.max(
+    TERMINAL_PANE_MIN_HEIGHT,
+    window.innerHeight - TERMINAL_PANE_MIN_GRID_HEIGHT,
+  );
+};
+
+const readTerminalPaneHeightWithinBounds = (height: number) => {
+  return Math.min(
+    readTerminalPaneMaxHeight(),
+    Math.max(TERMINAL_PANE_MIN_HEIGHT, Math.round(height)),
+  );
 };
 
 const readChangedFileCountText = (changedFileCount: number) => {
@@ -779,14 +799,6 @@ const COMMIT_HISTORY_MIN_DETAILS_WIDTH =
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.author +
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.date;
 
-type CommitHistoryColumnKey =
-  | "actors"
-  | "branchTags"
-  | "description"
-  | "commit"
-  | "author"
-  | "date";
-
 type CommitHistoryColumnWidths = {
   graph: number;
   actors: number;
@@ -796,13 +808,21 @@ type CommitHistoryColumnWidths = {
   author: number;
   date: number;
 };
+type CommitHistoryColumnResizeKey = keyof CommitHistoryColumnWidths;
 
 type CommitHistoryColumnResize = {
-  columnKey: CommitHistoryColumnKey;
+  columnKey: CommitHistoryColumnResizeKey;
   startClientX: number;
   startColumnWidths: CommitHistoryColumnWidths;
   startWidth: number;
   currentWidth: number;
+};
+
+type TerminalPaneResize = {
+  startClientY: number;
+  startHeight: number;
+  currentHeight: number;
+  terminalPaneElement: HTMLElement;
 };
 
 type BranchPointerDrag = {
@@ -1092,10 +1112,12 @@ const replaceCommitHistoryColumnWidth = ({
   width,
 }: {
   columnWidths: CommitHistoryColumnWidths;
-  columnKey: CommitHistoryColumnKey;
+  columnKey: CommitHistoryColumnResizeKey;
   width: number;
 }) => {
   switch (columnKey) {
+    case "graph":
+      return { ...columnWidths, graph: width };
     case "branchTags":
       return { ...columnWidths, branchTags: width };
     case "actors":
@@ -2964,13 +2986,13 @@ const CommitHistoryColumnResizeHandle = ({
   updateColumnResize,
   finishColumnResize,
 }: {
-  columnKey: CommitHistoryColumnKey;
+  columnKey: CommitHistoryColumnResizeKey;
   startColumnResize: ({
     event,
     columnKey,
   }: {
     event: PointerEvent<HTMLButtonElement>;
-    columnKey: CommitHistoryColumnKey;
+    columnKey: CommitHistoryColumnResizeKey;
   }) => void;
   updateColumnResize: (event: PointerEvent<HTMLButtonElement>) => void;
   finishColumnResize: (event: PointerEvent<HTMLButtonElement>) => void;
@@ -2985,6 +3007,7 @@ const CommitHistoryColumnResizeHandle = ({
       onPointerMove={updateColumnResize}
       onPointerUp={finishColumnResize}
       onPointerCancel={finishColumnResize}
+      onLostPointerCapture={finishColumnResize}
     />
   );
 };
@@ -3325,12 +3348,20 @@ const ConfirmationDialog = ({
 // The terminal pane renders the browser terminal while the main process owns the shell and cwd.
 const TerminalPane = ({
   terminalTarget,
+  terminalPaneHeight,
   closeTerminalPane,
+  startTerminalPaneResize,
+  updateTerminalPaneResize,
+  finishTerminalPaneResize,
   updateTerminalStatusState,
   showErrorMessage,
 }: {
   terminalTarget: TerminalTarget | null;
+  terminalPaneHeight: number;
   closeTerminalPane: () => void;
+  startTerminalPaneResize: (event: PointerEvent<HTMLButtonElement>) => void;
+  updateTerminalPaneResize: (event: PointerEvent<HTMLButtonElement>) => void;
+  finishTerminalPaneResize: (event: PointerEvent<HTMLButtonElement>) => void;
   updateTerminalStatusState: ({
     cwd,
     isBusy,
@@ -3357,7 +3388,10 @@ const TerminalPane = ({
     }
 
     const cwd = terminalTarget.cwd;
-    const terminal = new XtermTerminal({ scrollback: 0 });
+    const terminal = new XtermTerminal({
+      fontSize: TERMINAL_FONT_SIZE,
+      scrollback: 0,
+    });
     const fitAddon = new FitAddon();
     const queuedTerminalEvents: TerminalSessionEvent[] = [];
     let didWriteSnapshot = false;
@@ -3365,6 +3399,7 @@ const TerminalPane = ({
     let dataDisposable: XtermDisposable | null = null;
     let resizeDisposable: XtermDisposable | null = null;
     let animationFrameId: number | null = null;
+    let resizeAnimationFrameId: number | null = null;
 
     // The writer batches PTY chunks so xterm receives output in order without a render for every process event.
     const createTerminalWriter = ({
@@ -3492,13 +3527,20 @@ const TerminalPane = ({
       };
     };
     const resizeTerminal = () => {
-      fitTerminal();
-      const { cols, rows } = readTerminalDimensions();
+      if (resizeAnimationFrameId !== null) {
+        return;
+      }
 
-      void window.crabtree.resizeTerminalSession({
-        cwd,
-        cols,
-        rows,
+      resizeAnimationFrameId = window.requestAnimationFrame(() => {
+        resizeAnimationFrameId = null;
+        fitTerminal();
+        const { cols, rows } = readTerminalDimensions();
+
+        void window.crabtree.resizeTerminalSession({
+          cwd,
+          cols,
+          rows,
+        });
       });
     };
     const resizeObserver = new ResizeObserver(resizeTerminal);
@@ -3611,6 +3653,9 @@ const TerminalPane = ({
       if (animationFrameId !== null) {
         window.cancelAnimationFrame(animationFrameId);
       }
+      if (resizeAnimationFrameId !== null) {
+        window.cancelAnimationFrame(resizeAnimationFrameId);
+      }
 
       if (terminalRef.current === terminal) {
         terminalRef.current = null;
@@ -3636,22 +3681,67 @@ const TerminalPane = ({
   return (
     <section
       className="terminal-pane"
+      style={{ height: terminalPaneHeight }}
       aria-label={`Terminal in ${terminalTarget.cwd}`}
     >
+      <button
+        aria-label="Resize terminal"
+        aria-orientation="horizontal"
+        className="terminal-pane-resize"
+        role="separator"
+        type="button"
+        onLostPointerCapture={finishTerminalPaneResize}
+        onPointerCancel={finishTerminalPaneResize}
+        onPointerDown={startTerminalPaneResize}
+        onPointerMove={updateTerminalPaneResize}
+        onPointerUp={finishTerminalPaneResize}
+      />
       <div className="terminal-pane-header">
         <span className="terminal-pane-title">Terminal</span>
         <code className="terminal-pane-path">{terminalTarget.cwd}</code>
-        <Button
-          aria-label="Hide terminal"
-          className="terminal-pane-close"
-          size="icon-sm"
-          type="button"
-          variant="ghost"
-          onClick={closeTerminalPane}
-        >
-          <X aria-hidden="true" />
-          <span className="sr-only">Hide terminal</span>
-        </Button>
+        <TitleTooltip title="Kill">
+          <Button
+            aria-label="Kill"
+            className="terminal-pane-stop"
+            size="icon-sm"
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              void window.crabtree
+                .stopTerminalSession(terminalTarget.cwd)
+                .then(() => {
+                  updateTerminalStatusState({
+                    cwd: terminalTarget.cwd,
+                    isBusy: false,
+                  });
+                  closeTerminalPane();
+                })
+                .catch((error) => {
+                  const message =
+                    error instanceof Error
+                      ? error.message
+                      : "Failed to stop terminal.";
+                  showErrorMessage(message);
+                });
+            }}
+          >
+            <IoStop aria-hidden="true" />
+            <span className="sr-only">Kill</span>
+          </Button>
+        </TitleTooltip>
+        <TitleTooltip title="Close">
+          <Button
+            aria-label="Close"
+            className="terminal-pane-close"
+            size="icon-sm"
+            type="button"
+            variant="ghost"
+            onClick={closeTerminalPane}
+          >
+            <X aria-hidden="true" />
+            <span className="sr-only">Close</span>
+          </Button>
+        </TitleTooltip>
       </div>
       <div
         className="terminal-surface"
@@ -4170,6 +4260,7 @@ const CommitHistory = ({
   const commitHistoryHeaderScrollRef = useRef<HTMLDivElement | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const columnResizeRef = useRef<CommitHistoryColumnResize | null>(null);
+  const terminalPaneResizeRef = useRef<TerminalPaneResize | null>(null);
   const [columnWidths, setColumnWidths] = useState<CommitHistoryColumnWidths>(
     COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS,
   );
@@ -4199,6 +4290,9 @@ const CommitHistory = ({
   const [terminalTarget, setTerminalTarget] = useState<TerminalTarget | null>(
     null,
   );
+  const [terminalPaneHeight, setTerminalPaneHeight] = useState(() => {
+    return readTerminalPaneHeightWithinBounds(TERMINAL_PANE_INITIAL_HEIGHT);
+  });
   const [isTerminalBusyOfCwd, setIsTerminalBusyOfCwd] = useState<{
     [cwd: string]: boolean;
   }>({});
@@ -4241,6 +4335,15 @@ const CommitHistory = ({
               cwd: terminalSessionEvent.cwd,
               isBusy: terminalSessionEvent.isBusy,
             });
+            if (!terminalSessionEvent.isRunning) {
+              setTerminalTarget((currentTerminalTarget) => {
+                if (currentTerminalTarget?.cwd !== terminalSessionEvent.cwd) {
+                  return currentTerminalTarget;
+                }
+
+                return null;
+              });
+            }
             return;
         }
       },
@@ -4273,6 +4376,19 @@ const CommitHistory = ({
       removeTerminalSessionWatch();
     };
   }, [showErrorMessage, updateTerminalStatusState]);
+  useEffect(() => {
+    const resizeTerminalPaneAfterWindowResize = () => {
+      setTerminalPaneHeight((currentTerminalPaneHeight) =>
+        readTerminalPaneHeightWithinBounds(currentTerminalPaneHeight),
+      );
+    };
+
+    window.addEventListener("resize", resizeTerminalPaneAfterWindowResize);
+
+    return () => {
+      window.removeEventListener("resize", resizeTerminalPaneAfterWindowResize);
+    };
+  }, []);
   useEffect(() => {
     if (
       rowContextMenuTarget === null &&
@@ -4905,17 +5021,41 @@ const CommitHistory = ({
     );
   }, [gridTemplateColumns, tableWidth]);
 
-  const readColumnMinWidth = (columnKey: CommitHistoryColumnKey) => {
-    return COMMIT_HISTORY_MIN_COLUMN_WIDTHS[columnKey];
+  const readColumnMinWidth = (columnKey: CommitHistoryColumnResizeKey) => {
+    switch (columnKey) {
+      case "graph":
+        return graphMinimumWidth;
+      case "actors":
+      case "branchTags":
+      case "description":
+      case "commit":
+      case "author":
+      case "date":
+        return COMMIT_HISTORY_MIN_COLUMN_WIDTHS[columnKey];
+    }
+  };
+  const readColumnMaxWidth = (columnKey: CommitHistoryColumnResizeKey) => {
+    switch (columnKey) {
+      case "graph":
+        return graphMaxWidth;
+      case "actors":
+      case "branchTags":
+      case "description":
+      case "commit":
+      case "author":
+      case "date":
+        return Number.POSITIVE_INFINITY;
+    }
   };
   const startColumnResize = ({
     event,
     columnKey,
   }: {
     event: PointerEvent<HTMLButtonElement>;
-    columnKey: CommitHistoryColumnKey;
+    columnKey: CommitHistoryColumnResizeKey;
   }) => {
     event.preventDefault();
+    event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
     columnResizeRef.current = {
       columnKey,
@@ -4932,10 +5072,15 @@ const CommitHistory = ({
       return;
     }
 
+    event.preventDefault();
     const minWidth = readColumnMinWidth(columnResize.columnKey);
-    const nextWidth = Math.max(
-      minWidth,
-      columnResize.startWidth + event.clientX - columnResize.startClientX,
+    const maxWidth = readColumnMaxWidth(columnResize.columnKey);
+    const nextWidth = Math.min(
+      maxWidth,
+      Math.max(
+        minWidth,
+        columnResize.startWidth + event.clientX - columnResize.startClientX,
+      ),
     );
     const nextColumnWidths = replaceCommitHistoryColumnWidth({
       columnWidths: columnResize.startColumnWidths,
@@ -4955,6 +5100,7 @@ const CommitHistory = ({
       return;
     }
 
+    columnResizeRef.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -4966,29 +5112,59 @@ const CommitHistory = ({
         width: columnResize.currentWidth,
       }),
     );
-    columnResizeRef.current = null;
+    if (columnResize.columnKey === "graph") {
+      setDidResizeGraphColumn(true);
+    }
   };
-  const resizeGraphColumn = (data: ResizeCallbackData) => {
-    if (!Number.isFinite(data.size.width)) {
+  const startTerminalPaneResize = (event: PointerEvent<HTMLButtonElement>) => {
+    const terminalPaneElement = event.currentTarget.closest(".terminal-pane");
+
+    if (!(terminalPaneElement instanceof HTMLElement)) {
       return;
     }
 
-    const nextGraphWidth = Math.min(
-      graphMaxWidth,
-      Math.max(graphMinimumWidth, Math.round(data.size.width)),
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    terminalPaneResizeRef.current = {
+      startClientY: event.clientY,
+      startHeight: terminalPaneHeight,
+      currentHeight: terminalPaneHeight,
+      terminalPaneElement,
+    };
+  };
+  const updateTerminalPaneResize = (event: PointerEvent<HTMLButtonElement>) => {
+    const terminalPaneResize = terminalPaneResizeRef.current;
+
+    if (terminalPaneResize === null) {
+      return;
+    }
+
+    event.preventDefault();
+    const nextHeight = readTerminalPaneHeightWithinBounds(
+      terminalPaneResize.startHeight +
+        terminalPaneResize.startClientY -
+        event.clientY,
     );
+    terminalPaneResize.terminalPaneElement.style.height = `${nextHeight}px`;
+    terminalPaneResizeRef.current = {
+      ...terminalPaneResize,
+      currentHeight: nextHeight,
+    };
+  };
+  const finishTerminalPaneResize = (event: PointerEvent<HTMLButtonElement>) => {
+    const terminalPaneResize = terminalPaneResizeRef.current;
 
-    setColumnWidths((currentColumnWidths) => {
-      if (currentColumnWidths.graph === nextGraphWidth) {
-        return currentColumnWidths;
-      }
+    if (terminalPaneResize === null) {
+      return;
+    }
 
-      return {
-        ...currentColumnWidths,
-        graph: nextGraphWidth,
-      };
-    });
-    setDidResizeGraphColumn(true);
+    terminalPaneResizeRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    setTerminalPaneHeight(terminalPaneResize.currentHeight);
   };
   const startBranchPointerDrag = ({
     event,
@@ -5403,6 +5579,11 @@ const CommitHistory = ({
   ) => {
     event.preventDefault();
     event.stopPropagation();
+    if (terminalTarget?.cwd === cwd) {
+      setTerminalTarget(null);
+      return;
+    }
+
     setTerminalTarget({ cwd });
     trackDesktopAction({
       eventName: "terminal_opened",
@@ -6065,29 +6246,12 @@ const CommitHistory = ({
           <div className="commit-history-header">
             <div className="commit-history-header-cell commit-history-graph-title">
               <span>Graph</span>
-              <Resizable
-                axis="x"
-                width={graphWidth}
-                height={COMMIT_HISTORY_HEADER_HEIGHT}
-                minConstraints={[
-                  graphMinimumWidth,
-                  COMMIT_HISTORY_HEADER_HEIGHT,
-                ]}
-                maxConstraints={[graphMaxWidth, COMMIT_HISTORY_HEADER_HEIGHT]}
-                resizeHandles={["e"]}
-                handle={(resizeHandle, ref) => (
-                  <span
-                    className={`commit-history-panel-resize react-resizable-handle react-resizable-handle-${resizeHandle}`}
-                    ref={ref}
-                  />
-                )}
-                onResize={(_event, data) => resizeGraphColumn(data)}
-              >
-                <div
-                  className="commit-history-graph-resize-surface"
-                  aria-hidden="true"
-                />
-              </Resizable>
+              <CommitHistoryColumnResizeHandle
+                columnKey="graph"
+                startColumnResize={startColumnResize}
+                updateColumnResize={updateColumnResize}
+                finishColumnResize={finishColumnResize}
+              />
             </div>
             <div className="commit-history-header-cell">
               <Button
@@ -6235,7 +6399,11 @@ const CommitHistory = ({
         </div>
         <TerminalPane
           terminalTarget={terminalTarget}
+          terminalPaneHeight={terminalPaneHeight}
           closeTerminalPane={closeTerminalPane}
+          startTerminalPaneResize={startTerminalPaneResize}
+          updateTerminalPaneResize={updateTerminalPaneResize}
+          finishTerminalPaneResize={finishTerminalPaneResize}
           updateTerminalStatusState={updateTerminalStatusState}
           showErrorMessage={showErrorMessage}
         />

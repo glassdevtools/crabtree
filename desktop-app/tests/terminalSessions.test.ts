@@ -6,6 +6,9 @@ import test from "node:test";
 import type { TerminalSessionEvent } from "../src/shared/types";
 import { createTerminalSessionController } from "../src/main/terminalSessions";
 
+// TODO: AI-PICKED-VALUE: Thirty seconds keeps the child process alive long enough for the stop regression test without making cleanup slow.
+const TERMINAL_PROCESS_TREE_TEST_SLEEP_SECONDS = 30;
+
 const waitForTerminalEvent = async ({
   readDidReceiveEvent,
 }: {
@@ -164,3 +167,116 @@ test("marks a terminal session busy while a child process is running", async () 
     terminalSessionController.stopAllTerminalSessions();
   }
 });
+
+test(
+  "stops child processes when a terminal session stops",
+  { skip: process.platform === "win32" },
+  async () => {
+    const terminalSessionEvents: TerminalSessionEvent[] = [];
+    const terminalSessionController = createTerminalSessionController({
+      sendTerminalSessionEvent: (terminalSessionEvent) => {
+        terminalSessionEvents.push(terminalSessionEvent);
+      },
+    });
+    const cwd = await mkdtemp(join(tmpdir(), "crabtree-terminal-tree-"));
+    const childPidMarker = "crabtree-terminal-child-pid";
+    let childPid: number | null = null;
+
+    const readTerminalOutput = () => {
+      let output = "";
+
+      for (const terminalSessionEvent of terminalSessionEvents) {
+        if (terminalSessionEvent.type === "data") {
+          output += terminalSessionEvent.data;
+        }
+      }
+
+      return output;
+    };
+    const readChildPid = () => {
+      const match = new RegExp(`${childPidMarker}:(\\d+)`).exec(
+        readTerminalOutput(),
+      );
+
+      if (match === null) {
+        return null;
+      }
+
+      const pid = Number(match[1]);
+
+      if (!Number.isSafeInteger(pid)) {
+        return null;
+      }
+
+      return pid;
+    };
+    const readIsProcessRunning = (pid: number) => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    try {
+      await terminalSessionController.startTerminalSession({
+        cwd,
+        // TODO: AI-PICKED-VALUE: This common terminal size is enough for the one-line child-process command used by the regression test.
+        cols: 80,
+        rows: 24,
+      });
+
+      terminalSessionController.writeTerminalSession({
+        cwd,
+        data: `sleep ${TERMINAL_PROCESS_TREE_TEST_SLEEP_SECONDS} & echo ${childPidMarker}:$!\r`,
+      });
+
+      await waitForTerminalEvent({
+        readDidReceiveEvent: () => {
+          childPid = readChildPid();
+          return childPid !== null;
+        },
+      });
+
+      if (childPid === null) {
+        assert.fail("Expected the terminal to print a child process id.");
+      }
+
+      const terminalChildPid = childPid;
+
+      assert.equal(readIsProcessRunning(terminalChildPid), true);
+
+      terminalSessionController.stopTerminalSession(cwd);
+
+      await waitForTerminalEvent({
+        readDidReceiveEvent: () => {
+          for (const terminalSessionEvent of terminalSessionEvents) {
+            if (
+              terminalSessionEvent.type === "status" &&
+              terminalSessionEvent.cwd === cwd &&
+              !terminalSessionEvent.isRunning
+            ) {
+              return true;
+            }
+          }
+
+          return false;
+        },
+      });
+      await waitForTerminalEvent({
+        readDidReceiveEvent: () => !readIsProcessRunning(terminalChildPid),
+      });
+    } finally {
+      if (childPid !== null && readIsProcessRunning(childPid)) {
+        try {
+          process.kill(childPid, "SIGKILL");
+        } catch {
+          // The process may exit between the check and cleanup.
+        }
+      }
+
+      terminalSessionController.stopAllTerminalSessions();
+    }
+  },
+);
