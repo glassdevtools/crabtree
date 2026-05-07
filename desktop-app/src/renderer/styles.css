@@ -1,7 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "react-resizable/css/styles.css";
 
 @source "../components";
 
@@ -740,8 +739,7 @@ textarea,
   user-select: none;
 }
 
-.commit-history-column-resize::before,
-.commit-history-panel-resize::before {
+.commit-history-column-resize::before {
   content: "";
   position: absolute;
   top: 3px;
@@ -753,49 +751,6 @@ textarea,
 }
 
 .commit-history-column-resize:hover {
-  background: rgba(63, 140, 255, 0.18);
-}
-
-.commit-history-panel-resize {
-  position: absolute;
-  top: 0;
-  right: -4px;
-  z-index: 2;
-  width: 8px;
-  height: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: col-resize;
-  touch-action: none;
-  user-select: none;
-}
-
-.commit-history-graph-resize-surface {
-  position: absolute;
-  inset: 0;
-  height: 100%;
-  pointer-events: none;
-}
-
-.commit-history-panel-resize.react-resizable-handle {
-  margin-top: 0;
-  background-image: none;
-  transform: none;
-}
-
-.commit-history-panel-resize.react-resizable-handle-e {
-  top: 0;
-  right: -4px;
-}
-
-.commit-history-panel-resize.react-resizable-handle,
-.commit-history-graph-resize-surface .commit-history-panel-resize {
-  pointer-events: auto;
-}
-
-.commit-history-panel-resize:hover,
-.commit-history-panel-resize:active {
   background: rgba(63, 140, 255, 0.18);
 }
 
@@ -991,69 +946,104 @@ textarea,
   width: min(460px, calc(100vw - 32px));
 }
 
-/* TODO: AI-PICKED-VALUE: The bottom terminal pane takes about a third of the window so command output is readable without swallowing the commit grid. */
 .terminal-pane {
-  min-height: 160px;
-  height: min(32vh, 280px);
+  /* TODO: AI-PICKED-VALUE: This header height matches one readable terminal row at the current terminal font size. */
+  --terminal-pane-header-height: 28px;
+  position: relative;
+  min-height: 0;
   flex: 0 0 auto;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  overflow: hidden;
-  border-top: 1px solid #cbd5e1;
+  overflow: visible;
+  border-top: 1px solid #252b33;
   outline: none;
-  background: #f6f8fb;
-  color: #111827;
+  background: #000;
+  color: #e5e7eb;
+}
+
+.terminal-pane-resize {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 3;
+  height: 8px;
+  width: auto;
+  padding: 0;
+  border: 0;
+  appearance: none;
+  background: transparent;
+  cursor: row-resize;
+  touch-action: none;
+  transform: translateY(-4px);
+  user-select: none;
 }
 
 .terminal-pane-header {
   min-width: 0;
-  height: 26px;
+  height: var(--terminal-pane-header-height);
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 6px 0 10px;
-  border-bottom: 1px solid #d9dee6;
-  background: #eef2f7;
+  padding: 0 10px;
+  border-bottom: 1px solid #252b33;
+  background: #000;
 }
 
 .terminal-pane-title {
   flex: 0 0 auto;
-  color: #343a43;
-  font-size: 11px;
-  font-weight: 760;
+  color: #d1d5db;
+  font-size: 12px;
+  font-weight: 620;
+  line-height: 1;
 }
 
 .terminal-pane-path {
   min-width: 0;
   flex: 1;
   overflow: hidden;
-  color: #4f5660;
+  color: #9ca3af;
   font-size: 11px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.terminal-pane-stop,
 .terminal-pane-close {
   flex: 0 0 auto;
   width: 22px;
   height: 22px;
   background: transparent;
-  color: #5f6670;
+  color: #cbd5e1;
 }
 
+.terminal-pane-stop {
+  color: #fff;
+}
+
+.terminal-pane-stop svg {
+  width: 14px;
+  height: 14px;
+}
+
+.terminal-pane-stop:hover,
 .terminal-pane-close:hover {
-  background: #e3e7ed;
-  color: #343a43;
+  background: transparent;
+  color: #cbd5e1;
 }
 
-/* TODO: AI-PICKED-VALUE: This dark terminal surface matches common terminal themes without adding a new app-wide color scale. */
+.terminal-pane-stop:hover {
+  color: #fff;
+}
+
 .terminal-surface {
   min-height: 0;
   overflow: hidden;
-  border: 1px solid #252b33;
+  border: 0;
   border-radius: 0;
-  background: #0c0f14;
+  background: #000;
   cursor: text;
   padding: 8px;
 }
@@ -1061,15 +1051,17 @@ textarea,
 .terminal-surface .xterm {
   width: 100%;
   height: 100%;
+  background: #000;
 }
 
 .terminal-surface .xterm-viewport {
+  background: #000 !important;
   overflow-y: hidden !important;
 }
 
 .terminal-surface .xterm-viewport,
 .terminal-surface .xterm-screen {
-  border-radius: 4px;
+  border-radius: 0;
 }
 
 .git-pull-request-field {

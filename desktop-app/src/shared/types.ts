@@ -319,6 +319,7 @@ export type CrabtreeApi = {
   resizeTerminalSession: (
     terminalSessionResizeRequest: TerminalSessionResizeRequest,
   ) => Promise<void>;
+  stopTerminalSession: (cwd: string) => Promise<void>;
   copyText: (text: string) => Promise<void>;
   stageGitChanges: (path: string) => Promise<void>;
   unstageGitChanges: (path: string) => Promise<void>;

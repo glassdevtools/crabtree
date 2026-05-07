@@ -33,7 +33,7 @@ const featureItems = [
   {
     title: "Git power tools",
     descriptionLines: [
-      "Access power tools like one-click merges, simplified push and pull, and moving branches by simply dragging.",
+      "Access power tools like one-click merge, simplified push and pull, and moving branches by simply dragging.",
     ],
   },
   {
@@ -83,7 +83,7 @@ const faqItems = [
   {
     question: "How should I use it?",
     answer: [
-      "Start a bunch of worktrees in Codex. When you're ready to merge them, open Crabtree and switch to a branch by double clicking. Follow the suggestions in the Graph column: branch, commit, merge, and push.",
+      "Start a bunch of worktrees in Codex. When you're ready to merge them, open Crabtree and switch to a branch by double clicking. Follow the suggestions in the Graph column to branch, commit, merge, and push.",
     ],
   },
   {

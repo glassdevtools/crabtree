@@ -68,6 +68,7 @@ import {
   createTerminalSessionController,
   readTerminalSessionResizeRequest,
   readTerminalSessionStartRequest,
+  readTerminalSessionStopRequest,
   readTerminalSessionWriteRequest,
 } from "./terminalSessions";
 
@@ -1005,6 +1006,12 @@ ipcMain.handle("terminal:writeSession", async (_event, value: unknown) => {
 ipcMain.handle("terminal:resizeSession", async (_event, value: unknown) => {
   terminalSessionController.resizeTerminalSession(
     readTerminalSessionResizeRequest(value),
+  );
+});
+
+ipcMain.handle("terminal:stopSession", async (_event, value: unknown) => {
+  terminalSessionController.stopTerminalSession(
+    readTerminalSessionStopRequest(value),
   );
 });
 
