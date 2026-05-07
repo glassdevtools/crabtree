@@ -2094,9 +2094,9 @@ const ChatRobotTags = ({
                     <PathLauncherIcon pathLauncher={pathLauncher} />
                   </Button>
                 </TitleTooltip>
-                <TitleTooltip title="Open in Terminal">
+                <TitleTooltip title="Show Terminal">
                   <Button
-                    aria-label={`Open terminal in ${threadGroup.cwd}`}
+                    aria-label={`Show terminal in ${threadGroup.cwd}`}
                     className={
                       isTerminalBusyOfCwd[threadGroup.cwd] === true
                         ? "commit-thread-terminal commit-thread-terminal-busy"
