@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XtermTerminal } from "@xterm/xterm";
-import { Dialog as RadixDialog } from "radix-ui";
 import { FaTerminal } from "react-icons/fa";
 import { GoDotFill } from "react-icons/go";
 import {
@@ -74,12 +73,10 @@ import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogOverlay,
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
@@ -1998,7 +1995,7 @@ const ChatRobotTags = ({
   isTerminalBusyOfCwd,
   openCopyContextMenu,
   openCodePath,
-  openTerminalModal,
+  openTerminalPane,
   showErrorMessage,
 }: {
   threadGroups: ThreadGroup[];
@@ -2010,10 +2007,7 @@ const ChatRobotTags = ({
     errorMessage: string,
   ) => void;
   openCodePath: (path: string) => Promise<void>;
-  openTerminalModal: (
-    event: MouseEvent<HTMLButtonElement>,
-    cwd: string,
-  ) => void;
+  openTerminalPane: (event: MouseEvent<HTMLButtonElement>, cwd: string) => void;
   showErrorMessage: (message: string) => void;
 }) => {
   if (threadGroups.length === 0) {
@@ -2092,7 +2086,7 @@ const ChatRobotTags = ({
                     onMouseDown={(event) => event.stopPropagation()}
                     onDoubleClick={(event) => event.stopPropagation()}
                     onClick={(event) =>
-                      openTerminalModal(event, threadGroup.cwd)
+                      openTerminalPane(event, threadGroup.cwd)
                     }
                   >
                     <FaTerminal
@@ -2299,7 +2293,7 @@ const CommitHistoryRow = ({
   openCopyContextMenu,
   openGitRefContextMenu,
   openCodePath,
-  openTerminalModal,
+  openTerminalPane,
   showErrorMessage,
   startBranchPointerDrag,
   finishBranchPointerDrag,
@@ -2362,10 +2356,7 @@ const CommitHistoryRow = ({
     gitRefContextMenuTarget: Omit<GitRefContextMenuTarget, "x" | "y">,
   ) => void;
   openCodePath: (path: string) => Promise<void>;
-  openTerminalModal: (
-    event: MouseEvent<HTMLButtonElement>,
-    cwd: string,
-  ) => void;
+  openTerminalPane: (event: MouseEvent<HTMLButtonElement>, cwd: string) => void;
   showErrorMessage: (message: string) => void;
   startBranchPointerDrag: ({
     event,
@@ -2871,7 +2862,7 @@ const CommitHistoryRow = ({
           isTerminalBusyOfCwd={isTerminalBusyOfCwd}
           openCopyContextMenu={openCopyContextMenu}
           openCodePath={openCodePath}
-          openTerminalModal={openTerminalModal}
+          openTerminalPane={openTerminalPane}
           showErrorMessage={showErrorMessage}
         />
       </div>
@@ -3331,32 +3322,15 @@ const ConfirmationDialog = ({
   );
 };
 
-// The terminal has its own modal surface because the shared dialog is sized for small forms.
-const TerminalModalContent = ({ children }: { children: ReactNode }) => {
-  return (
-    <RadixDialog.Portal>
-      <DialogOverlay />
-      <RadixDialog.Content
-        className="terminal-modal-content"
-        onOpenAutoFocus={(event) => {
-          event.preventDefault();
-        }}
-      >
-        {children}
-      </RadixDialog.Content>
-    </RadixDialog.Portal>
-  );
-};
-
-// The terminal modal renders the browser terminal while the main process owns the shell and cwd.
-const TerminalDialog = ({
+// The terminal pane renders the browser terminal while the main process owns the shell and cwd.
+const TerminalPane = ({
   terminalTarget,
-  closeTerminalModal,
+  closeTerminalPane,
   updateTerminalStatusState,
   showErrorMessage,
 }: {
   terminalTarget: TerminalTarget | null;
-  closeTerminalModal: () => void;
+  closeTerminalPane: () => void;
   updateTerminalStatusState: ({
     cwd,
     isBusy,
@@ -3383,7 +3357,7 @@ const TerminalDialog = ({
     }
 
     const cwd = terminalTarget.cwd;
-    const terminal = new XtermTerminal();
+    const terminal = new XtermTerminal({ scrollback: 0 });
     const fitAddon = new FitAddon();
     const queuedTerminalEvents: TerminalSessionEvent[] = [];
     let didWriteSnapshot = false;
@@ -3655,53 +3629,39 @@ const TerminalDialog = ({
     updateTerminalStatusState,
   ]);
 
-  return (
-    <Dialog
-      open={terminalTarget !== null}
-      onOpenChange={(isOpen) => {
-        if (isOpen) {
-          return;
-        }
+  if (terminalTarget === null) {
+    return null;
+  }
 
-        closeTerminalModal();
-      }}
+  return (
+    <section
+      className="terminal-pane"
+      aria-label={`Terminal in ${terminalTarget.cwd}`}
     >
-      {terminalTarget === null ? null : (
-        <TerminalModalContent>
-          <div className="terminal-modal-header">
-            <DialogTitle className="terminal-modal-title">Terminal</DialogTitle>
-            <DialogDescription>
-              <code className="terminal-modal-path">{terminalTarget.cwd}</code>
-            </DialogDescription>
-          </div>
-          <div
-            className="terminal-surface"
-            ref={setTerminalElementRef}
-            aria-label={`Terminal in ${terminalTarget.cwd}`}
-            onMouseDown={() => {
-              terminalRef.current?.focus();
-            }}
-          />
-          <div className="terminal-modal-footer">
-            <Button type="button" onClick={closeTerminalModal}>
-              Close
-            </Button>
-          </div>
-          <DialogClose asChild>
-            <Button
-              aria-label="Close terminal"
-              className="terminal-modal-close"
-              size="icon-sm"
-              type="button"
-              variant="ghost"
-            >
-              <X aria-hidden="true" />
-              <span className="sr-only">Close terminal</span>
-            </Button>
-          </DialogClose>
-        </TerminalModalContent>
-      )}
-    </Dialog>
+      <div className="terminal-pane-header">
+        <span className="terminal-pane-title">Terminal</span>
+        <code className="terminal-pane-path">{terminalTarget.cwd}</code>
+        <Button
+          aria-label="Hide terminal"
+          className="terminal-pane-close"
+          size="icon-sm"
+          type="button"
+          variant="ghost"
+          onClick={closeTerminalPane}
+        >
+          <X aria-hidden="true" />
+          <span className="sr-only">Hide terminal</span>
+        </Button>
+      </div>
+      <div
+        className="terminal-surface"
+        ref={setTerminalElementRef}
+        aria-label={`Terminal in ${terminalTarget.cwd}`}
+        onMouseDown={() => {
+          terminalRef.current?.focus();
+        }}
+      />
+    </section>
   );
 };
 
@@ -5437,7 +5397,7 @@ const CommitHistory = ({
       properties: {},
     });
   };
-  const openTerminalModal = (
+  const openTerminalPane = (
     event: MouseEvent<HTMLButtonElement>,
     cwd: string,
   ) => {
@@ -5449,7 +5409,7 @@ const CommitHistory = ({
       properties: { source: "commit_history" },
     });
   };
-  const closeTerminalModal = () => {
+  const closeTerminalPane = () => {
     setTerminalTarget(null);
   };
   const closeBranchMergeConfirmationModal = () => {
@@ -6265,7 +6225,7 @@ const CommitHistory = ({
                 openCopyContextMenu={openCopyContextMenu}
                 openGitRefContextMenu={openGitRefContextMenu}
                 openCodePath={openCodePath}
-                openTerminalModal={openTerminalModal}
+                openTerminalPane={openTerminalPane}
                 showErrorMessage={showErrorMessage}
                 startBranchPointerDrag={startBranchPointerDrag}
                 finishBranchPointerDrag={finishBranchPointerDrag}
@@ -6273,6 +6233,12 @@ const CommitHistory = ({
             ))}
           </div>
         </div>
+        <TerminalPane
+          terminalTarget={terminalTarget}
+          closeTerminalPane={closeTerminalPane}
+          updateTerminalStatusState={updateTerminalStatusState}
+          showErrorMessage={showErrorMessage}
+        />
         <BranchCreateDialog
           branchCreateTarget={branchCreateTarget}
           createBranch={createBranch}
@@ -6299,12 +6265,6 @@ const CommitHistory = ({
           pathLauncher={pathLauncher}
           openCodePath={openCodePath}
           closeRowDiffModal={closeRowDiffModal}
-        />
-        <TerminalDialog
-          terminalTarget={terminalTarget}
-          closeTerminalModal={closeTerminalModal}
-          updateTerminalStatusState={updateTerminalStatusState}
-          showErrorMessage={showErrorMessage}
         />
         <ConfirmationDialog
           isOpen={gitRefDeleteTarget !== null}

@@ -137,9 +137,11 @@ textarea,
 }
 
 .app-shell {
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .initial-loading-error {
@@ -419,6 +421,7 @@ textarea,
   flex: 1;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .repo-list {
@@ -427,7 +430,7 @@ textarea,
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: visible;
+  overflow: hidden;
   overflow-anchor: none;
   padding: 12px 0 0;
 }
@@ -451,6 +454,8 @@ textarea,
   min-height: 0;
   flex: 1;
   display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .repo-header {
@@ -639,7 +644,7 @@ textarea,
   --commit-history-table-width: 1524px;
   min-height: 0;
   flex: 1;
-  overflow: visible;
+  overflow: hidden;
   overflow-anchor: none;
   border: 1px solid #d9dee6;
   border-radius: 0;
@@ -674,8 +679,9 @@ textarea,
 }
 
 .commit-history-body-scroll {
-  overflow-x: auto;
-  overflow-y: visible;
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
 }
 
 .commit-history-header-cell {
@@ -985,61 +991,58 @@ textarea,
   width: min(460px, calc(100vw - 32px));
 }
 
-/* TODO: AI-PICKED-VALUE: The terminal modal is wider than normal dialogs so command output has room while still leaving a small margin around the app window. */
-.terminal-modal-content {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  z-index: 50;
+/* TODO: AI-PICKED-VALUE: The bottom terminal pane takes about a third of the window so command output is readable without swallowing the commit grid. */
+.terminal-pane {
+  min-height: 160px;
+  height: min(32vh, 280px);
+  flex: 0 0 auto;
   display: grid;
-  width: min(1180px, calc(100vw - 24px));
-  height: min(760px, calc(100vh - 24px));
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  border-radius: 8px;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border-top: 1px solid #cbd5e1;
   outline: none;
   background: #f6f8fb;
-  box-shadow: 0 24px 72px rgba(15, 23, 42, 0.24);
   color: #111827;
-  transform: translate(-50%, -50%);
 }
 
-.terminal-modal-header {
+.terminal-pane-header {
   min-width: 0;
-  padding-right: 30px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px 0 10px;
+  border-bottom: 1px solid #d9dee6;
+  background: #eef2f7;
 }
 
-.terminal-modal-title {
-  padding: 0 0 4px;
+.terminal-pane-title {
+  flex: 0 0 auto;
+  color: #343a43;
+  font-size: 11px;
+  font-weight: 760;
 }
 
-.terminal-modal-path {
-  display: block;
-  max-width: 100%;
+.terminal-pane-path {
+  min-width: 0;
+  flex: 1;
   overflow: hidden;
   color: #4f5660;
+  font-size: 11px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.terminal-modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.terminal-modal-close {
-  position: absolute;
-  top: 8px;
-  right: 8px;
+.terminal-pane-close {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
   background: transparent;
   color: #5f6670;
 }
 
-.terminal-modal-close:hover {
+.terminal-pane-close:hover {
   background: #e3e7ed;
   color: #343a43;
 }
@@ -1049,7 +1052,7 @@ textarea,
   min-height: 0;
   overflow: hidden;
   border: 1px solid #252b33;
-  border-radius: 6px;
+  border-radius: 0;
   background: #0c0f14;
   cursor: text;
   padding: 8px;
@@ -1058,6 +1061,10 @@ textarea,
 .terminal-surface .xterm {
   width: 100%;
   height: 100%;
+}
+
+.terminal-surface .xterm-viewport {
+  overflow-y: hidden !important;
 }
 
 .terminal-surface .xterm-viewport,
