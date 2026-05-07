@@ -39,6 +39,11 @@ export type ChatThreadOpenRequest = {
   cwd: string;
 };
 
+export type OpenChatProviderPathRequest = {
+  providerId: ChatProviderId;
+  path: string;
+};
+
 export type ChatProviderRepoFolder = {
   providerId: ChatProviderId;
   path: string;
@@ -302,6 +307,9 @@ export type CrabtreeApi = {
   quitAndInstallAppUpdate: () => Promise<void>;
   openChatThread: (
     chatThreadOpenRequest: ChatThreadOpenRequest,
+  ) => Promise<void>;
+  openChatProviderPath: (
+    openChatProviderPathRequest: OpenChatProviderPathRequest,
   ) => Promise<void>;
   openExternalUrl: (url: string) => Promise<void>;
   openPath: (openPathRequest: OpenPathRequest) => Promise<void>;

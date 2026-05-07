@@ -186,7 +186,8 @@ textarea,
   margin-left: auto;
 }
 
-.path-launcher-control {
+.path-launcher-control,
+.chat-provider-launcher-control {
   height: 28px;
   display: inline-flex;
   align-items: center;
@@ -197,7 +198,8 @@ textarea,
   color: #343a43;
 }
 
-.path-launcher-open {
+.path-launcher-open,
+.chat-provider-launcher-open {
   width: 34px;
   height: 100%;
   display: inline-flex;
@@ -209,23 +211,28 @@ textarea,
   background: #ffffff;
 }
 
-.path-launcher-open:not(:disabled):hover {
+.path-launcher-open:not(:disabled):hover,
+.chat-provider-launcher-open:not(:disabled):hover {
   background: #ffffff;
 }
 
-.path-launcher-open:disabled {
+.path-launcher-open:disabled,
+.chat-provider-launcher-open:disabled {
   cursor: default;
   opacity: 0.46;
 }
 
 .path-launcher-open .path-launcher-icon,
 .path-launcher-open .path-launcher-icon-image,
-.path-launcher-open .path-launcher-icon svg {
+.path-launcher-open .path-launcher-icon svg,
+.chat-provider-launcher-open .chat-provider-launcher-icon,
+.chat-provider-launcher-open .chat-provider-launcher-icon-image {
   width: 16px;
   height: 16px;
 }
 
-.path-launcher-select {
+.path-launcher-select,
+.chat-provider-launcher-select {
   width: 26px;
   height: 100%;
   justify-content: center;
@@ -237,25 +244,31 @@ textarea,
 }
 
 .path-launcher-select:hover,
-.path-launcher-select[aria-expanded="true"] {
+.path-launcher-select[aria-expanded="true"],
+.chat-provider-launcher-select:hover,
+.chat-provider-launcher-select[aria-expanded="true"] {
   background: #ffffff;
 }
 
-.path-launcher-select [data-slot="select-value"] {
+.path-launcher-select [data-slot="select-value"],
+.chat-provider-launcher-select [data-slot="select-value"] {
   display: none;
 }
 
-.path-launcher-select > svg {
+.path-launcher-select > svg,
+.chat-provider-launcher-select > svg {
   width: 14px;
   height: 14px;
   color: #5f6670;
 }
 
-.path-launcher-select-content {
+.path-launcher-select-content,
+.chat-provider-launcher-select-content {
   width: 160px;
 }
 
-.path-launcher-option {
+.path-launcher-option,
+.chat-provider-launcher-option {
   min-height: 24px;
   display: flex;
   align-items: center;
@@ -264,7 +277,8 @@ textarea,
   line-height: 1;
 }
 
-.path-launcher-icon {
+.path-launcher-icon,
+.chat-provider-launcher-icon {
   width: 20px;
   height: 20px;
   flex: 0 0 20px;
@@ -279,7 +293,8 @@ textarea,
   color: #0078d4;
 }
 
-.path-launcher-icon-image {
+.path-launcher-icon-image,
+.chat-provider-launcher-icon-image {
   width: 20px;
   height: 20px;
   display: block;
@@ -638,9 +653,9 @@ textarea,
 }
 
 .commit-history {
-  --commit-history-grid-template-columns: 300px 160px 240px 420px 84px 150px
+  --commit-history-grid-template-columns: 300px 50px 70px 240px 420px 84px 150px
     170px;
-  --commit-history-table-width: 1524px;
+  --commit-history-table-width: 1484px;
   min-height: 0;
   flex: 1;
   overflow: hidden;
@@ -701,20 +716,31 @@ textarea,
   text-overflow: ellipsis;
 }
 
-.commit-history-header-toggle {
-  min-width: 0;
-  height: 18px;
-  padding: 0 5px;
-  border: 0;
-  border-radius: 4px;
-  color: inherit;
-  font: inherit;
-  font-weight: inherit;
+.commit-history-chats-title {
+  gap: 4px;
+  padding-right: 12px;
 }
 
-.commit-history-header-toggle[aria-pressed="true"] {
+.commit-history-header-filter {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: #8b929c;
+  flex: 0 0 auto;
+}
+
+.commit-history-header-filter[aria-pressed="true"] {
   background: #eaf1ff;
   color: #0a64c9;
+}
+
+.commit-history-header-filter svg {
+  width: 10px;
+  height: 10px;
 }
 
 .commit-history-graph-title {
@@ -1000,7 +1026,7 @@ textarea,
 
 .terminal-pane-path {
   min-width: 0;
-  flex: 1;
+  flex: 0 1 auto;
   overflow: hidden;
   color: #9ca3af;
   font-size: 11px;
@@ -1020,6 +1046,7 @@ textarea,
 }
 
 .terminal-pane-stop {
+  margin-left: auto;
   color: #fff;
 }
 
@@ -1310,7 +1337,8 @@ textarea,
 }
 
 .commit-branch-tags-cell,
-.commit-actors-cell,
+.commit-code-cell,
+.commit-chats-cell,
 .commit-description-cell,
 .commit-hash-cell,
 .commit-author-cell,
@@ -1322,7 +1350,8 @@ textarea,
 }
 
 .commit-history-row-multiline .commit-branch-tags-cell,
-.commit-history-row-multiline .commit-actors-cell,
+.commit-history-row-multiline .commit-code-cell,
+.commit-history-row-multiline .commit-chats-cell,
 .commit-history-row-multiline .commit-description-cell,
 .commit-history-row-multiline .commit-hash-cell,
 .commit-history-row-multiline .commit-author-cell,
@@ -1333,25 +1362,29 @@ textarea,
 }
 
 .commit-branch-tags-cell,
-.commit-actors-cell,
+.commit-code-cell,
+.commit-chats-cell,
 .commit-description-cell {
   overflow: hidden;
 }
 
 .commit-branch-tags-cell,
-.commit-actors-cell {
+.commit-code-cell,
+.commit-chats-cell {
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
 }
 
 .commit-branch-tags-cell::-webkit-scrollbar,
-.commit-actors-cell::-webkit-scrollbar {
+.commit-code-cell::-webkit-scrollbar,
+.commit-chats-cell::-webkit-scrollbar {
   display: none;
 }
 
 .commit-branch-tags-cell .commit-label-list,
-.commit-actors-cell .commit-label-list {
+.commit-code-cell .commit-label-list,
+.commit-chats-cell .commit-label-list {
   min-width: max-content;
   flex: 0 0 auto;
   overflow: visible;

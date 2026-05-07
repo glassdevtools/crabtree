@@ -7,6 +7,7 @@ import test from "node:test";
 import {
   readOpenCodeDatabasePath,
   readCodexDashboardData,
+  readChatProviderProjectOpenTarget,
   readOpenCodeDashboardDataForHome,
   readChatProviderDetectionsForHome,
   readOpenCodeProjectDataPath,
@@ -78,6 +79,47 @@ test("detects Codex when its command is available", async () => {
       ],
     );
   });
+});
+
+test("reads the Codex project open command", () => {
+  assert.deepEqual(
+    readChatProviderProjectOpenTarget({
+      providerId: "codex",
+      path: "/tmp/project-one",
+      platform: "darwin",
+    }),
+    {
+      type: "command",
+      command: "/Applications/Codex.app/Contents/MacOS/Codex",
+      args: ["--open-project", "/tmp/project-one"],
+    },
+  );
+});
+
+test("reads the OpenCode project open URL", () => {
+  assert.deepEqual(
+    readChatProviderProjectOpenTarget({
+      providerId: "openCode",
+      path: "/tmp/project one",
+      platform: "darwin",
+    }),
+    {
+      type: "url",
+      url: "opencode://open-project?directory=%2Ftmp%2Fproject+one",
+    },
+  );
+});
+
+test("rejects Codex project opening on platforms without a known app command", () => {
+  assert.throws(
+    () =>
+      readChatProviderProjectOpenTarget({
+        providerId: "codex",
+        path: "/tmp/project-one",
+        platform: "linux",
+      }),
+    /Opening projects in Codex is only supported on macOS\./,
+  );
 });
 
 test("does not start Codex app-server when Codex is missing", async () => {

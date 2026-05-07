@@ -18,6 +18,8 @@ type DesktopAnalyticsEventName =
   | "change_summary_opened"
   | "changes_committed"
   | "chat_opened"
+  | "chat_provider_launcher_changed"
+  | "chat_provider_repo_opened"
   | "codex_chats_filter_changed"
   | "desktop_app_opened"
   | "github_clicked"

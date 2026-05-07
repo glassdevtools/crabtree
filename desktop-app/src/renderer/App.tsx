@@ -7,6 +7,7 @@ import {
   Copy,
   FileDiff,
   GitCompareArrows,
+  ListFilter,
   LoaderCircle,
   Settings,
   Tag,
@@ -124,8 +125,15 @@ import {
   readDuplicateCheckedOutBranchOfBranch,
 } from "./commitHistoryCheckouts";
 import {
+  readCommitGridTemplateColumns,
   readCommitHistoryRowHeight,
   readCommitHistoryRowLayouts,
+  readCommitHistoryTableWidth,
+  replaceCommitHistoryColumnWidth,
+} from "./commitHistoryLayout";
+import type {
+  CommitHistoryColumnResizeKey,
+  CommitHistoryColumnWidths,
 } from "./commitHistoryLayout";
 import {
   readAutomaticBranchName,
@@ -689,6 +697,19 @@ const readPathLauncher = (value: string): PathLauncher | null => {
   }
 };
 
+const readChatProviderIdFromSelectValue = (
+  value: string,
+): ChatProviderId | null => {
+  switch (value) {
+    case "codex":
+      return "codex";
+    case "openCode":
+      return "openCode";
+    default:
+      return null;
+  }
+};
+
 const readPathLauncherLabel = (pathLauncher: PathLauncher) => {
   switch (pathLauncher) {
     case "vscode":
@@ -698,6 +719,31 @@ const readPathLauncherLabel = (pathLauncher: PathLauncher) => {
     case "finder":
       return "Finder";
   }
+};
+
+const ChatProviderLauncherIcon = ({
+  providerId,
+}: {
+  providerId: ChatProviderId;
+}) => {
+  return (
+    <span
+      className={cn(
+        "chat-provider-launcher-icon",
+        providerId === "openCode"
+          ? "chat-provider-launcher-icon-opencode"
+          : "chat-provider-launcher-icon-codex",
+      )}
+    >
+      <img
+        alt=""
+        aria-hidden="true"
+        className="chat-provider-launcher-icon-image"
+        draggable={false}
+        src={providerId === "openCode" ? openCodeChatIconUrl : codexChatIconUrl}
+      />
+    </span>
+  );
 };
 
 const PathLauncherIcon = ({ pathLauncher }: { pathLauncher: PathLauncher }) => {
@@ -760,6 +806,25 @@ const PathLauncherSelectItems = () => {
   );
 };
 
+const ChatProviderLauncherSelectItems = () => {
+  return (
+    <>
+      <SelectItem value="codex">
+        <span className="chat-provider-launcher-option">
+          <ChatProviderLauncherIcon providerId="codex" />
+          <span>{readChatProviderLabel("codex")}</span>
+        </span>
+      </SelectItem>
+      <SelectItem value="openCode">
+        <span className="chat-provider-launcher-option">
+          <ChatProviderLauncherIcon providerId="openCode" />
+          <span>{readChatProviderLabel("openCode")}</span>
+        </span>
+      </SelectItem>
+    </>
+  );
+};
+
 const copyText = async ({
   text,
   errorMessage,
@@ -790,7 +855,8 @@ const readRepoFolderName = (repo: RepoGraph) => {
 // TODO: AI-PICKED-VALUE: These column widths match the current table layout closely enough while making drag resizing concrete.
 const COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS = {
   graph: COMMIT_GRAPH_MIN_WIDTH,
-  actors: 160,
+  code: 50,
+  chats: 100,
   branchTags: 240,
   description: 294,
   commit: 84,
@@ -799,7 +865,8 @@ const COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS = {
 };
 // TODO: AI-PICKED-VALUE: These smaller resize limits keep columns usable while allowing the page to compress much further.
 const COMMIT_HISTORY_MIN_COLUMN_WIDTHS = {
-  actors: 44,
+  code: 44,
+  chats: 44,
   branchTags: 72,
   description: 120,
   commit: 52,
@@ -807,23 +874,13 @@ const COMMIT_HISTORY_MIN_COLUMN_WIDTHS = {
   date: 82,
 };
 const COMMIT_HISTORY_MIN_DETAILS_WIDTH =
-  COMMIT_HISTORY_MIN_COLUMN_WIDTHS.actors +
+  COMMIT_HISTORY_MIN_COLUMN_WIDTHS.code +
+  COMMIT_HISTORY_MIN_COLUMN_WIDTHS.chats +
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.branchTags +
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.description +
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.commit +
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.author +
   COMMIT_HISTORY_MIN_COLUMN_WIDTHS.date;
-
-type CommitHistoryColumnWidths = {
-  graph: number;
-  actors: number;
-  branchTags: number;
-  description: number;
-  commit: number;
-  author: number;
-  date: number;
-};
-type CommitHistoryColumnResizeKey = keyof CommitHistoryColumnWidths;
 
 type CommitHistoryColumnResize = {
   columnKey: CommitHistoryColumnResizeKey;
@@ -1099,53 +1156,6 @@ const readCommitGraphWidth = ({ laneCount }: { laneCount: number }) => {
     COMMIT_GRAPH_MIN_WIDTH,
     COMMIT_GRAPH_PADDING_LEFT * 2 + laneCount * COMMIT_GRAPH_LANE_WIDTH,
   );
-};
-
-const readCommitGridTemplateColumns = (
-  columnWidths: CommitHistoryColumnWidths,
-) => {
-  return `${columnWidths.graph}px ${columnWidths.actors}px ${columnWidths.branchTags}px ${columnWidths.description}px ${columnWidths.commit}px ${columnWidths.author}px ${columnWidths.date}px`;
-};
-
-const readCommitHistoryTableWidth = (
-  columnWidths: CommitHistoryColumnWidths,
-) => {
-  return (
-    columnWidths.graph +
-    columnWidths.actors +
-    columnWidths.branchTags +
-    columnWidths.description +
-    columnWidths.commit +
-    columnWidths.author +
-    columnWidths.date
-  );
-};
-
-const replaceCommitHistoryColumnWidth = ({
-  columnWidths,
-  columnKey,
-  width,
-}: {
-  columnWidths: CommitHistoryColumnWidths;
-  columnKey: CommitHistoryColumnResizeKey;
-  width: number;
-}) => {
-  switch (columnKey) {
-    case "graph":
-      return { ...columnWidths, graph: width };
-    case "branchTags":
-      return { ...columnWidths, branchTags: width };
-    case "actors":
-      return { ...columnWidths, actors: width };
-    case "description":
-      return { ...columnWidths, description: width };
-    case "commit":
-      return { ...columnWidths, commit: width };
-    case "author":
-      return { ...columnWidths, author: width };
-    case "date":
-      return { ...columnWidths, date: width };
-  }
 };
 
 const updateCommitHistoryColumnStyles = (
@@ -2026,14 +2036,13 @@ const BranchTags = ({
   );
 };
 
-const ChatRobotTags = ({
+const CommitThreadCodeTags = ({
   threadGroups,
   pathLauncher,
   isTerminalBusyOfCwd,
   openCopyContextMenu,
   openCodePath,
   openTerminalPane,
-  showErrorMessage,
 }: {
   threadGroups: ThreadGroup[];
   pathLauncher: PathLauncher;
@@ -2045,29 +2054,10 @@ const ChatRobotTags = ({
   ) => void;
   openCodePath: (path: string) => Promise<void>;
   openTerminalPane: (event: MouseEvent<HTMLButtonElement>, cwd: string) => void;
-  showErrorMessage: (message: string) => void;
 }) => {
   if (threadGroups.length === 0) {
     return null;
   }
-
-  const openThread = async (thread: ChatThread) => {
-    try {
-      await window.crabtree.openChatThread({
-        providerId: thread.providerId,
-        threadId: thread.id,
-        cwd: thread.cwd,
-      });
-      trackDesktopAction({
-        eventName: "chat_opened",
-        properties: { provider: thread.providerId },
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to open chat.";
-      showErrorMessage(message);
-    }
-  };
 
   const pathLauncherLabel = readPathLauncherLabel(pathLauncher);
   const shouldStackThreadGroups = threadGroups.length > 1;
@@ -2142,6 +2132,54 @@ const ChatRobotTags = ({
                 </TitleTooltip>
               </span>
             )}
+          </span>
+        );
+      })}
+    </div>
+  );
+};
+
+const CommitThreadChatTags = ({
+  threadGroups,
+  showErrorMessage,
+}: {
+  threadGroups: ThreadGroup[];
+  showErrorMessage: (message: string) => void;
+}) => {
+  if (threadGroups.length === 0) {
+    return null;
+  }
+
+  const openThread = async (thread: ChatThread) => {
+    try {
+      await window.crabtree.openChatThread({
+        providerId: thread.providerId,
+        threadId: thread.id,
+        cwd: thread.cwd,
+      });
+      trackDesktopAction({
+        eventName: "chat_opened",
+        properties: { provider: thread.providerId },
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to open chat.";
+      showErrorMessage(message);
+    }
+  };
+
+  const shouldStackThreadGroups = threadGroups.length > 1;
+
+  return (
+    <div
+      className={cn(
+        "commit-label-list commit-thread-group-list",
+        shouldStackThreadGroups && "commit-thread-group-list-multiline",
+      )}
+    >
+      {threadGroups.map((threadGroup) => {
+        return (
+          <span className="commit-thread-group" key={threadGroup.key}>
             {threadGroup.threads.map((thread) => {
               const title = threadTitle(thread);
               const isThreadActive = readIsThreadActive(thread);
@@ -2892,14 +2930,19 @@ const CommitHistoryRow = ({
           </div>
         ) : null}
       </div>
-      <div className="commit-actors-cell">
-        <ChatRobotTags
+      <div className="commit-code-cell">
+        <CommitThreadCodeTags
           threadGroups={threadGroups}
           pathLauncher={pathLauncher}
           isTerminalBusyOfCwd={isTerminalBusyOfCwd}
           openCopyContextMenu={openCopyContextMenu}
           openCodePath={openCodePath}
           openTerminalPane={openTerminalPane}
+        />
+      </div>
+      <div className="commit-chats-cell">
+        <CommitThreadChatTags
+          threadGroups={threadGroups}
           showErrorMessage={showErrorMessage}
         />
       </div>
@@ -3714,6 +3757,19 @@ const TerminalPane = ({
       <div className="terminal-pane-header">
         <span className="terminal-pane-title">Terminal</span>
         <code className="terminal-pane-path">{terminalTarget.cwd}</code>
+        <TitleTooltip title="Close">
+          <Button
+            aria-label="Close"
+            className="terminal-pane-close"
+            size="icon-sm"
+            type="button"
+            variant="ghost"
+            onClick={closeTerminalPane}
+          >
+            <X aria-hidden="true" />
+            <span className="sr-only">Close</span>
+          </Button>
+        </TitleTooltip>
         <TitleTooltip title="Kill">
           <Button
             aria-label="Kill"
@@ -3742,19 +3798,6 @@ const TerminalPane = ({
           >
             <IoStop aria-hidden="true" />
             <span className="sr-only">Kill</span>
-          </Button>
-        </TitleTooltip>
-        <TitleTooltip title="Close">
-          <Button
-            aria-label="Close"
-            className="terminal-pane-close"
-            size="icon-sm"
-            type="button"
-            variant="ghost"
-            onClick={closeTerminalPane}
-          >
-            <X aria-hidden="true" />
-            <span className="sr-only">Close</span>
           </Button>
         </TitleTooltip>
       </div>
@@ -5040,7 +5083,8 @@ const CommitHistory = ({
     switch (columnKey) {
       case "graph":
         return graphMinimumWidth;
-      case "actors":
+      case "code":
+      case "chats":
       case "branchTags":
       case "description":
       case "commit":
@@ -5053,7 +5097,8 @@ const CommitHistory = ({
     switch (columnKey) {
       case "graph":
         return graphMaxWidth;
-      case "actors":
+      case "code":
+      case "chats":
       case "branchTags":
       case "description":
       case "commit":
@@ -6269,25 +6314,40 @@ const CommitHistory = ({
               />
             </div>
             <div className="commit-history-header-cell">
-              <Button
-                className="commit-history-header-toggle"
-                variant="ghost"
-                size="xs"
-                type="button"
-                aria-pressed={shouldShowChatOnly}
-                onClick={() => {
-                  const nextShouldShowChatOnly = !shouldShowChatOnly;
-                  setShouldShowChatOnly(nextShouldShowChatOnly);
-                  trackDesktopAction({
-                    eventName: "codex_chats_filter_changed",
-                    properties: { is_enabled: nextShouldShowChatOnly },
-                  });
-                }}
-              >
-                Code
-              </Button>
+              <span>Code</span>
               <CommitHistoryColumnResizeHandle
-                columnKey="actors"
+                columnKey="code"
+                startColumnResize={startColumnResize}
+                updateColumnResize={updateColumnResize}
+                finishColumnResize={finishColumnResize}
+              />
+            </div>
+            <div className="commit-history-header-cell commit-history-chats-title">
+              <span>Chats</span>
+              <TitleTooltip
+                title={shouldShowChatOnly ? "Show all commits" : "Show chats"}
+              >
+                <Button
+                  aria-label="Filter chats"
+                  aria-pressed={shouldShowChatOnly}
+                  className="commit-history-header-filter"
+                  variant="ghost"
+                  size="icon-xs"
+                  type="button"
+                  onClick={() => {
+                    const nextShouldShowChatOnly = !shouldShowChatOnly;
+                    setShouldShowChatOnly(nextShouldShowChatOnly);
+                    trackDesktopAction({
+                      eventName: "codex_chats_filter_changed",
+                      properties: { is_enabled: nextShouldShowChatOnly },
+                    });
+                  }}
+                >
+                  <ListFilter aria-hidden="true" size={10} strokeWidth={2} />
+                </Button>
+              </TitleTooltip>
+              <CommitHistoryColumnResizeHandle
+                columnKey="chats"
                 startColumnResize={startColumnResize}
                 updateColumnResize={updateColumnResize}
                 finishColumnResize={finishColumnResize}
@@ -6736,6 +6796,8 @@ const CrabtreeDesktopApp = () => {
     null,
   );
   const [pathLauncher, setPathLauncher] = useState<PathLauncher>("vscode");
+  const [chatProviderLauncher, setChatProviderLauncher] =
+    useState<ChatProviderId>("codex");
   const [isLoading, setIsLoading] = useState(true);
   const [loadingRepoRoot, setLoadingRepoRootState] = useState<string | null>(
     null,
@@ -7479,6 +7541,28 @@ const CrabtreeDesktopApp = () => {
       showErrorMessage(message);
     }
   };
+  const openSelectedRepoChatProviderPath = async () => {
+    if (selectedRepo === null) {
+      return;
+    }
+
+    try {
+      await window.crabtree.openChatProviderPath({
+        providerId: chatProviderLauncher,
+        path: selectedRepo.root,
+      });
+      trackDesktopAction({
+        eventName: "chat_provider_repo_opened",
+        properties: { provider: chatProviderLauncher, source: "header" },
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to open repo in chat provider.";
+      showErrorMessage(message);
+    }
+  };
   const changeSelectedRepoRoot = (repoRoot: string) => {
     selectRepoRoot(repoRoot);
     setLoadingRepoRoot(repoRoot);
@@ -7493,6 +7577,17 @@ const CrabtreeDesktopApp = () => {
       trackDesktopAction({
         eventName: "path_launcher_changed",
         properties: { launcher: nextPathLauncher },
+      });
+    }
+  };
+  const changeChatProviderLauncher = (value: string) => {
+    const nextChatProviderLauncher = readChatProviderIdFromSelectValue(value);
+
+    if (nextChatProviderLauncher !== null) {
+      setChatProviderLauncher(nextChatProviderLauncher);
+      trackDesktopAction({
+        eventName: "chat_provider_launcher_changed",
+        properties: { provider: nextChatProviderLauncher },
       });
     }
   };
@@ -7556,6 +7651,7 @@ const CrabtreeDesktopApp = () => {
       ? "Crabtree found chats, but Git could not read their folders. " +
         "They may be deleted, moved, not valid Git worktrees, or blocked by macOS permissions."
       : "No Git repositories found from detected chat sources.";
+  const chatProviderLauncherLabel = readChatProviderLabel(chatProviderLauncher);
   const repoHeaderControls = (
     <>
       {dashboardData.repos.length === 0 ? null : (
@@ -7602,6 +7698,35 @@ const CrabtreeDesktopApp = () => {
             />
             <SelectContent align="end" className="path-launcher-select-content">
               <PathLauncherSelectItems />
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="chat-provider-launcher-control">
+          <button
+            aria-label={`Open selected repo in ${chatProviderLauncherLabel}`}
+            className="chat-provider-launcher-open"
+            type="button"
+            disabled={selectedRepo === null}
+            onClick={() => {
+              void openSelectedRepoChatProviderPath();
+            }}
+          >
+            <ChatProviderLauncherIcon providerId={chatProviderLauncher} />
+          </button>
+          <Select
+            value={chatProviderLauncher}
+            onValueChange={changeChatProviderLauncher}
+          >
+            <SelectTrigger
+              aria-label="Choose app for opening chat projects"
+              className="chat-provider-launcher-select"
+              size="sm"
+            />
+            <SelectContent
+              align="end"
+              className="chat-provider-launcher-select-content"
+            >
+              <ChatProviderLauncherSelectItems />
             </SelectContent>
           </Select>
         </div>

@@ -49,6 +49,14 @@ type PathInfoReader = {
   readIsDirectory: (path: string) => boolean;
 };
 
+export type ChatProviderProjectOpenTarget =
+  | { type: "command"; command: string; args: string[] }
+  | { type: "url"; url: string };
+
+const CODEX_DARWIN_PROJECT_OPEN_COMMAND =
+  "/Applications/Codex.app/Contents/MacOS/Codex";
+const CODEX_PROJECT_OPEN_ARG = "--open-project";
+
 const nodePathInfoReader: PathInfoReader = {
   readPathExists: (path) => {
     try {
@@ -397,6 +405,42 @@ const readChatProviderDefinition = (providerId: ChatProviderId) => {
 
 export const readChatProviderLabel = (providerId: ChatProviderId) => {
   return readChatProviderDefinition(providerId).label;
+};
+
+export const readChatProviderProjectOpenTarget = ({
+  providerId,
+  path,
+  platform,
+}: {
+  providerId: ChatProviderId;
+  path: string;
+  platform: NodeJS.Platform;
+}): ChatProviderProjectOpenTarget => {
+  if (path.length === 0) {
+    throw new Error("Chat provider path cannot be empty.");
+  }
+
+  switch (providerId) {
+    case "codex":
+      if (platform !== "darwin") {
+        throw new Error(
+          "Opening projects in Codex is only supported on macOS.",
+        );
+      }
+
+      return {
+        type: "command",
+        command: CODEX_DARWIN_PROJECT_OPEN_COMMAND,
+        args: [CODEX_PROJECT_OPEN_ARG, path],
+      };
+    case "openCode": {
+      const openCodeUrl = new URL("opencode://open-project");
+
+      openCodeUrl.searchParams.set("directory", path);
+
+      return { type: "url", url: openCodeUrl.toString() };
+    }
+  }
 };
 
 export const readChatProviderThreadFolderDescription = (

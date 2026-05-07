@@ -20,6 +20,7 @@ import type {
   GitMoveTagRequest,
   GitSwitchBranchRequest,
   CrabtreeApi,
+  OpenChatProviderPathRequest,
   OpenPathRequest,
   TerminalSessionEvent,
   TerminalSessionResizeRequest,
@@ -99,6 +100,14 @@ const api: CrabtreeApi = {
   },
   openChatThread: async (chatThreadOpenRequest: ChatThreadOpenRequest) => {
     await ipcRenderer.invoke("chatThreads:open", chatThreadOpenRequest);
+  },
+  openChatProviderPath: async (
+    openChatProviderPathRequest: OpenChatProviderPathRequest,
+  ) => {
+    await ipcRenderer.invoke(
+      "chatProviders:openPath",
+      openChatProviderPathRequest,
+    );
   },
   openExternalUrl: async (url: string) => {
     await ipcRenderer.invoke("external:openUrl", url);

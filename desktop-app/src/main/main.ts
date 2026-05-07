@@ -1,5 +1,7 @@
 import { app, BrowserWindow, clipboard, ipcMain, shell } from "electron";
 import electronUpdater from "electron-updater";
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type {
@@ -20,6 +22,7 @@ import type {
   GitMoveBranchRequest,
   GitMoveTagRequest,
   GitSwitchBranchRequest,
+  OpenChatProviderPathRequest,
   OpenPathRequest,
   PathLauncher,
   TerminalSessionEvent,
@@ -31,6 +34,7 @@ import { createAppServerClient } from "./appServerClient";
 import {
   readChatProviderDashboardData,
   readChatProviderDetections,
+  readChatProviderProjectOpenTarget,
 } from "./chatProviders";
 import {
   readCodexThreadFromAppServerReadResponse,
@@ -223,6 +227,23 @@ const readChatThreadOpenRequest = (value: unknown): ChatThreadOpenRequest => {
     providerId: readChatProviderId(value.providerId),
     threadId: value.threadId,
     cwd: value.cwd,
+  };
+};
+
+const readOpenChatProviderPathRequest = (
+  value: unknown,
+): OpenChatProviderPathRequest => {
+  if (
+    !isObject(value) ||
+    typeof value.path !== "string" ||
+    value.path.length === 0
+  ) {
+    throw new Error("openChatProviderPathRequest needs a provider and path.");
+  }
+
+  return {
+    providerId: readChatProviderId(value.providerId),
+    path: value.path,
   };
 };
 
@@ -935,6 +956,42 @@ ipcMain.handle("appUpdate:quitAndInstall", () => {
   appUpdateController.quitAndInstall();
 });
 
+ipcMain.handle("chatProviders:openPath", async (_event, value: unknown) => {
+  const openChatProviderPathRequest = readOpenChatProviderPathRequest(value);
+  const chatProviderProjectOpenTarget = readChatProviderProjectOpenTarget({
+    providerId: openChatProviderPathRequest.providerId,
+    path: openChatProviderPathRequest.path,
+    platform: process.platform,
+  });
+
+  switch (chatProviderProjectOpenTarget.type) {
+    case "url":
+      await shell.openExternal(chatProviderProjectOpenTarget.url);
+      return;
+    case "command": {
+      if (!existsSync(chatProviderProjectOpenTarget.command)) {
+        throw new Error("Codex app is not installed.");
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const chatProviderProcess = spawn(
+          chatProviderProjectOpenTarget.command,
+          chatProviderProjectOpenTarget.args,
+          { detached: true, stdio: "ignore" },
+        );
+
+        chatProviderProcess.once("spawn", () => {
+          chatProviderProcess.unref();
+          resolve();
+        });
+        chatProviderProcess.once("error", reject);
+      });
+      startAppServerStatusClient();
+      return;
+    }
+  }
+});
+
 ipcMain.handle("chatThreads:open", async (_event, value: unknown) => {
   const chatThreadOpenRequest = readChatThreadOpenRequest(value);
 
@@ -950,10 +1007,17 @@ ipcMain.handle("chatThreads:open", async (_event, value: unknown) => {
         throw new Error("OpenCode chat does not have a folder.");
       }
 
-      const openCodeUrl = new URL("opencode://open-project");
+      const chatProviderProjectOpenTarget = readChatProviderProjectOpenTarget({
+        providerId: chatThreadOpenRequest.providerId,
+        path: chatThreadOpenRequest.cwd,
+        platform: process.platform,
+      });
 
-      openCodeUrl.searchParams.set("directory", chatThreadOpenRequest.cwd);
-      await shell.openExternal(openCodeUrl.toString());
+      if (chatProviderProjectOpenTarget.type !== "url") {
+        throw new Error("OpenCode chat should open with an app URL.");
+      }
+
+      await shell.openExternal(chatProviderProjectOpenTarget.url);
       return;
     }
   }
