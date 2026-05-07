@@ -1601,8 +1601,7 @@ textarea,
   width: 9px;
   height: 9px;
   flex: 0 0 auto;
-  color: #ffffff;
-  opacity: 0.72;
+  color: #5f6670;
   animation: initial-loading-spin 900ms linear infinite;
 }
 

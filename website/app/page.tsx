@@ -51,8 +51,7 @@ const featureItems = [
 ];
 const questionItems = [
   <>
-    What <span className="featureToken featureTokenChat">chats</span> were
-    merged?
+    What <span className="featureToken featureTokenChat">chats</span> are still not merged yet?
   </>,
   <>
     What <span className="featureToken featureTokenWorktree">worktrees</span> do
