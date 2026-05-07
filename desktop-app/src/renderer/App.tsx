@@ -174,7 +174,7 @@ const COMMIT_GRAPH_SEGMENT_STROKE_WIDTH = 2.25;
 // TODO: AI-PICKED-VALUE: This neutral gray makes changed cwd rows read as working-tree state instead of Git history.
 const COMMIT_GRAPH_CWD_CHANGE_COLOR = "#8b929c";
 const COMMIT_GRAPH_ROW_CONNECTION_INSET_RATIO = 0;
-const COMMIT_HISTORY_HEADER_HEIGHT = 22;
+const COMMIT_HISTORY_HEADER_HEIGHT = COMMIT_GRAPH_ROW_HEIGHT;
 // Dashboard reads touch chat providers and Git, so automatic refreshes run only when the previous read has finished.
 // TODO: AI-PICKED-VALUE: Refreshing one second after each automatic read keeps branch/worktree state current without queuing Git reads.
 const DASHBOARD_REFRESH_INTERVAL_MS = 1000;
@@ -5293,8 +5293,7 @@ const CommitHistory = ({
         : `HEAD vs ${row.commit.shortSha} ${row.commit.subject}`;
     const readRowDiffTarget = (mode: GitDiffRequest["mode"]): RowDiffTarget => {
       return {
-        title:
-          mode === "changesMadeHere" ? "See changes" : "Diff against HEAD",
+        title: mode === "changesMadeHere" ? "See changes" : "Diff against HEAD",
         description:
           mode === "changesMadeHere"
             ? gitDiffDescription

@@ -664,7 +664,7 @@ textarea,
   display: grid;
   grid-template-columns: var(--commit-history-grid-template-columns);
   min-width: var(--commit-history-table-width);
-  height: 22px;
+  height: 25px;
   align-items: center;
   border-bottom: 1px solid #e1e5ec;
   background: #ffffff;
