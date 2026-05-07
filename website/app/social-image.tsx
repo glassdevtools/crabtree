@@ -75,7 +75,7 @@ export const createSocialImage = async () => {
             paddingLeft: 16,
           }}
         >
-          Easily merge your Codex worktrees.
+          Easily merge your worktrees.
         </div>
       </div>
       <img

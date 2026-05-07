@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 const siteTitle = "Crabtree";
-const siteDescription = "Easily merge your Codex worktrees together.";
+const siteDescription = "Easily merge your worktrees together.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://crabtree.app"),

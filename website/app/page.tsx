@@ -161,7 +161,7 @@ const HomePage = () => {
               <span>Crabtree</span>
             </h1>
             <p className="heroSubtext">
-              Easily merge your Codex worktrees together. Crabtree lets you
+              Easily merge your worktrees together. Crabtree lets you
               manage your chats, worktrees, and branches, all on one page.
             </p>
 
