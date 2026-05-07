@@ -16,7 +16,7 @@ const featureItems = [
   {
     title: "Easily merge your worktrees",
     descriptionLines: [
-      "In Codex it's easy to spin up 100 worktrees, but merging them back together is hard. Crabtree was built to fix that. Commit, branch, merge, update main, and push without leaving the app.",
+      "It's easy to spin up 100 chat worktrees, but merging them back together is hard. Crabtree was built to fix that. Commit, branch, merge, update main, and push without leaving the app.",
     ],
   },
   {
@@ -31,15 +31,15 @@ const featureItems = [
     ],
   },
   {
-    title: "Auto-sync",
-    descriptionLines: [
-      "Everything automatically stays in sync with Git and Codex, no refresh button needed.",
-    ],
-  },
-  {
     title: "Git power tools",
     descriptionLines: [
       "Access power tools like one-click merges, simplified push and pull, and moving branches by simply dragging.",
+    ],
+  },
+  {
+    title: "Auto-sync",
+    descriptionLines: [
+      "See where every chat lives on your Git tree. Crabtree auto-detects your local chats and Git changes.",
     ],
   },
   {
@@ -51,8 +51,7 @@ const featureItems = [
 ];
 const questionItems = [
   <>
-    What <span className="featureToken featureTokenChat">chats</span> were
-    merged?
+    What <span className="featureToken featureTokenChat">chats</span> are still not merged yet?
   </>,
   <>
     What <span className="featureToken featureTokenWorktree">worktrees</span> do
