@@ -1,13 +1,21 @@
 # Welcome to Crabtree!
 
-<div align="center">
-	<img
-		src="./website/src/assets/default-app-icon.png"
-		alt="Crabtree app icon"
-		width="300"
-	 	height="300"
-	/>
-</div>
+<table>
+  <tr>
+    <td>
+      <img src="./website/src/assets/default-app-icon.png" alt="Crabtree app icon" width="300" height="300">
+    </td>
+    <td>
+      <img src="./desktop-app/src/renderer/assets/loading-2.png" alt="Crabtree app icon" width="300" height="300">
+    </td>
+    <td>
+      <img src="./desktop-app/src/renderer/assets/loading-1.png" alt="Crabtree app icon" width="300" height="300">
+    </td>
+    <td>
+      <img src="./desktop-app/src/renderer/assets/loading-3.png" alt="Crabtree app icon" width="300" height="300">
+    </td>
+  </tr>
+</table>
 
 It's easy to spin up 100 worktrees in Codex, but merging them back together is hard. Crabtree was built to fix that.
 
