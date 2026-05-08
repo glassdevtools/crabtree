@@ -8,6 +8,7 @@ const showSonnerWarningToast = sonnerToast.warning;
 sonnerToast.warning = (message, data) => {
   return showSonnerWarningToast(message, {
     ...data,
+    closeButton: data?.closeButton ?? true,
     duration: data?.duration ?? Infinity,
   });
 };

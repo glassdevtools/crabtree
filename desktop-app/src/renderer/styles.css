@@ -272,9 +272,9 @@ textarea,
   min-height: 24px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 14px;
-  line-height: 1;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.2;
 }
 
 .path-launcher-icon,
@@ -1052,6 +1052,10 @@ textarea,
   height: 22px;
   background: transparent;
   color: #cbd5e1;
+}
+
+.terminal-pane-close {
+  margin-left: -3px;
 }
 
 .terminal-pane-stop {

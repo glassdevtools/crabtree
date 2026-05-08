@@ -3406,6 +3406,7 @@ const ConfirmationDialog = ({
 // The terminal pane renders the browser terminal while the main process owns the shell and cwd.
 const TerminalPane = ({
   terminalTarget,
+  worktrees,
   terminalPaneHeight,
   closeTerminalPane,
   startTerminalPaneResize,
@@ -3415,6 +3416,7 @@ const TerminalPane = ({
   showErrorMessage,
 }: {
   terminalTarget: TerminalTarget | null;
+  worktrees: GitWorktree[];
   terminalPaneHeight: number;
   closeTerminalPane: () => void;
   startTerminalPaneResize: (event: PointerEvent<HTMLButtonElement>) => void;
@@ -3736,6 +3738,11 @@ const TerminalPane = ({
     return null;
   }
 
+  const isTerminalTargetWorktree = readIsWorktreeCwd({
+    cwd: terminalTarget.cwd,
+    worktrees,
+  });
+
   return (
     <section
       className="terminal-pane"
@@ -3756,7 +3763,9 @@ const TerminalPane = ({
       />
       <div className="terminal-pane-header">
         <span className="terminal-pane-title">Terminal</span>
-        <code className="terminal-pane-path">{terminalTarget.cwd}</code>
+        {isTerminalTargetWorktree ? (
+          <code className="terminal-pane-path">Worktree</code>
+        ) : null}
         <TitleTooltip title="Close">
           <Button
             aria-label="Close"
@@ -6474,6 +6483,7 @@ const CommitHistory = ({
         </div>
         <TerminalPane
           terminalTarget={terminalTarget}
+          worktrees={worktrees}
           terminalPaneHeight={terminalPaneHeight}
           closeTerminalPane={closeTerminalPane}
           startTerminalPaneResize={startTerminalPaneResize}
