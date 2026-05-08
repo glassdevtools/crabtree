@@ -303,9 +303,10 @@ textarea,
 }
 
 .copy-toast-value {
+  width: 100%;
   min-width: 0;
   /* TODO: AI-PICKED-VALUE: This width keeps copied paths and SHAs readable without making the toast too wide. */
-  max-width: min(340px, calc(100vw - 96px));
+  max-width: 100%;
   overflow: hidden;
   color: #5f6670;
   font-size: 12px;
@@ -336,9 +337,17 @@ textarea,
   margin-top: 1.75px;
 }
 
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-content] {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
 [data-sonner-toaster]
   [data-sonner-toast][data-styled="true"]
   [data-description] {
+  min-width: 0;
+  max-width: 100%;
   color: inherit;
 }
 
@@ -653,9 +662,9 @@ textarea,
 }
 
 .commit-history {
-  --commit-history-grid-template-columns: 300px 50px 70px 240px 420px 84px 150px
+  --commit-history-grid-template-columns: 300px 54px 70px 240px 420px 84px 150px
     170px;
-  --commit-history-table-width: 1484px;
+  --commit-history-table-width: 1488px;
   min-height: 0;
   flex: 1;
   overflow: hidden;

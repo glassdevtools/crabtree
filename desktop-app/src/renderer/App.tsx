@@ -855,7 +855,7 @@ const readRepoFolderName = (repo: RepoGraph) => {
 // TODO: AI-PICKED-VALUE: These column widths match the current table layout closely enough while making drag resizing concrete.
 const COMMIT_HISTORY_INITIAL_COLUMN_WIDTHS = {
   graph: COMMIT_GRAPH_MIN_WIDTH,
-  code: 50,
+  code: 54,
   chats: 100,
   branchTags: 240,
   description: 294,
