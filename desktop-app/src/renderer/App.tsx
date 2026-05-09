@@ -948,9 +948,16 @@ type RowDiffLoadState =
   | { type: "loaded"; files: GitDiffFile[] }
   | { type: "error"; message: string };
 
+type CopyContextMenuItem = {
+  itemName: string;
+  text: string;
+  errorMessage: string;
+};
+
 type RowContextMenuTarget = {
   x: number;
   y: number;
+  copyMenuItem: CopyContextMenuItem | null;
   sha: string | null;
   isEnabled: boolean;
   pullRequestTarget: GitPullRequestCreateTarget | null;
@@ -958,9 +965,7 @@ type RowContextMenuTarget = {
   diffAgainstHeadTarget: RowDiffTarget;
 };
 
-type CopyContextMenuTarget = {
-  text: string;
-  errorMessage: string;
+type CopyContextMenuTarget = CopyContextMenuItem & {
   x: number;
   y: number;
 };
@@ -1833,6 +1838,7 @@ const BranchTags = ({
   openCopyContextMenu: (
     event: MouseEvent<Element>,
     text: string,
+    itemName: string,
     errorMessage: string,
   ) => void;
   openGitRefContextMenu: (
@@ -1981,6 +1987,7 @@ const BranchTags = ({
               openCopyContextMenu(
                 event,
                 refName,
+                isHead ? "ref" : "branch",
                 isTag
                   ? "Failed to copy tag name."
                   : "Failed to copy branch name.",
@@ -2050,6 +2057,7 @@ const CommitThreadCodeTags = ({
   openCopyContextMenu: (
     event: MouseEvent<Element>,
     text: string,
+    itemName: string,
     errorMessage: string,
   ) => void;
   openCodePath: (path: string) => Promise<void>;
@@ -2087,6 +2095,7 @@ const CommitThreadCodeTags = ({
                       openCopyContextMenu(
                         event,
                         threadGroup.cwd,
+                        "path",
                         "Failed to copy path.",
                       );
                     }}
@@ -2397,8 +2406,9 @@ const CommitHistoryRow = ({
   clearBranchPointerDropTarget: (event: DragEvent<HTMLDivElement>) => void;
   finishBranchPointerDrop: (event: DragEvent<HTMLDivElement>) => void;
   openRowContextMenu: (
-    event: MouseEvent<HTMLDivElement>,
+    event: MouseEvent<Element>,
     row: CommitGraphRow,
+    copyMenuItem: CopyContextMenuItem | null,
   ) => void;
   openRowAfterDoubleClick: () => void;
   openBranchCreateModal: (
@@ -2424,6 +2434,7 @@ const CommitHistoryRow = ({
   openCopyContextMenu: (
     event: MouseEvent<Element>,
     text: string,
+    itemName: string,
     errorMessage: string,
   ) => void;
   openGitRefContextMenu: (
@@ -2800,7 +2811,7 @@ const CommitHistoryRow = ({
         }),
       }}
       onDoubleClick={row.isCommitRow ? openRowAfterDoubleClick : undefined}
-      onContextMenu={(event) => openRowContextMenu(event, row)}
+      onContextMenu={(event) => openRowContextMenu(event, row, null)}
       onDragOver={updateBranchPointerDropTarget}
       onDragLeave={clearBranchPointerDropTarget}
       onDrop={finishBranchPointerDrop}
@@ -2973,11 +2984,11 @@ const CommitHistoryRow = ({
         onContextMenu={
           row.isCommitRow
             ? (event) => {
-                openCopyContextMenu(
-                  event,
-                  commit.subject,
-                  "Failed to copy description.",
-                );
+                openRowContextMenu(event, row, {
+                  itemName: "description",
+                  text: commit.subject,
+                  errorMessage: "Failed to copy description.",
+                });
               }
             : undefined
         }
@@ -2991,11 +3002,11 @@ const CommitHistoryRow = ({
         onContextMenu={
           row.isCommitRow
             ? (event) => {
-                openCopyContextMenu(
-                  event,
-                  commit.sha,
-                  "Failed to copy commit.",
-                );
+                openRowContextMenu(event, row, {
+                  itemName: "commit",
+                  text: commit.sha,
+                  errorMessage: "Failed to copy commit.",
+                });
               }
             : undefined
         }
@@ -3007,11 +3018,11 @@ const CommitHistoryRow = ({
         onContextMenu={
           row.isCommitRow
             ? (event) => {
-                openCopyContextMenu(
-                  event,
-                  commit.author,
-                  "Failed to copy author.",
-                );
+                openRowContextMenu(event, row, {
+                  itemName: "author",
+                  text: commit.author,
+                  errorMessage: "Failed to copy author.",
+                });
               }
             : undefined
         }
@@ -3023,11 +3034,11 @@ const CommitHistoryRow = ({
         onContextMenu={
           row.isCommitRow
             ? (event) => {
-                openCopyContextMenu(
-                  event,
-                  commitDateText,
-                  "Failed to copy date.",
-                );
+                openRowContextMenu(event, row, {
+                  itemName: "date",
+                  text: commitDateText,
+                  errorMessage: "Failed to copy date.",
+                });
               }
             : undefined
         }
@@ -5477,8 +5488,9 @@ const CommitHistory = ({
     setBranchCreateTarget(null);
   };
   const openRowContextMenu = (
-    event: MouseEvent<HTMLDivElement>,
+    event: MouseEvent<Element>,
     row: CommitGraphRow,
+    copyMenuItem: CopyContextMenuItem | null,
   ) => {
     event.preventDefault();
     event.stopPropagation();
@@ -5512,6 +5524,7 @@ const CommitHistory = ({
     };
 
     setRowContextMenuTarget({
+      copyMenuItem,
       sha: row.isCommitRow ? row.commit.sha : null,
       isEnabled: row.isCommitRow,
       pullRequestTarget: row.isCommitRow
@@ -5532,6 +5545,7 @@ const CommitHistory = ({
   const openCopyContextMenu = (
     event: MouseEvent<Element>,
     text: string,
+    itemName: string,
     errorMessage: string,
   ) => {
     event.preventDefault();
@@ -5539,6 +5553,7 @@ const CommitHistory = ({
     setRowContextMenuTarget(null);
     setGitRefContextMenuTarget(null);
     setCopyContextMenuTarget({
+      itemName,
       text,
       errorMessage,
       x: event.clientX,
@@ -5559,12 +5574,23 @@ const CommitHistory = ({
       y: event.clientY,
     });
   };
+  const copyContextMenuItem = async (copyMenuItem: CopyContextMenuItem) => {
+    await copyText({
+      text: copyMenuItem.text,
+      errorMessage: copyMenuItem.errorMessage,
+    });
+  };
+  const copyRowContextMenuText = async (target: RowContextMenuTarget) => {
+    if (target.copyMenuItem === null) {
+      return;
+    }
+
+    setRowContextMenuTarget(null);
+    await copyContextMenuItem(target.copyMenuItem);
+  };
   const copyContextMenuText = async (target: CopyContextMenuTarget) => {
     setCopyContextMenuTarget(null);
-    await copyText({
-      text: target.text,
-      errorMessage: target.errorMessage,
-    });
+    await copyContextMenuItem(target);
   };
   const copyGitRefContextMenuText = async (target: GitRefContextMenuTarget) => {
     setGitRefContextMenuTarget(null);
@@ -6172,6 +6198,23 @@ const CommitHistory = ({
             event.stopPropagation();
           }}
         >
+          {rowContextMenuTarget.copyMenuItem === null ? null : (
+            <>
+              <Button
+                className="context-menu-item"
+                variant="ghost"
+                size="sm"
+                type="button"
+                onClick={() => {
+                  void copyRowContextMenuText(rowContextMenuTarget);
+                }}
+              >
+                <Copy size={10} strokeWidth={1.75} />
+                <span>Copy {rowContextMenuTarget.copyMenuItem.itemName}</span>
+              </Button>
+              <div className="context-menu-separator" />
+            </>
+          )}
           <Button
             className="context-menu-item"
             variant="ghost"
@@ -6256,7 +6299,7 @@ const CommitHistory = ({
             }}
           >
             <Copy size={10} strokeWidth={1.75} />
-            <span>Copy</span>
+            <span>Copy {copyContextMenuTarget.itemName}</span>
           </Button>
         </div>
       )}
@@ -6284,7 +6327,7 @@ const CommitHistory = ({
             }}
           >
             <Copy size={10} strokeWidth={1.75} />
-            <span>Copy</span>
+            <span>Copy {gitRefContextMenuTarget.gitRefType}</span>
           </Button>
           <Button
             className="context-menu-item"
