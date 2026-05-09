@@ -1096,7 +1096,7 @@ textarea,
 
 .terminal-surface .xterm-viewport {
   background: #000 !important;
-  overflow-y: hidden !important;
+  overflow-y: auto !important;
 }
 
 .terminal-surface .xterm-viewport,

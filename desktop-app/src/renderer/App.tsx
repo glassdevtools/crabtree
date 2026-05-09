@@ -184,6 +184,8 @@ const TERMINAL_PANE_MIN_HEIGHT = 150;
 const TERMINAL_PANE_MIN_GRID_HEIGHT = 180;
 // TODO: AI-PICKED-VALUE: This is small enough to fit more terminal output while keeping command text readable.
 const TERMINAL_FONT_SIZE = 13;
+// TODO: AI-PICKED-VALUE: This matches xterm's default scrollback so terminal history is available without growing beyond the upstream default.
+const TERMINAL_SCROLLBACK_ROWS = 1000;
 // Dashboard reads touch chat providers and Git, so automatic refreshes run only when the previous read has finished.
 // TODO: AI-PICKED-VALUE: Refreshing one second after each automatic read keeps branch/worktree state current without queuing Git reads.
 const DASHBOARD_REFRESH_INTERVAL_MS = 1000;
@@ -3450,7 +3452,7 @@ const TerminalPane = ({
     const cwd = terminalTarget.cwd;
     const terminal = new XtermTerminal({
       fontSize: TERMINAL_FONT_SIZE,
-      scrollback: 0,
+      scrollback: TERMINAL_SCROLLBACK_ROWS,
     });
     const fitAddon = new FitAddon();
     const queuedTerminalEvents: TerminalSessionEvent[] = [];
@@ -3632,6 +3634,32 @@ const TerminalPane = ({
     terminal.loadAddon(fitAddon);
     terminal.open(terminalElement);
     terminalRef.current = terminal;
+    terminal.attachCustomWheelEventHandler((event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      let lineAmount: number;
+
+      switch (event.deltaMode) {
+        case WheelEvent.DOM_DELTA_LINE:
+          lineAmount = event.deltaY;
+          break;
+        case WheelEvent.DOM_DELTA_PAGE:
+          lineAmount = event.deltaY * terminal.rows;
+          break;
+        default:
+          lineAmount = event.deltaY / TERMINAL_FONT_SIZE;
+          break;
+      }
+
+      if (lineAmount !== 0) {
+        terminal.scrollLines(
+          Math.sign(lineAmount) * Math.max(1, Math.ceil(Math.abs(lineAmount))),
+        );
+      }
+
+      return false;
+    });
     resizeObserver.observe(terminalElement);
     terminal.focus();
     dataDisposable = terminal.onData((data) => {
