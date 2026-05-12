@@ -17,9 +17,9 @@
   </tr>
 </table>
 
-It's easy to spin up 100 worktrees in Codex, but merging them back together is hard. Crabtree was built to fix that.
+It's easy to spin up 100 agents in Codex, but merging them back together is hard. Crabtree was built to fix that.
 
-[Crabtree](https://crabtree.app) is a desktop app that lets you manage your Codex chats, worktrees, and branches in one place. Branch, commit, merge, and push, without fumbling with Codex or Cursor.
+[Crabtree](https://crabtree.app) is a desktop app that lets you manage your parallel agents and branches in one place. Branch, commit, merge, and push, without fumbling with Codex or Cursor.
 
 ## Contributing
 

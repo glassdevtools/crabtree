@@ -17,10 +17,10 @@ const featureTokenClassName =
   "inline-flex h-[1.45em] items-center gap-1 rounded border px-[5px] align-middle text-[0.9em] font-[720] leading-none whitespace-nowrap";
 const featureTokenBranchClassName = `${featureTokenClassName} border-[#acb9ca] bg-[#eaf1ff] text-[#162d54]`;
 const featureTokenChatClassName = `${featureTokenClassName} border-[#d4dae3] bg-[#eef0f3] text-[#343a43]`;
-const featureTokenWorktreeClassName = `${featureTokenClassName} border-[#d4dae3] bg-transparent text-[#343a43]`;
+const featureTokenAgentClassName = `${featureTokenClassName} border-[#d4dae3] bg-transparent text-[#343a43]`;
 
-const WorktreeToken = () => (
-  <span className={featureTokenWorktreeClassName}>
+const AgentToken = () => (
+  <span className={featureTokenAgentClassName}>
     {/* dot */}
     <span
       className="relative block size-[13px] shrink-0 overflow-visible"
@@ -28,7 +28,7 @@ const WorktreeToken = () => (
     >
       <span className="absolute left-1/2 top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#8b929c]" />
     </span>
-    <span>worktrees</span>
+    <span>agents</span>
   </span>
 );
 
@@ -53,16 +53,16 @@ const ChatToken = () => (
 
 const featureItems = [
   {
-    title: "Easily merge your worktrees",
+    title: "Easily merge your agents",
     descriptionLines: [
-      "It's easy to spin up 100 AI worktrees, but merging them back together is hard. Crabtree was built to fix that. Commit, branch, merge, update main, and push without leaving the app.",
+      "It's easy to spin up 100 AI worktrees or cloud agents, but merging them back together is hard. Crabtree was built to fix that. Commit, branch, merge, update main, and push without leaving the app.",
     ],
   },
   {
     title: "Everything on a single page",
     descriptionLines: [
       <>
-        View all your <BranchToken />, <ChatToken />, and <WorktreeToken />.
+        View all your <BranchToken />, <ChatToken />, and <AgentToken />.
       </>,
     ],
   },
@@ -88,7 +88,7 @@ const featureItems = [
 const questionItems = [
   <>Which chats still need to be merged in?</>,
   <>
-    Which <WorktreeToken /> have changes to review?
+    Which <AgentToken /> have changes to review?
   </>,
   <>
     Which <ChatToken /> are on which <BranchToken />?
@@ -99,14 +99,14 @@ const faqItems = [
     question: "What are Crabtree's core features?",
     answer: [
       "Crabtree is a Git visualizer that also:",
-      "- Shows you where your chats and worktrees are.",
+      "- Shows you where your agents are.",
       "- Suggests actions to take like commit/merge/push.",
     ],
   },
   {
     question: "How should I use it?",
     answer: [
-      "Start a bunch of worktrees in Codex. When you're ready to merge them, open Crabtree and switch to a branch by double clicking. Then follow the suggestions in the Graph column to branch, commit, merge, and push.",
+      "Start a bunch of parallel agents in Codex. When you're ready to merge them, open Crabtree and switch to a branch by double clicking. Then follow the suggestions in the Graph column to branch, commit, merge, and push.",
     ],
   },
   {
@@ -182,8 +182,8 @@ const HomePage = () => {
               <span>Crabtree</span>
             </h1>
             <p className="heroSubtext">
-              Easily merge your worktrees together. Crabtree lets you manage
-              your chats, worktrees, and branches, all on one page.
+              Easily merge your agents together. Crabtree lets you manage your
+              parallel agents and branches all on one page.
             </p>
 
             <div className="hero__actions">

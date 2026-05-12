@@ -75,7 +75,7 @@ export const createSocialImage = async () => {
             paddingLeft: 16,
           }}
         >
-          Easily merge your worktrees.
+          Easily merge your agents.
         </div>
       </div>
       <img
