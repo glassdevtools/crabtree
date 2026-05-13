@@ -75,7 +75,7 @@ export const createSocialImage = async () => {
             paddingLeft: 16,
           }}
         >
-          Easily merge 100 Codex agents.
+          Easily merge your agents.
         </div>
       </div>
       <img
