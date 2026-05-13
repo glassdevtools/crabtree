@@ -55,7 +55,7 @@ const featureItems = [
   {
     title: "Easily merge your agents",
     descriptionLines: [
-      "It's easy to spin up 100 AI worktrees or cloud agents, but merging them back together is hard. BranchMaster was built to fix that. Commit, branch, merge, update main, and push without leaving the app.",
+      "It's easy to spin up 100 AI worktrees, but merging them back together is hard. BranchMaster was built to fix that. Commit, branch, merge, update main, and push without leaving the app.",
     ],
   },
   {
