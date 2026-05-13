@@ -5,7 +5,7 @@ import {
   socialImageSize,
 } from "./social-image";
 
-const twitterImageVersion = "v3";
+const twitterImageVersion = "v4";
 
 export const alt = socialImageAlt;
 export const contentType = socialImageContentType;

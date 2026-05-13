@@ -182,7 +182,7 @@ const HomePage = () => {
               <span>BranchMaster</span>
             </h1>
             <p className="heroSubtext">
-              Easily merge your agents together. BranchMaster lets you manage
+              Easily merge 100 Codex agents. BranchMaster lets you manage
               your parallel agents and branches all on one page.
             </p>
 
