@@ -17,7 +17,7 @@ test("creates a lowercase branch name from a chat title", () => {
       fallbackTitle: "thread-1",
       isBranchNameUsedOfBranch: {},
     }),
-    "crabtree/fix-branch-button",
+    "branchmaster/fix-branch-button",
   );
 });
 
@@ -27,11 +27,11 @@ test("adds a branch number when the chat branch name already exists", () => {
       title: "Fix Branch Button",
       fallbackTitle: "thread-1",
       isBranchNameUsedOfBranch: {
-        "crabtree/fix-branch-button": true,
-        "crabtree/fix-branch-button-2": true,
+        "branchmaster/fix-branch-button": true,
+        "branchmaster/fix-branch-button-2": true,
       },
     }),
-    "crabtree/fix-branch-button-3",
+    "branchmaster/fix-branch-button-3",
   );
 });
 
@@ -42,7 +42,7 @@ test("uses the fallback title when the chat title has no branch-safe characters"
       fallbackTitle: "thread-abc-123",
       isBranchNameUsedOfBranch: {},
     }),
-    "crabtree/thread-abc-123",
+    "branchmaster/thread-abc-123",
   );
 });
 
@@ -52,17 +52,17 @@ test("creates a commit message from an existing branch name", () => {
       branch: "feature",
       isCommitMessageUsedOfMessage: {},
     }),
-    "crabtree/feature",
+    "branchmaster/feature",
   );
 });
 
-test("does not double-prefix crabtree branch names for commit messages", () => {
+test("does not double-prefix branchmaster branch names for commit messages", () => {
   assert.equal(
     readAutomaticCommitMessage({
-      branch: "crabtree/feature",
+      branch: "branchmaster/feature",
       isCommitMessageUsedOfMessage: {},
     }),
-    "crabtree/feature",
+    "branchmaster/feature",
   );
 });
 
@@ -71,10 +71,10 @@ test("adds a commit message number when that commit message already exists", () 
     readAutomaticCommitMessage({
       branch: "feature",
       isCommitMessageUsedOfMessage: {
-        "crabtree/feature": true,
-        "crabtree/feature-2": true,
+        "branchmaster/feature": true,
+        "branchmaster/feature-2": true,
       },
     }),
-    "crabtree/feature-3",
+    "branchmaster/feature-3",
   );
 });

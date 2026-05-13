@@ -194,7 +194,7 @@ const UNFOCUSED_ERROR_TOAST_DURATION_MS = Infinity;
 const USER_GIT_UPDATE_TOAST_ID_PREFIX = "user-git-update";
 const DASHBOARD_WARNING_TOAST_ID_PREFIX = "dashboard-warning";
 const GITHUB_REPOSITORY_URL = packageInfo.repository.url.replace(/\.git$/, "");
-console.log("[Crabtree renderer]", { version: packageInfo.version });
+console.log("[BranchMaster renderer]", { version: packageInfo.version });
 const DUPLICATE_CHECKOUT_BRANCH_WARNING =
   "This is checked out in multiple places, which often leads to confusion. We recommend adding a new branch here instead.";
 const COMMIT_GRAPH_ACTION_ICON_SIZE = 10;
@@ -835,7 +835,7 @@ const copyText = async ({
   errorMessage: string;
 }) => {
   try {
-    await window.crabtree.copyText(text);
+    await window.branchmaster.copyText(text);
     toast.success("Copied!", {
       closeButton: false,
       description: <div className="copy-toast-value">{text}</div>,
@@ -1357,6 +1357,7 @@ const createCommitGraph = ({
         displaySha = changedWorkingTreeSha;
       } else if (
         headSha !== null &&
+        thread.cwd.length > 0 &&
         !readIsWorktreeCwd({ cwd: thread.cwd, worktrees })
       ) {
         displaySha = headSha;
@@ -2163,7 +2164,7 @@ const CommitThreadChatTags = ({
 
   const openThread = async (thread: ChatThread) => {
     try {
-      await window.crabtree.openChatThread({
+      await window.branchmaster.openChatThread({
         providerId: thread.providerId,
         threadId: thread.id,
         cwd: thread.cwd,
@@ -3609,7 +3610,7 @@ const TerminalPane = ({
         fitTerminal();
         const { cols, rows } = readTerminalDimensions();
 
-        void window.crabtree.resizeTerminalSession({
+        void window.branchmaster.resizeTerminalSession({
           cwd,
           cols,
           rows,
@@ -3617,7 +3618,7 @@ const TerminalPane = ({
       });
     };
     const resizeObserver = new ResizeObserver(resizeTerminal);
-    const removeTerminalSessionWatch = window.crabtree.watchTerminalSession(
+    const removeTerminalSessionWatch = window.branchmaster.watchTerminalSession(
       (terminalSessionEvent) => {
         if (terminalSessionEvent.cwd !== cwd) {
           return;
@@ -3674,7 +3675,7 @@ const TerminalPane = ({
     resizeObserver.observe(terminalElement);
     terminal.focus();
     dataDisposable = terminal.onData((data) => {
-      void window.crabtree
+      void window.branchmaster
         .writeTerminalSession({ cwd, data })
         .catch((error) => {
           const message =
@@ -3685,7 +3686,7 @@ const TerminalPane = ({
         });
     });
     resizeDisposable = terminal.onResize(({ cols, rows }) => {
-      void window.crabtree.resizeTerminalSession({ cwd, cols, rows });
+      void window.branchmaster.resizeTerminalSession({ cwd, cols, rows });
     });
 
     animationFrameId = window.requestAnimationFrame(() => {
@@ -3694,7 +3695,7 @@ const TerminalPane = ({
 
       const { cols, rows } = readTerminalDimensions();
 
-      void window.crabtree
+      void window.branchmaster
         .startTerminalSession({
           cwd,
           cols,
@@ -3826,7 +3827,7 @@ const TerminalPane = ({
             type="button"
             variant="ghost"
             onClick={() => {
-              void window.crabtree
+              void window.branchmaster
                 .stopTerminalSession(terminalTarget.cwd)
                 .then(() => {
                   updateTerminalStatusState({
@@ -4431,7 +4432,7 @@ const CommitHistory = ({
   );
   useEffect(() => {
     let isDisposed = false;
-    const removeTerminalSessionWatch = window.crabtree.watchTerminalSession(
+    const removeTerminalSessionWatch = window.branchmaster.watchTerminalSession(
       (terminalSessionEvent) => {
         switch (terminalSessionEvent.type) {
           case "data":
@@ -4455,7 +4456,7 @@ const CommitHistory = ({
       },
     );
 
-    void window.crabtree
+    void window.branchmaster
       .readTerminalSessions()
       .then((terminalSessionSummaries) => {
         if (isDisposed) {
@@ -4557,7 +4558,7 @@ const CommitHistory = ({
 
     setRowDiffLoadState({ type: "loading" });
 
-    void window.crabtree
+    void window.branchmaster
       .readGitDiff(rowDiffTarget.request)
       .then((gitDiff) => {
         if (shouldIgnore) {
@@ -5737,7 +5738,7 @@ const CommitHistory = ({
       "Created branch.",
       async () => {
         try {
-          await window.crabtree.createGitRef({
+          await window.branchmaster.createGitRef({
             repoRoot: branchCreateTarget.repoRoot,
             gitRefType: "branch",
             name: branch,
@@ -5778,7 +5779,7 @@ const CommitHistory = ({
       async () => {
         try {
           if (commitChangesTarget.type === "createBranchAndCommit") {
-            await window.crabtree.createGitBranch({
+            await window.branchmaster.createGitBranch({
               path: commitChangesTarget.path,
               branch: commitChangesTarget.branch,
               expectedHeadSha: commitChangesTarget.expectedHeadSha,
@@ -5789,14 +5790,14 @@ const CommitHistory = ({
             });
           }
 
-          const newSha = await window.crabtree.commitAllGitChanges({
+          const newSha = await window.branchmaster.commitAllGitChanges({
             path: commitChangesTarget.path,
             message,
           });
 
           if (commitChangesTarget.type === "commit") {
             try {
-              await window.crabtree.moveGitBranch({
+              await window.branchmaster.moveGitBranch({
                 repoRoot,
                 branch: commitChangesTarget.branchTarget.branch,
                 oldSha: commitChangesTarget.branchTarget.oldSha,
@@ -5842,7 +5843,7 @@ const CommitHistory = ({
       gitRefCreateText.successMessage,
       async () => {
         try {
-          await window.crabtree.createGitRef({
+          await window.branchmaster.createGitRef({
             repoRoot,
             gitRefType: gitRefCreateTarget.gitRefType,
             name,
@@ -5886,7 +5887,7 @@ const CommitHistory = ({
       "Created pull request.",
       async () => {
         try {
-          pullRequestUrl = await window.crabtree.createGitPullRequest({
+          pullRequestUrl = await window.branchmaster.createGitPullRequest({
             repoRoot,
             baseBranch,
             headBranch,
@@ -5917,7 +5918,7 @@ const CommitHistory = ({
     }
 
     try {
-      await window.crabtree.openExternalUrl(pullRequestUrl);
+      await window.branchmaster.openExternalUrl(pullRequestUrl);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to open pull request.";
@@ -5939,14 +5940,14 @@ const CommitHistory = ({
         try {
           switch (deleteTarget.gitRefType) {
             case "branch":
-              await window.crabtree.deleteGitBranch({
+              await window.branchmaster.deleteGitBranch({
                 repoRoot,
                 branch: deleteTarget.name,
                 oldSha: deleteTarget.oldSha,
               });
               break;
             case "tag":
-              await window.crabtree.deleteGitTag({
+              await window.branchmaster.deleteGitTag({
                 repoRoot,
                 tag: deleteTarget.name,
                 oldSha: deleteTarget.oldSha,
@@ -5974,7 +5975,7 @@ const CommitHistory = ({
   };
   const openCodePath = async (path: string) => {
     try {
-      await window.crabtree.openPath({ path, launcher: pathLauncher });
+      await window.branchmaster.openPath({ path, launcher: pathLauncher });
       trackDesktopAction({
         eventName: "repo_opened",
         properties: { launcher: pathLauncher, source: "commit_history" },
@@ -5997,7 +5998,7 @@ const CommitHistory = ({
     }
 
     try {
-      const preview = await window.crabtree.previewGitMerge({
+      const preview = await window.branchmaster.previewGitMerge({
         repoRoot,
         branch,
       });
@@ -6027,7 +6028,7 @@ const CommitHistory = ({
       "Merged branch.",
       async () => {
         try {
-          await window.crabtree.mergeGitBranch({
+          await window.branchmaster.mergeGitBranch({
             repoRoot,
             branch: request.branch,
           });
@@ -6078,7 +6079,7 @@ const CommitHistory = ({
       "Pushed.",
       async () => {
         try {
-          await window.crabtree.pushGitBranchSyncChanges(branchSyncChanges);
+          await window.branchmaster.pushGitBranchSyncChanges(branchSyncChanges);
           trackDesktopAction({
             eventName: "branches_pushed",
             properties: {
@@ -6113,7 +6114,7 @@ const CommitHistory = ({
       async () => {
         try {
           if (request.gitRefType === "branch") {
-            await window.crabtree.moveGitBranch({
+            await window.branchmaster.moveGitBranch({
               repoRoot: request.repoRoot,
               branch: request.refName,
               oldSha: request.oldSha,
@@ -6121,7 +6122,7 @@ const CommitHistory = ({
               targetPath: request.targetPath,
             });
           } else {
-            await window.crabtree.moveGitTag({
+            await window.branchmaster.moveGitTag({
               repoRoot: request.repoRoot,
               tag: request.refName,
               oldSha: request.oldSha,
@@ -6160,7 +6161,7 @@ const CommitHistory = ({
       "Switched HEAD.",
       async () => {
         try {
-          await window.crabtree.checkoutGitCommit({
+          await window.branchmaster.checkoutGitCommit({
             repoRoot,
             sha: row.commit.sha,
           });
@@ -6862,13 +6863,13 @@ const RepoSection = ({
 const ElectronApiMissingScreen = () => (
   <main className="electron-api-missing-screen">
     <Card className="electron-api-missing-card">
-      <h1>Crabtree desktop UI</h1>
+      <h1>BranchMaster desktop UI</h1>
       <p>Open this app from Electron.</p>
     </Card>
   </main>
 );
 
-const CrabtreeDesktopApp = () => {
+const BranchMasterDesktopApp = () => {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(
     null,
   );
@@ -7099,9 +7100,11 @@ const CrabtreeDesktopApp = () => {
             pendingDashboardRefreshRepoRootRef.current = null;
 
             try {
-              const nextDashboardData = await window.crabtree.readDashboard({
-                repoRoot: nextRepoRoot,
-              });
+              const nextDashboardData = await window.branchmaster.readDashboard(
+                {
+                  repoRoot: nextRepoRoot,
+                },
+              );
 
               if (userGitUpdateCountRef.current === 0) {
                 applyDashboardData(nextDashboardData);
@@ -7160,7 +7163,7 @@ const CrabtreeDesktopApp = () => {
     let nextDashboardData: DashboardData | null;
 
     try {
-      nextDashboardData = await window.crabtree.readDashboardIfIdle({
+      nextDashboardData = await window.branchmaster.readDashboardIfIdle({
         repoRoot,
       });
     } catch (error) {
@@ -7191,7 +7194,7 @@ const CrabtreeDesktopApp = () => {
 
       try {
         const nextDashboardData =
-          await window.crabtree.readDashboardAfterGitMutation();
+          await window.branchmaster.readDashboardAfterGitMutation();
         applyDashboardData(nextDashboardData);
         await new Promise<void>((resolve) => {
           dashboardPaintResolversRef.current.push(resolve);
@@ -7219,9 +7222,9 @@ const CrabtreeDesktopApp = () => {
   useEffect(() => {
     let didCancel = false;
     const stopWatchingAppUpdateStatus =
-      window.crabtree.watchAppUpdateStatus(setAppUpdateStatus);
+      window.branchmaster.watchAppUpdateStatus(setAppUpdateStatus);
 
-    void window.crabtree
+    void window.branchmaster
       .readAppUpdateStatus()
       .then((nextAppUpdateStatus) => {
         if (!didCancel) {
@@ -7240,7 +7243,7 @@ const CrabtreeDesktopApp = () => {
   useEffect(() => {
     let didCancel = false;
 
-    void window.crabtree
+    void window.branchmaster
       .readChatProviderDetections()
       .then((nextChatProviderDetections) => {
         if (!didCancel) {
@@ -7256,37 +7259,38 @@ const CrabtreeDesktopApp = () => {
     };
   }, []);
   useEffect(() => {
-    const stopWatchingChatThreadStatus = window.crabtree.watchChatThreadStatus(
-      (codexThreadStatusChange: ChatThreadStatusChange) => {
-        codexThreadStatusOfIdRef.current[codexThreadStatusChange.threadId] =
-          codexThreadStatusChange.status;
+    const stopWatchingChatThreadStatus =
+      window.branchmaster.watchChatThreadStatus(
+        (codexThreadStatusChange: ChatThreadStatusChange) => {
+          codexThreadStatusOfIdRef.current[codexThreadStatusChange.threadId] =
+            codexThreadStatusChange.status;
 
-        setDashboardData((currentDashboardData) => {
-          if (currentDashboardData === null) {
-            return currentDashboardData;
-          }
-
-          let didUpdateThread = false;
-          const threads = currentDashboardData.threads.map((thread) => {
-            if (
-              !readIsCodexThread(thread) ||
-              thread.id !== codexThreadStatusChange.threadId
-            ) {
-              return thread;
+          setDashboardData((currentDashboardData) => {
+            if (currentDashboardData === null) {
+              return currentDashboardData;
             }
 
-            didUpdateThread = true;
-            return { ...thread, status: codexThreadStatusChange.status };
+            let didUpdateThread = false;
+            const threads = currentDashboardData.threads.map((thread) => {
+              if (
+                !readIsCodexThread(thread) ||
+                thread.id !== codexThreadStatusChange.threadId
+              ) {
+                return thread;
+              }
+
+              didUpdateThread = true;
+              return { ...thread, status: codexThreadStatusChange.status };
+            });
+
+            if (!didUpdateThread) {
+              return currentDashboardData;
+            }
+
+            return { ...currentDashboardData, threads };
           });
-
-          if (!didUpdateThread) {
-            return currentDashboardData;
-          }
-
-          return { ...currentDashboardData, threads };
-        });
-      },
-    );
+        },
+      );
 
     return () => {
       stopWatchingChatThreadStatus();
@@ -7509,10 +7513,10 @@ const CrabtreeDesktopApp = () => {
         try {
           switch (action) {
             case "push":
-              await window.crabtree.pushGitBranchSyncChanges(changes);
+              await window.branchmaster.pushGitBranchSyncChanges(changes);
               break;
             case "revert":
-              await window.crabtree.revertGitBranchSyncChanges(changes);
+              await window.branchmaster.revertGitBranchSyncChanges(changes);
               break;
           }
 
@@ -7608,7 +7612,7 @@ const CrabtreeDesktopApp = () => {
     }
 
     try {
-      await window.crabtree.openPath({
+      await window.branchmaster.openPath({
         path: selectedRepo.root,
         launcher: pathLauncher,
       });
@@ -7628,7 +7632,7 @@ const CrabtreeDesktopApp = () => {
     }
 
     try {
-      await window.crabtree.openChatProviderPath({
+      await window.branchmaster.openChatProviderPath({
         providerId: chatProviderLauncher,
         path: selectedRepo.root,
       });
@@ -7680,16 +7684,16 @@ const CrabtreeDesktopApp = () => {
   const runAppUpdateAction = async () => {
     try {
       if (appUpdateStatus.type === "ready") {
-        await window.crabtree.quitAndInstallAppUpdate();
+        await window.branchmaster.quitAndInstallAppUpdate();
         return;
       }
 
-      const nextAppUpdateStatus = await window.crabtree.checkForAppUpdate();
+      const nextAppUpdateStatus = await window.branchmaster.checkForAppUpdate();
       setAppUpdateStatus(nextAppUpdateStatus);
 
       switch (nextAppUpdateStatus.type) {
         case "idle":
-          showSuccessMessage("Crabtree is up to date.");
+          showSuccessMessage("BranchMaster is up to date.");
           return;
         case "ready":
           showSuccessMessage("Update ready.");
@@ -7705,7 +7709,7 @@ const CrabtreeDesktopApp = () => {
     } catch (error) {
       const message = readCaughtUserFacingErrorMessage({
         error,
-        fallbackMessage: "Failed to update Crabtree.",
+        fallbackMessage: "Failed to update BranchMaster.",
       });
       showErrorMessage(message);
     }
@@ -7729,7 +7733,7 @@ const CrabtreeDesktopApp = () => {
     loadingRepoRoot !== null && selectedRepo?.root === loadingRepoRoot;
   const emptyRepoDescription =
     dashboardData.gitErrors.length > 0 && dashboardData.threads.length > 0
-      ? "Crabtree found chats, but Git could not read their folders. " +
+      ? "BranchMaster found chats, but Git could not read their folders. " +
         "They may be deleted, moved, not valid Git worktrees, or blocked by macOS permissions."
       : "No Git repositories found from detected chat sources.";
   const chatProviderLauncherLabel = readChatProviderLabel(chatProviderLauncher);
@@ -8006,14 +8010,14 @@ const CrabtreeDesktopApp = () => {
                         eventName: "github_clicked",
                         properties: { button_location: "settings" },
                       });
-                      void window.crabtree.openExternalUrl(
+                      void window.branchmaster.openExternalUrl(
                         GITHUB_REPOSITORY_URL,
                       );
                     }}
                     rel="noreferrer"
                     target="_blank"
                   >
-                    glassdevtools/crabtree
+                    glassdevtools/branchmaster
                   </a>
                 </dd>
               </div>
@@ -8080,9 +8084,9 @@ const CrabtreeDesktopApp = () => {
 };
 
 export const App = () => {
-  if (window.crabtree === undefined) {
+  if (window.branchmaster === undefined) {
     return <ElectronApiMissingScreen />;
   }
 
-  return <CrabtreeDesktopApp />;
+  return <BranchMasterDesktopApp />;
 };

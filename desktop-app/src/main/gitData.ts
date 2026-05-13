@@ -331,9 +331,29 @@ const readRepoSeeds = async ({
   const repoSeedOfKey: { [key: string]: RepoSeed } = {};
   const threadsOfCwd: { [cwd: string]: ChatThread[] } = {};
   const gitErrors: string[] = [];
+  const pendingGitErrors: { gitError: string; threadIds: string[] }[] = [];
   const cwds: string[] = [];
   const queuedRepoFolders: ChatProviderRepoFolder[] = [];
   const repoFolderOfPath: { [repoPath: string]: ChatProviderRepoFolder } = {};
+  const isThreadIdAttachedToRepoSeed: { [threadId: string]: boolean } = {};
+
+  const pushThreadIdsToRepoSeed = ({
+    repoSeed,
+    threadIds,
+  }: {
+    repoSeed: RepoSeed;
+    threadIds: string[];
+  }) => {
+    for (const threadId of threadIds) {
+      isThreadIdAttachedToRepoSeed[threadId] = true;
+
+      if (repoSeed.threadIds.includes(threadId)) {
+        continue;
+      }
+
+      repoSeed.threadIds.push(threadId);
+    }
+  };
 
   for (const thread of threads) {
     let threadsForCwd = threadsOfCwd[thread.cwd];
@@ -391,7 +411,30 @@ const readRepoSeeds = async ({
     const threadsForCwd = threadsOfCwd[repoSeedReadResult.cwd];
 
     if (repoSeedReadResult.gitError !== null) {
-      gitErrors.push(repoSeedReadResult.gitError);
+      const pendingThreadIds: string[] = [];
+      let shouldKeepGitError = threadsForCwd === undefined;
+
+      if (threadsForCwd !== undefined) {
+        for (const thread of threadsForCwd) {
+          const originUrl = thread.gitInfo?.originUrl;
+
+          if (originUrl === undefined || originUrl === null) {
+            shouldKeepGitError = true;
+            continue;
+          }
+
+          pendingThreadIds.push(thread.id);
+        }
+      }
+
+      if (!shouldKeepGitError && pendingThreadIds.length > 0) {
+        pendingGitErrors.push({
+          gitError: repoSeedReadResult.gitError,
+          threadIds: pendingThreadIds,
+        });
+      } else {
+        gitErrors.push(repoSeedReadResult.gitError);
+      }
     }
 
     if (repoSeed === null || threadsForCwd === undefined) {
@@ -403,11 +446,14 @@ const readRepoSeeds = async ({
 
     if (existingRepoSeed === undefined) {
       repoSeed.threadIds = threadIds;
+      for (const threadId of threadIds) {
+        isThreadIdAttachedToRepoSeed[threadId] = true;
+      }
       repoSeedOfKey[repoSeed.key] = repoSeed;
       continue;
     }
 
-    existingRepoSeed.threadIds.push(...threadIds);
+    pushThreadIdsToRepoSeed({ repoSeed: existingRepoSeed, threadIds });
   }
 
   for (const repoPathSeedReadResult of repoPathSeedReadResults) {
@@ -422,6 +468,34 @@ const readRepoSeeds = async ({
     }
 
     repoSeedOfKey[repoSeed.key] = repoSeed;
+  }
+
+  for (const thread of threads) {
+    const originUrl = thread.gitInfo?.originUrl;
+
+    if (originUrl === undefined || originUrl === null) {
+      continue;
+    }
+
+    const repoSeed = repoSeedOfKey[originUrl];
+
+    if (repoSeed === undefined) {
+      continue;
+    }
+
+    pushThreadIdsToRepoSeed({ repoSeed, threadIds: [thread.id] });
+  }
+
+  for (const pendingGitError of pendingGitErrors) {
+    const didAttachThread = pendingGitError.threadIds.some(
+      (threadId) => isThreadIdAttachedToRepoSeed[threadId] === true,
+    );
+
+    if (didAttachThread) {
+      continue;
+    }
+
+    gitErrors.push(pendingGitError.gitError);
   }
 
   const repoSeedReadSummary: RepoSeedReadSummary = {
@@ -1214,6 +1288,7 @@ const readCommits = async ({
   const format = `%H${FIELD_SEPARATOR}%P${FIELD_SEPARATOR}%D${FIELD_SEPARATOR}%an${FIELD_SEPARATOR}%ad${FIELD_SEPARATOR}%s`;
   const threadIdsOfSha: { [sha: string]: string[] } = {};
   const localBranchesOfSha: { [sha: string]: string[] } = {};
+  const remoteBranchShaOfBranch: { [branch: string]: string } = {};
   const commits: GitCommit[] = [];
   const refText = await readGitText({
     cwd: repoSeed.root,
@@ -1233,6 +1308,14 @@ const readCommits = async ({
       "refs/heads",
     ],
   });
+  const remoteBranchText = await readGitText({
+    cwd: repoSeed.root,
+    args: [
+      "for-each-ref",
+      `--format=%(objectname)${FIELD_SEPARATOR}%(refname)`,
+      "refs/remotes/origin",
+    ],
+  });
   const rootHead = await readNullableGitText({
     cwd: repoSeed.root,
     args: ["rev-parse", "HEAD"],
@@ -1240,14 +1323,49 @@ const readCommits = async ({
   const worktreeHeads = worktrees
     .map((worktree) => worktree.head)
     .filter((head): head is string => head !== null && head !== ZERO_SHA);
+  const shaOfCwd: { [cwd: string]: string | null } = {};
+  const threadCwds: string[] = [];
+  const isThreadCwdQueued: { [cwd: string]: boolean } = {};
+  const threadGitInfoShas: string[] = [];
+  const isThreadGitInfoShaQueued: { [sha: string]: boolean } = {};
+
+  for (const thread of threads) {
+    const sha = thread.gitInfo?.sha;
+
+    if (
+      sha === undefined ||
+      sha === null ||
+      sha === ZERO_SHA ||
+      isThreadGitInfoShaQueued[sha] === true
+    ) {
+      continue;
+    }
+
+    isThreadGitInfoShaQueued[sha] = true;
+    threadGitInfoShas.push(sha);
+  }
+
+  const existingThreadGitInfoShaResults = await readValuesWithGitReadLimit({
+    items: threadGitInfoShas,
+    readItem: async (sha) => {
+      return {
+        sha,
+        existingSha: await readNullableGitText({
+          cwd: repoSeed.root,
+          args: ["rev-parse", "--quiet", "--verify", `${sha}^{commit}`],
+        }),
+      };
+    },
+  });
+  const existingThreadGitInfoShas = existingThreadGitInfoShaResults
+    .map((result) => result.existingSha)
+    .filter((sha): sha is string => sha !== null && sha !== ZERO_SHA);
   const historyRoots = [
     ...splitLines(refText),
     ...(rootHead === null ? [] : [rootHead]),
     ...worktreeHeads,
+    ...existingThreadGitInfoShas,
   ];
-  const shaOfCwd: { [cwd: string]: string | null } = {};
-  const threadCwds: string[] = [];
-  const isThreadCwdQueued: { [cwd: string]: boolean } = {};
 
   if (historyRoots.length === 0) {
     return commits;
@@ -1279,9 +1397,33 @@ const readCommits = async ({
     shaOfCwd[cwdShaResult.cwd] = cwdShaResult.sha;
   }
 
+  for (const line of remoteBranchText.split("\n")) {
+    if (line.length === 0) {
+      continue;
+    }
+
+    const [sha, ref] = line.split(FIELD_SEPARATOR);
+    const remoteBranchPrefix = "refs/remotes/origin/";
+
+    if (
+      sha === undefined ||
+      ref === undefined ||
+      !ref.startsWith(remoteBranchPrefix)
+    ) {
+      continue;
+    }
+
+    remoteBranchShaOfBranch[ref.slice(remoteBranchPrefix.length)] = sha;
+  }
+
   for (const thread of threads) {
     const cwdSha = thread.cwd.length === 0 ? null : shaOfCwd[thread.cwd];
-    const sha = cwdSha ?? thread.gitInfo?.sha;
+    const gitInfo = thread.gitInfo;
+    const gitInfoBranchSha =
+      gitInfo?.branch === undefined || gitInfo.branch === null
+        ? null
+        : (remoteBranchShaOfBranch[gitInfo.branch] ?? null);
+    const sha = cwdSha ?? gitInfo?.sha ?? gitInfoBranchSha;
 
     if (sha === undefined || sha === null || sha === ZERO_SHA) {
       continue;

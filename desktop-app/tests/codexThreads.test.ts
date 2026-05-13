@@ -6,11 +6,13 @@ import test from "node:test";
 import {
   convertCodexThreadStatus,
   readCodexThreadFromAppServerValue,
+  readCodexThreads,
   readCodexThreadStatusChangeFromAppServerNotification,
 } from "../src/main/codexThreads";
+import type { AppServerClient } from "../src/main/appServerClient";
 
 const createTempRolloutFile = (text: string) => {
-  const dir = mkdtempSync(join(tmpdir(), "crabtree-codex-rollout-"));
+  const dir = mkdtempSync(join(tmpdir(), "branchmaster-codex-rollout-"));
   const path = join(dir, "rollout.jsonl");
 
   writeFileSync(path, text);
@@ -66,6 +68,35 @@ test("reads codex app-server status change notifications", () => {
       status: { type: "idle" },
     },
   );
+});
+
+test("lists codex app-server threads from top-level sources", async () => {
+  const requests: { method: string; params: unknown }[] = [];
+  const appServerClient: AppServerClient = {
+    request: async ({ method, params }) => {
+      requests.push({ method, params });
+
+      return { data: [], nextCursor: null };
+    },
+    close: () => {},
+  };
+
+  await readCodexThreads(appServerClient);
+
+  assert.deepEqual(requests, [
+    {
+      method: "thread/list",
+      params: {
+        limit: 200,
+        sortKey: "updated_at",
+        sortDirection: "desc",
+        sourceKinds: ["cli", "vscode", "exec", "appServer", "unknown"],
+        archived: false,
+        cursor: null,
+        useStateDbOnly: true,
+      },
+    },
+  ]);
 });
 
 test("reads active codex rollout task markers", () => {

@@ -10,7 +10,9 @@ import type { AppUpdateStatus } from "../shared/types";
 const APP_UPDATE_CHECK_INTERVAL_MS = 2 * 60 * 60 * 1000;
 
 const readAppUpdateErrorMessage = (error: unknown) => {
-  return error instanceof Error ? error.message : "Failed to update Crabtree.";
+  return error instanceof Error
+    ? error.message
+    : "Failed to update BranchMaster.";
 };
 
 export const createAppUpdateController = ({
@@ -102,7 +104,7 @@ export const createAppUpdateController = ({
       setAppUpdateStatus({ type: "ready", version: info.version });
     });
     autoUpdater.on("error", (error) => {
-      console.error("Failed to update Crabtree.", error);
+      console.error("Failed to update BranchMaster.", error);
 
       if (appUpdateStatus.type !== "ready") {
         setAppUpdateStatus({

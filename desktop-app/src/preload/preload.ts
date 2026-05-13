@@ -19,7 +19,7 @@ import type {
   GitMoveBranchRequest,
   GitMoveTagRequest,
   GitSwitchBranchRequest,
-  CrabtreeApi,
+  BranchMasterApi,
   OpenChatProviderPathRequest,
   OpenPathRequest,
   TerminalSessionEvent,
@@ -28,7 +28,7 @@ import type {
   TerminalSessionWriteRequest,
 } from "../shared/types";
 
-const api: CrabtreeApi = {
+const api: BranchMasterApi = {
   readDashboard: async (request: DashboardReadRequest) => {
     const dashboardData: DashboardData = await ipcRenderer.invoke(
       "dashboard:read",
@@ -234,4 +234,4 @@ const api: CrabtreeApi = {
   },
 };
 
-contextBridge.exposeInMainWorld("crabtree", api);
+contextBridge.exposeInMainWorld("branchmaster", api);

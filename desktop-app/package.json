@@ -1,11 +1,11 @@
 {
-  "name": "crabtree",
+  "name": "branchmaster",
   "version": "0.1.50",
   "private": true,
   "author": "Glass Devtools, Inc.",
   "repository": {
     "type": "git",
-    "url": "https://github.com/glassdevtools/crabtree.git"
+    "url": "https://github.com/glassdevtools/branchmaster.git"
   },
   "main": "out/main/main.js",
   "scripts": {

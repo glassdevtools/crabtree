@@ -2,7 +2,7 @@ export const readCreatedGitRefName = (gitRefName: string) => {
   return gitRefName.trim().replace(/[^A-Za-z0-9._/-]+/g, "-");
 };
 
-const AUTOMATIC_BRANCH_PREFIX = "crabtree";
+const AUTOMATIC_BRANCH_PREFIX = "branchmaster";
 
 export const readAutomaticBranchName = ({
   title,

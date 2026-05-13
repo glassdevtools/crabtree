@@ -1,5 +1,5 @@
 export const CLIENT_DOWNLOAD_PAGE_PATH =
-  "https://github.com/glassdevtools/crabtree/releases/latest";
+  "https://github.com/glassdevtools/branchmaster/releases/latest";
 
 type DetectedOS = {
   platform: "macos" | "windows";
@@ -19,7 +19,7 @@ type NavigatorWithUserAgentData = Navigator & {
 const clientDownloads: ClientDownload[] = [
   {
     platform: "macos",
-    href: "https://github.com/glassdevtools/crabtree/releases/latest/download/Crabtree.dmg",
+    href: "https://github.com/glassdevtools/branchmaster/releases/latest/download/BranchMaster.dmg",
   },
 ];
 

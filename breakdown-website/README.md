@@ -1,6 +1,6 @@
-# Crabtree Breakdown Website
+# BranchMaster Breakdown Website
 
-Static UI state breakdown for the Crabtree product surfaces.
+Static UI state breakdown for the BranchMaster product surfaces.
 
 Open `index.html` directly in a browser, or run from the repo root:
 

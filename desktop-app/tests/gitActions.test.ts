@@ -137,7 +137,7 @@ const commitRepoFile = async ({
 
 const createRepo = async () => {
   const repoRoot = await realpath(
-    await mkdtemp(join(tmpdir(), "crabtree-git-")),
+    await mkdtemp(join(tmpdir(), "branchmaster-git-")),
   );
 
   await runGit({
@@ -150,7 +150,7 @@ const createRepo = async () => {
   });
   await runGit({
     cwd: repoRoot,
-    args: ["config", "user.name", "Crabtree Tests"],
+    args: ["config", "user.name", "BranchMaster Tests"],
   });
 
   return { repoRoot };
@@ -168,7 +168,7 @@ const withRepo = async (runTest: ({ repoRoot }: GitRepo) => Promise<void>) => {
 
 const createRepoWithOrigin = async () => {
   const parentRoot = await realpath(
-    await mkdtemp(join(tmpdir(), "crabtree-git-origin-")),
+    await mkdtemp(join(tmpdir(), "branchmaster-git-origin-")),
   );
   const originRoot = join(parentRoot, "origin.git");
   const repoRoot = join(parentRoot, "repo");
@@ -184,7 +184,7 @@ const createRepoWithOrigin = async () => {
   });
   await runGit({
     cwd: repoRoot,
-    args: ["config", "user.name", "Crabtree Tests"],
+    args: ["config", "user.name", "BranchMaster Tests"],
   });
   const mainSha = await commitRepoFile({
     repoRoot,
@@ -234,6 +234,25 @@ const createThread = ({ id, cwd }: { id: string; cwd: string }) => {
     status: { type: "idle" },
     gitInfo: null,
   };
+
+  return thread;
+};
+
+const createThreadWithGitInfo = ({
+  id,
+  cwd,
+  sha,
+  branch,
+  originUrl,
+}: {
+  id: string;
+  cwd: string;
+  sha: string | null;
+  branch: string | null;
+  originUrl: string;
+}) => {
+  const thread = createThread({ id, cwd });
+  thread.gitInfo = { sha, branch, originUrl };
 
   return thread;
 };
@@ -336,6 +355,93 @@ test("reads repo graphs from project folders without Codex threads", async () =>
   });
 });
 
+test("attaches cloud agent threads to matching local repos by origin", async () => {
+  await withOriginRepo(async ({ repoRoot }) => {
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
+    const featureSha = await commitRepoFile({
+      repoRoot,
+      filePath: "feature.txt",
+      content: "feature\n",
+      message: "feature",
+    });
+    await runGit({ cwd: repoRoot, args: ["push", "-u", "origin", "feature"] });
+    await runGit({ cwd: repoRoot, args: ["switch", "main"] });
+    await runGit({ cwd: repoRoot, args: ["branch", "-D", "feature"] });
+
+    const originUrl = await runGit({
+      cwd: repoRoot,
+      args: ["config", "--get", "remote.origin.url"],
+    });
+    const threads = [
+      createThread({ id: "root-thread", cwd: repoRoot }),
+      createThreadWithGitInfo({
+        id: "cloud-thread",
+        cwd: "",
+        sha: null,
+        branch: "feature",
+        originUrl,
+      }),
+    ];
+    const { repos, warnings, gitErrors } = await readRepoGraphs({
+      threads,
+      focusedRepoRoot: null,
+    });
+    const repo = repos[0];
+    const featureCommit = repo?.commits.find(
+      (commit) => commit.sha === featureSha,
+    );
+
+    assert.equal(warnings.length, 0);
+    assert.equal(gitErrors.length, 0);
+    assert.equal(repos.length, 1);
+    assert.deepEqual(repo?.threadIds.sort(), ["cloud-thread", "root-thread"]);
+    assert.deepEqual(featureCommit?.threadIds, ["cloud-thread"]);
+  });
+});
+
+test("uses cloud agent git info instead of reporting nonlocal cwd errors", async () => {
+  await withOriginRepo(async ({ parentRoot, repoRoot }) => {
+    await runGit({ cwd: repoRoot, args: ["switch", "-c", "feature"] });
+    const featureSha = await commitRepoFile({
+      repoRoot,
+      filePath: "feature.txt",
+      content: "feature\n",
+      message: "feature",
+    });
+    await runGit({ cwd: repoRoot, args: ["push", "-u", "origin", "feature"] });
+    await runGit({ cwd: repoRoot, args: ["switch", "main"] });
+    await runGit({ cwd: repoRoot, args: ["branch", "-D", "feature"] });
+
+    const originUrl = await runGit({
+      cwd: repoRoot,
+      args: ["config", "--get", "remote.origin.url"],
+    });
+    const cloudCwd = join(parentRoot, "cloud-agent-repo");
+    const { repos, warnings, gitErrors } = await readRepoGraphsWithRepoFolders({
+      threads: [
+        createThreadWithGitInfo({
+          id: "cloud-thread",
+          cwd: cloudCwd,
+          sha: null,
+          branch: "feature",
+          originUrl,
+        }),
+      ],
+      repoFolders: [{ providerId: "openCode", path: repoRoot }],
+      focusedRepoRoot: null,
+    });
+    const repo = repos[0];
+    const featureCommit = repo?.commits.find(
+      (commit) => commit.sha === featureSha,
+    );
+
+    assert.equal(warnings.length, 0);
+    assert.equal(gitErrors.length, 0);
+    assert.deepEqual(repo?.threadIds, ["cloud-thread"]);
+    assert.deepEqual(featureCommit?.threadIds, ["cloud-thread"]);
+  });
+});
+
 test("merges project folders with Codex thread folders for the same repo", async () => {
   await withRepo(async ({ repoRoot }) => {
     await commitRepoFile({
@@ -401,7 +507,9 @@ test("deeply reads only the focused repo graph", async () => {
 });
 
 test("reports Git errors when Codex folders cannot seed any repos", async () => {
-  const parentRoot = await mkdtemp(join(tmpdir(), "crabtree-missing-repo-"));
+  const parentRoot = await mkdtemp(
+    join(tmpdir(), "branchmaster-missing-repo-"),
+  );
   const missingRepoRoot = join(parentRoot, "missing");
 
   try {
@@ -633,7 +741,12 @@ test("reads local branches as branch sync changes when origin tracking refs are 
     });
     await runGit({
       cwd: repoRoot,
-      args: ["remote", "set-url", "origin", "/tmp/crabtree-missing-origin.git"],
+      args: [
+        "remote",
+        "set-url",
+        "origin",
+        "/tmp/branchmaster-missing-origin.git",
+      ],
     });
     const { repos, warnings, gitErrors } = await readRepoGraphs({
       threads: [createThread({ id: "root-thread", cwd: repoRoot })],

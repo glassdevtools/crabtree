@@ -1,6 +1,6 @@
 # Git Testing Inventory
 
-This file is the short checklist for Git behavior in Crabtree. Tests should prove each action works and that unsafe actions either warn first or cannot hide commits from the visible graph.
+This file is the short checklist for Git behavior in BranchMaster. Tests should prove each action works and that unsafe actions either warn first or cannot hide commits from the visible graph.
 
 ## Git State We Read
 
@@ -38,7 +38,7 @@ This file is the short checklist for Git behavior in Crabtree. Tests should prov
 - Show or hide merge buttons.
 - Allow or block branch drag targets.
 - Ask for an optional commit message before committing dirty cwd values with a known branch target.
-- Ask for an optional commit message before creating a Crabtree branch and committing dirty cwd values with no known branch target.
+- Ask for an optional commit message before creating a BranchMaster branch and committing dirty cwd values with no known branch target.
 - Remember pending branch tag changes until push/pull/reset.
 - Show staged and unstaged change summaries.
 - Filter the graph to commits with chats.

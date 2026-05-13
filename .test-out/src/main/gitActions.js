@@ -201,7 +201,7 @@ const commitAllGitChanges = async ({ path, message, }) => {
             args: [
                 "update-ref",
                 "-m",
-                `MoltTree: move ${branch}`,
+                `BranchMaster: move ${branch}`,
                 branchRef,
                 newSha,
                 oldSha,
@@ -384,7 +384,7 @@ const moveGitBranch = async ({ repoRoot, branch, oldSha, newSha, }) => {
             args: [
                 "update-ref",
                 "-m",
-                `MoltTree: move ${branch}`,
+                `BranchMaster: move ${branch}`,
                 branchRef,
                 targetSha,
                 expectedOldSha,
@@ -608,7 +608,7 @@ const resetGitBranchTagChanges = async (gitBranchTagChanges) => {
                 args: [
                     "update-ref",
                     "-m",
-                    `MoltTree: reset ${branch}`,
+                    `BranchMaster: reset ${branch}`,
                     branchRef,
                     remoteSha,
                     localSha,

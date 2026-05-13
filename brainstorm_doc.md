@@ -1,8 +1,8 @@
 The AI put this together after we talked about the 3 APIs we have access to to interact with Codex. It's probably outdated and not necessary anymore.
 
-# Crabtree
+# BranchMaster
 
-Crabtree is a local desktop tool for browsing Codex threads alongside their Git history and opening the right context back in Codex Desktop.
+BranchMaster is a local desktop tool for browsing Codex threads alongside their Git history and opening the right context back in Codex Desktop.
 
 ## Repo Layout
 

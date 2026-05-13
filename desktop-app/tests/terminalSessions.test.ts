@@ -36,8 +36,8 @@ test("starts a terminal session in a cwd and emits output", async () => {
       terminalSessionEvents.push(terminalSessionEvent);
     },
   });
-  const cwd = await mkdtemp(join(tmpdir(), "crabtree-terminal-"));
-  const expectedOutput = "crabtree-terminal-test";
+  const cwd = await mkdtemp(join(tmpdir(), "branchmaster-terminal-"));
+  const expectedOutput = "branchmaster-terminal-test";
 
   try {
     const terminalSessionSnapshot =
@@ -108,7 +108,7 @@ test("marks a terminal session busy while a child process is running", async () 
       terminalSessionEvents.push(terminalSessionEvent);
     },
   });
-  const cwd = await mkdtemp(join(tmpdir(), "crabtree-terminal-busy-"));
+  const cwd = await mkdtemp(join(tmpdir(), "branchmaster-terminal-busy-"));
   const sleepCommand =
     process.platform === "win32" ? "Start-Sleep -Seconds 2\r" : "sleep 2\r";
 
@@ -178,8 +178,8 @@ test(
         terminalSessionEvents.push(terminalSessionEvent);
       },
     });
-    const cwd = await mkdtemp(join(tmpdir(), "crabtree-terminal-tree-"));
-    const childPidMarker = "crabtree-terminal-child-pid";
+    const cwd = await mkdtemp(join(tmpdir(), "branchmaster-terminal-tree-"));
+    const childPidMarker = "branchmaster-terminal-child-pid";
     let childPid: number | null = null;
 
     const readTerminalOutput = () => {

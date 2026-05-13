@@ -8,7 +8,7 @@ import { readOrCreateAnalyticsInstallId } from "../src/main/analyticsStore";
 const withUserDataPath = async (
   runTest: (userDataPath: string) => Promise<void>,
 ) => {
-  const userDataPath = await mkdtemp(join(tmpdir(), "crabtree-analytics-"));
+  const userDataPath = await mkdtemp(join(tmpdir(), "branchmaster-analytics-"));
 
   try {
     await runTest(userDataPath);

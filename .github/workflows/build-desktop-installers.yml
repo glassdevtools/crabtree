@@ -139,10 +139,10 @@ jobs:
       - name: Upload macOS installer
         uses: actions/upload-artifact@v4
         with:
-          name: crabtree-macos-universal
+          name: branchmaster-macos-universal
           path: |
-            desktop-app/dist/Crabtree-*.dmg
-            desktop-app/dist/Crabtree-*.zip
+            desktop-app/dist/BranchMaster-*.dmg
+            desktop-app/dist/BranchMaster-*.zip
             desktop-app/dist/*.blockmap
             desktop-app/dist/latest*.yml
           if-no-files-found: error
@@ -173,10 +173,10 @@ jobs:
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: crabtree-windows-x64
+          name: branchmaster-windows-x64
           path: |
-            desktop-app/dist/Crabtree-*.exe
-            desktop-app/dist/Crabtree-*.exe.blockmap
+            desktop-app/dist/BranchMaster-*.exe
+            desktop-app/dist/BranchMaster-*.exe.blockmap
             desktop-app/dist/latest*.yml
           if-no-files-found: error
           retention-days: 14
@@ -217,20 +217,19 @@ jobs:
 
           release_assets=()
           for asset_path in \
-            release-artifacts/**/Crabtree-*.dmg \
-            release-artifacts/**/Crabtree-*.zip \
-            release-artifacts/**/Crabtree-*.exe \
+            release-artifacts/**/BranchMaster-*.dmg \
+            release-artifacts/**/BranchMaster-*.zip \
+            release-artifacts/**/BranchMaster-*.exe \
             release-artifacts/**/*.blockmap \
             release-artifacts/**/latest*.yml
           do
             release_assets+=("$asset_path")
           done
 
-          for dmg_path in release-artifacts/**/Crabtree-*-universal.dmg; do
+          for dmg_path in release-artifacts/**/BranchMaster-*-universal.dmg; do
             for static_asset_path in \
               release-artifacts/latest.dmg \
-              release-artifacts/Crabtree.dmg \
-              release-artifacts/MoltTree.dmg
+              release-artifacts/BranchMaster.dmg
             do
               cp "$dmg_path" "$static_asset_path"
               release_assets+=("$static_asset_path")
@@ -238,11 +237,10 @@ jobs:
             break
           done
 
-          for exe_path in release-artifacts/**/Crabtree-*.exe; do
+          for exe_path in release-artifacts/**/BranchMaster-*.exe; do
             for static_asset_path in \
               release-artifacts/latest.exe \
-              release-artifacts/Crabtree.exe \
-              release-artifacts/MoltTree.exe
+              release-artifacts/BranchMaster.exe
             do
               cp "$exe_path" "$static_asset_path"
               release_assets+=("$static_asset_path")
@@ -257,13 +255,13 @@ jobs:
 
           release_notes_path="$RUNNER_TEMP/release-notes.md"
           cat > "$release_notes_path" <<EOF
-          Crabtree ${PACKAGE_VERSION}.
+          BranchMaster ${PACKAGE_VERSION}.
 
-          Website: [Crabtree](https://crabtree.app)
+          Website: [BranchMaster](https://branchmaster.dev)
 
           | OS | Download |
           | --- | --- |
-          | Mac | [Download for Mac](https://github.com/glassdevtools/crabtree/releases/download/${RELEASE_TAG}/Crabtree.dmg) |
+          | Mac | [Download for Mac](https://github.com/glassdevtools/branchmaster/releases/download/${RELEASE_TAG}/BranchMaster.dmg) |
           | Windows | Coming soon... |
           | Linux | Coming soon... |
           EOF

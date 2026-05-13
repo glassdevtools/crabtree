@@ -11,6 +11,7 @@ import type { AppServerClient } from "./appServerClient";
 const MAX_THREAD_COUNT = 1000;
 // TODO: AI-PICKED-VALUE: Page size 200 matches a large sidebar batch without making one app-server response too large.
 const THREAD_PAGE_SIZE = 200;
+const THREAD_SOURCE_KINDS = ["cli", "vscode", "exec", "appServer", "unknown"];
 
 // Codex app-server owns current Codex titles, cwd values, and running statuses.
 // Rollout task markers fill the gap where another Codex process owns the running turn and app-server reports the thread as not loaded.
@@ -503,6 +504,7 @@ export const readCodexThreads = async (appServerClient: AppServerClient) => {
         limit: THREAD_PAGE_SIZE,
         sortKey: "updated_at",
         sortDirection: "desc",
+        sourceKinds: THREAD_SOURCE_KINDS,
         archived: false,
         cursor,
         useStateDbOnly: true,

@@ -23,7 +23,7 @@ window.breakdownWebsiteData.website = {
       source: "ClientDownloadLink plus getAutoDetectedDownloadUrl",
       states: "latestReleasePage, macDmg",
       notes:
-        "The link starts on the latest GitHub Release page, then client detection may switch macOS users to Crabtree.dmg.",
+        "The link starts on the latest GitHub Release page, then client detection may switch macOS users to BranchMaster.dmg.",
     },
     {
       variable: "detectedPlatform",
@@ -66,8 +66,8 @@ window.breakdownWebsiteData.website = {
     {
       name: "WebsiteDownloadHrefState",
       typeScript: `type WebsiteDownloadHrefState =
-  | { type: "latestReleasePage"; href: "https://github.com/glassdevtools/crabtree/releases/latest" }
-  | { type: "macDmg"; href: "https://github.com/glassdevtools/crabtree/releases/latest/download/Crabtree.dmg" };`,
+  | { type: "latestReleasePage"; href: "https://github.com/glassdevtools/branchmaster/releases/latest" }
+  | { type: "macDmg"; href: "https://github.com/glassdevtools/branchmaster/releases/latest/download/BranchMaster.dmg" };`,
     },
     {
       name: "WebsiteDetectedPlatformState",
@@ -108,7 +108,7 @@ window.breakdownWebsiteData.website = {
   staticPage --> hydrate["Client components hydrate"]
   hydrate --> hrefStart["Download href: latest release page"]
   hrefStart --> detect{"Detect client platform"}
-  detect -->|macOS desktop| mac["Download href: Crabtree.dmg"]
+  detect -->|macOS desktop| mac["Download href: BranchMaster.dmg"]
   detect -->|Windows| generic
   detect -->|Unknown or failed| generic["Keep latest release page"]
   staticPage --> faq["FAQ details"]
@@ -170,7 +170,7 @@ window.breakdownWebsiteData.website = {
       product: "GitHub Releases",
       usedBy: "Download buttons",
       neededOutsideRepo:
-        "A public latest release and a static Crabtree.dmg asset for direct macOS downloads.",
+        "A public latest release and a static BranchMaster.dmg asset for direct macOS downloads.",
       expectedSource:
         "GitHub release assets produced outside the website code.",
     },
@@ -178,7 +178,7 @@ window.breakdownWebsiteData.website = {
       product: "GitHub repository",
       usedBy: "GitHub buttons and footer link",
       neededOutsideRepo: "Public repository availability.",
-      expectedSource: "https://github.com/glassdevtools/crabtree.",
+      expectedSource: "https://github.com/glassdevtools/branchmaster.",
     },
     {
       product: "Next.js hosting",
@@ -208,7 +208,7 @@ window.breakdownWebsiteData.website = {
         "download_app_clicked is captured with app_version, surface website, and button_location.",
       ],
       backendResponses: [
-        "GitHub serves the latest release page or Crabtree.dmg.",
+        "GitHub serves the latest release page or BranchMaster.dmg.",
         "PostHog receives the click event if the client is configured.",
       ],
     },
@@ -216,7 +216,7 @@ window.breakdownWebsiteData.website = {
       feature: "Auto-detect download platform",
       stateChanges: [
         "Initial href is the generic latest release page.",
-        "macOS sets the href to Crabtree.dmg.",
+        "macOS sets the href to BranchMaster.dmg.",
         "Windows keeps the generic href until Windows assets are published.",
         "Unsupported, failed, server, or iPad-like macOS detection keeps the generic href.",
       ],

@@ -51,7 +51,7 @@ const commitRepoFile = async ({ repoRoot, filePath, content, message, }) => {
     return await readSha({ cwd: repoRoot, ref: "HEAD" });
 };
 const createRepo = async () => {
-    const repoRoot = await (0, promises_1.realpath)(await (0, promises_1.mkdtemp)((0, node_path_1.join)((0, node_os_1.tmpdir)(), "molttree-git-")));
+    const repoRoot = await (0, promises_1.realpath)(await (0, promises_1.mkdtemp)((0, node_path_1.join)((0, node_os_1.tmpdir)(), "branchmaster-git-")));
     await runGit({
         cwd: repoRoot,
         args: ["init", "--initial-branch=main"],
@@ -62,7 +62,7 @@ const createRepo = async () => {
     });
     await runGit({
         cwd: repoRoot,
-        args: ["config", "user.name", "MoltTree Tests"],
+        args: ["config", "user.name", "BranchMaster Tests"],
     });
     return { repoRoot };
 };
@@ -76,7 +76,7 @@ const withRepo = async (runTest) => {
     }
 };
 const createRepoWithOrigin = async () => {
-    const parentRoot = await (0, promises_1.realpath)(await (0, promises_1.mkdtemp)((0, node_path_1.join)((0, node_os_1.tmpdir)(), "molttree-git-origin-")));
+    const parentRoot = await (0, promises_1.realpath)(await (0, promises_1.mkdtemp)((0, node_path_1.join)((0, node_os_1.tmpdir)(), "branchmaster-git-origin-")));
     const originRoot = (0, node_path_1.join)(parentRoot, "origin.git");
     const repoRoot = (0, node_path_1.join)(parentRoot, "repo");
     await runGit({
@@ -90,7 +90,7 @@ const createRepoWithOrigin = async () => {
     });
     await runGit({
         cwd: repoRoot,
-        args: ["config", "user.name", "MoltTree Tests"],
+        args: ["config", "user.name", "BranchMaster Tests"],
     });
     const mainSha = await commitRepoFile({
         repoRoot,

@@ -36,7 +36,9 @@ const readIsCodexNotDetected = async () => false;
 const readIsCodexDetected = async () => true;
 
 const withHomePath = async (runTest: (homePath: string) => Promise<void>) => {
-  const homePath = await mkdtemp(join(tmpdir(), "crabtree-chat-providers-"));
+  const homePath = await mkdtemp(
+    join(tmpdir(), "branchmaster-chat-providers-"),
+  );
 
   try {
     await runTest(homePath);

@@ -1,5 +1,5 @@
 {
-  "name": "crabtree-repo",
+  "name": "branchmaster-repo",
   "private": true,
   "workspaces": [
     "desktop-app",

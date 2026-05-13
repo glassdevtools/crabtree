@@ -1,7 +1,7 @@
 const config = {
-  // TODO: AI-PICKED-VALUE: This bundle id keeps existing MoltTree installs on the same app identity after the Crabtree rename.
-  appId: "com.glassdevtools.molttree",
-  productName: "Crabtree",
+  // TODO: AI-PICKED-VALUE: This bundle id matches the BranchMaster GitHub organization and product name.
+  appId: "com.glassdevtools.branchmaster",
+  productName: "BranchMaster",
   electronVersion: "41.3.0",
   directories: {
     output: "dist",
@@ -17,7 +17,7 @@ const config = {
     {
       provider: "github",
       owner: "glassdevtools",
-      repo: "crabtree",
+      repo: "branchmaster",
       releaseType: "release",
     },
   ],
@@ -39,11 +39,11 @@ const config = {
       "Contents/Resources/app.asar.unpacked/node_modules/@lydell/node-pty-*/prebuilds/**/*",
     extendInfo: {
       NSDesktopFolderUsageDescription:
-        "Crabtree needs access to repositories stored on your Desktop so it can read their Git history.",
+        "BranchMaster needs access to repositories stored on your Desktop so it can read their Git history.",
       NSDocumentsFolderUsageDescription:
-        "Crabtree needs access to repositories stored in Documents so it can read their Git history.",
+        "BranchMaster needs access to repositories stored in Documents so it can read their Git history.",
       NSDownloadsFolderUsageDescription:
-        "Crabtree needs access to repositories stored in Downloads so it can read their Git history.",
+        "BranchMaster needs access to repositories stored in Downloads so it can read their Git history.",
     },
     hardenedRuntime: true,
     entitlements: "packaging/macos/entitlements.plist",

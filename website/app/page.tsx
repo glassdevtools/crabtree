@@ -8,7 +8,7 @@ import codexChatIcon from "../src/assets/codex-chat-icon.png";
 import defaultAppIcon from "../src/assets/default-app-icon.png";
 import productScreenshot from "../src/assets/product-screenshot.png";
 
-const repoUrl = "https://github.com/glassdevtools/crabtree";
+const repoUrl = "https://github.com/glassdevtools/branchmaster";
 const ctaDownloadButtonClassName = "ctaButton ctaButtonDownload";
 const ctaGithubButtonClassName = "ctaButton ctaButtonGithub";
 const downloadButtonClassName = "downloadButton";
@@ -55,7 +55,7 @@ const featureItems = [
   {
     title: "Easily merge your agents",
     descriptionLines: [
-      "It's easy to spin up 100 AI worktrees or cloud agents, but merging them back together is hard. Crabtree was built to fix that. Commit, branch, merge, update main, and push without leaving the app.",
+      "It's easy to spin up 100 AI worktrees or cloud agents, but merging them back together is hard. BranchMaster was built to fix that. Commit, branch, merge, update main, and push without leaving the app.",
     ],
   },
   {
@@ -75,7 +75,7 @@ const featureItems = [
   {
     title: "Auto-sync",
     descriptionLines: [
-      "See where every chat lives on your Git tree. Crabtree auto-detects your local chats and Git changes.",
+      "See where every chat lives on your Git tree. BranchMaster auto-detects your local chats and Git changes.",
     ],
   },
   {
@@ -96,9 +96,9 @@ const questionItems = [
 ];
 const faqItems = [
   {
-    question: "What are Crabtree's core features?",
+    question: "What are BranchMaster's core features?",
     answer: [
-      "Crabtree is a Git visualizer that also:",
+      "BranchMaster is a Git visualizer that also:",
       "- Shows you where your agents are.",
       "- Suggests actions to take like commit/merge/push.",
     ],
@@ -106,7 +106,7 @@ const faqItems = [
   {
     question: "How should I use it?",
     answer: [
-      "Start a bunch of parallel agents in Codex. When you're ready to merge them, open Crabtree and switch to a branch by double clicking. Then follow the suggestions in the Graph column to branch, commit, merge, and push.",
+      "Start a bunch of parallel agents in Codex. When you're ready to merge them, open BranchMaster and switch to a branch by double clicking. Then follow the suggestions in the Graph column to branch, commit, merge, and push.",
     ],
   },
   {
@@ -130,12 +130,12 @@ const HomePage = () => {
             draggable={false}
           />
           <span className="wordmarkText">
-            <span className="wordmarkTextBase">Crabtree</span>
+            <span className="wordmarkTextBase">BranchMaster</span>
             <span
               className="wordmarkTextGradient transition-opacity duration-500 ease-out"
               aria-hidden="true"
             >
-              Crabtree
+              BranchMaster
             </span>
           </span>
         </a>
@@ -179,11 +179,11 @@ const HomePage = () => {
                   draggable={false}
                 />
               </span>
-              <span>Crabtree</span>
+              <span>BranchMaster</span>
             </h1>
             <p className="heroSubtext">
-              Easily merge your agents together. Crabtree lets you manage your
-              parallel agents and branches all on one page.
+              Easily merge your agents together. BranchMaster lets you manage
+              your parallel agents and branches all on one page.
             </p>
 
             <div className="hero__actions">
@@ -209,7 +209,7 @@ const HomePage = () => {
           <figure className="productPhoto">
             <Image
               src={productScreenshot}
-              alt="Crabtree app showing Codex chats, branches, worktrees, changed files, and Git history"
+              alt="BranchMaster app showing Codex chats, branches, worktrees, changed files, and Git history"
               sizes="(max-width: 760px) calc(100vw - 32px), (max-width: 1128px) calc(100vw - 48px), 1080px"
               preload
               placeholder="blur"

@@ -36,7 +36,7 @@ export type AppServerClient = {
 const CODEX_DARWIN_COMMAND_PATH =
   "/Applications/Codex.app/Contents/Resources/codex";
 // TODO: AI-PICKED-VALUE: The temp cache directory lets dev and packaged builds reuse one copied Codex binary per installed app version.
-const CODEX_DARWIN_COMMAND_CACHE_DIR = join(tmpdir(), "crabtree-codex-cli");
+const CODEX_DARWIN_COMMAND_CACHE_DIR = join(tmpdir(), "branchmaster-codex-cli");
 // TODO: AI-PICKED-VALUE: One second is enough for a PATH lookup without slowing settings or dashboard startup when Codex is absent.
 const CODEX_COMMAND_DETECTION_TIMEOUT_MS = 1000;
 // TODO: AI-PICKED-VALUE: Ten seconds keeps startup bounded while giving Codex app-server enough time to answer normal requests.
@@ -261,8 +261,8 @@ export const createAppServerClient = async ({
     id: 0,
     params: {
       clientInfo: {
-        name: "crabtree",
-        title: "Crabtree",
+        name: "branchmaster",
+        title: "BranchMaster",
         version: "0",
       },
     },

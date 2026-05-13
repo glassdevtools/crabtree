@@ -287,7 +287,7 @@ export type AppUpdateStatus =
   | { type: "ready"; version: string }
   | { type: "error"; message: string };
 
-export type CrabtreeApi = {
+export type BranchMasterApi = {
   readDashboard: (request: DashboardReadRequest) => Promise<DashboardData>;
   readDashboardIfIdle: (
     request: DashboardReadRequest,

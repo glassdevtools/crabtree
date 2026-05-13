@@ -1,6 +1,6 @@
-# Crabtree Website
+# BranchMaster Website
 
-Next.js site for Crabtree.
+Next.js site for BranchMaster.
 
 Run from the repo root:
 

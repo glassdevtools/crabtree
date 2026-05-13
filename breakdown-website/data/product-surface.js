@@ -6,7 +6,7 @@ window.breakdownWebsiteData.productSurface = {
   title: "Product Surface Breakdown",
   eyebrow: "Parent view",
   summary:
-    "Crabtree has two distinct UI surfaces. The public website markets and routes downloads. The desktop app is the actual worktree, branch, chat, and Git control surface. The website is never a desktop-app UI state.",
+    "BranchMaster has two distinct UI surfaces. The public website markets and routes downloads. The desktop app is the actual worktree, branch, chat, and Git control surface. The website is never a desktop-app UI state.",
   sourceFiles: [
     "README.md",
     "package.json",
@@ -30,7 +30,7 @@ window.breakdownWebsiteData.productSurface = {
       states:
         "publicWebsiteBrowser, electronRenderer, desktopRendererOutsideElectron",
       notes:
-        "The desktop BrowserWindow only loads the bundled renderer or the local Electron dev URL. It should never load crabtree.app.",
+        "The desktop BrowserWindow only loads the bundled renderer or the local Electron dev URL. It should never load branchmaster.dev.",
     },
     {
       variable: "externalWebNavigation",
@@ -66,8 +66,8 @@ window.breakdownWebsiteData.productSurface = {
       name: "RuntimeHostState",
       typeScript: `type RuntimeHostState =
   | { type: "publicWebsiteBrowser"; app: "website"; canShowDesktopUi: false }
-  | { type: "electronRenderer"; app: "desktopApp"; hasCrabtreeApi: true; canShowWebsite: false }
-  | { type: "desktopRendererOutsideElectron"; app: "desktopApp"; hasCrabtreeApi: false; canShowWebsite: false };`,
+  | { type: "electronRenderer"; app: "desktopApp"; hasBranchMasterApi: true; canShowWebsite: false }
+  | { type: "desktopRendererOutsideElectron"; app: "desktopApp"; hasBranchMasterApi: false; canShowWebsite: false };`,
     },
     {
       name: "ExternalWebNavigationState",
@@ -92,7 +92,7 @@ window.breakdownWebsiteData.productSurface = {
     },
   ],
   flowchart: `flowchart TD
-  user["User reaches Crabtree"] --> entry{"Entry point"}
+  user["User reaches BranchMaster"] --> entry{"Entry point"}
   entry -->|Public browser URL| website["Website surface"]
   entry -->|Installed Electron app| desktop["Desktop app surface"]
   website --> websitePage["Marketing page"]
@@ -100,7 +100,7 @@ window.breakdownWebsiteData.productSurface = {
   websitePage --> websiteGitHub["GitHub links"]
   websitePage --> websiteFaq["FAQ details"]
   websiteDownload --> githubRelease["GitHub Release or direct asset"]
-  desktop --> desktopRuntime{"window.crabtree exists?"}
+  desktop --> desktopRuntime{"window.branchmaster exists?"}
   desktopRuntime -->|No| missingApi["Electron API missing screen"]
   desktopRuntime -->|Yes| desktopLoading["Desktop dashboard loading"]
   desktopLoading --> desktopLoaded["Desktop dashboard states"]
@@ -109,7 +109,7 @@ window.breakdownWebsiteData.productSurface = {
   desktopLoaded --> desktopModals["Desktop dialogs, menus, and toasts"]
   desktopLoaded --> externalUrl["External web URL clicked"]
   externalUrl --> systemBrowser["Open in system browser"]
-  externalUrl -. forbidden .-> noEmbed["Do not load crabtree.app or any website in BrowserWindow"]`,
+  externalUrl -. forbidden .-> noEmbed["Do not load branchmaster.dev or any website in BrowserWindow"]`,
   backgroundStates: [
     {
       state: "No shared background process",
@@ -135,7 +135,7 @@ window.breakdownWebsiteData.productSurface = {
       product: "GitHub Releases",
       usedBy: "Website downloads and desktop updater",
       neededOutsideRepo:
-        "Public release assets named Crabtree.dmg and compatibility aliases, plus Electron update YAML files.",
+        "Public release assets named BranchMaster.dmg and compatibility aliases, plus Electron update YAML files.",
       expectedSource:
         "Created by .github/workflows/build-desktop-installers.yml using the built-in GitHub token.",
     },
@@ -175,7 +175,7 @@ window.breakdownWebsiteData.productSurface = {
       stateChanges: [
         "Public browser entry stays on the website surface.",
         "Installed app entry moves into the Electron desktop state machine.",
-        "The desktop app never swaps to the website UI or embeds crabtree.app.",
+        "The desktop app never swaps to the website UI or embeds branchmaster.dev.",
       ],
       backendResponses: [
         "Website routes downloads to public GitHub Releases.",
@@ -184,7 +184,7 @@ window.breakdownWebsiteData.productSurface = {
       ],
     },
     {
-      feature: "Download Crabtree",
+      feature: "Download BranchMaster",
       stateChanges: [
         "Website download links start at the latest release page.",
         "Client OS detection may rewrite the link to a direct macOS or Windows asset.",
@@ -195,7 +195,7 @@ window.breakdownWebsiteData.productSurface = {
       ],
     },
     {
-      feature: "Use Crabtree desktop",
+      feature: "Use BranchMaster desktop",
       stateChanges: [
         "The desktop moves from initial loading into repo graph, empty repo, or load error states.",
         "User Git actions open dialogs, run loading toasts, and refresh the dashboard.",

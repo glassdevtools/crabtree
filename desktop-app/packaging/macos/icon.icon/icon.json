@@ -19,11 +19,12 @@
     {
       "layers": [
         {
-          "image-name": "77d361df-b486-4c7a-ba2c-534dd6441763.png",
-          "name": "77d361df-b486-4c7a-ba2c-534dd6441763",
+          "glass": false,
+          "image-name": "default-img.png",
+          "name": "default-img",
           "position": {
-            "scale": 0.83,
-            "translation-in-points": [0.8299999999999272, -1.6599999999999682]
+            "scale": 0.9,
+            "translation-in-points": [1.9457155384343423, 0]
           }
         }
       ],

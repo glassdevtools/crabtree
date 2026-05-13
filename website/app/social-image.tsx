@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 export const socialImageAlt =
-  "Crabtree app showing Codex chats, worktrees, branches, and Git history";
+  "BranchMaster app showing Codex chats, worktrees, branches, and Git history";
 export const socialImageContentType = "image/png";
 // TODO: AI-PICKED-VALUE: These layout sizes keep the app screenshot readable in a standard large social preview.
 export const socialImageSize = {
@@ -63,7 +63,7 @@ export const createSocialImage = async () => {
               lineHeight: 1,
             }}
           >
-            Crabtree
+            BranchMaster
           </div>
         </div>
         <div
