@@ -106,12 +106,12 @@ const faqItems = [
   {
     question: "How should I use it?",
     answer: [
-      "Start a bunch of parallel agents in Codex. When you're ready to merge them, open BranchMaster and switch to a branch by double clicking. Then follow the suggestions in the Graph column to branch, commit, merge, and push.",
+      "Start a bunch of parallel worktrees in Codex. When you're ready to merge them, open BranchMaster and switch to a branch by double clicking. Then follow the suggestions in the Graph column to branch, commit, merge, and push.",
     ],
   },
   {
     question: "What AI tools does it support?",
-    answer: "Codex and OpenCode. We plan to support more tools in the future.",
+    answer: "Codex and OpenCode. We may support more tools in the future.",
   },
 ];
 
