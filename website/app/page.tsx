@@ -182,8 +182,8 @@ const HomePage = () => {
               <span>BranchMaster</span>
             </h1>
             <p className="heroSubtext">
-              Easily merge your agents together. BranchMaster lets you manage
-              your parallel agents and branches all on one page.
+              Easily merge your branches together. BranchMaster lets you manage
+              your chats, branches, and worktrees in one place.
             </p>
 
             <div className="hero__actions">
