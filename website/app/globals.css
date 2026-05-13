@@ -176,7 +176,12 @@ img {
   position: absolute;
   inset: 0;
   display: block;
-  background-image: linear-gradient(90deg, #efc018 0%, #ff3b00 100%);
+  background-image: linear-gradient(
+    90deg,
+    #0b64e4 0%,
+    #13a3ff 52%,
+    #0a38d8 100%
+  );
   background-size: 100% 100%;
   color: transparent;
   opacity: 0;
@@ -372,12 +377,11 @@ h1.heroTitle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: 12px;
   max-width: 880px;
   margin: 0 auto 12px;
   color: #101410;
   font-family:
-    "Arial Black",
     "Avenir Next",
     ui-sans-serif,
     system-ui,
@@ -385,18 +389,18 @@ h1.heroTitle {
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
-  font-size: clamp(2.35rem, 5.4vw, 4rem);
-  font-weight: 900;
+  font-size: clamp(2.2rem, 4.9vw, 3.6rem);
+  font-weight: 760;
   line-height: 1.1;
-  letter-spacing: -0.015em;
+  letter-spacing: 0;
   text-wrap: balance;
 }
 
 .heroTitleIcon {
   display: inline-flex;
   flex: 0 0 auto;
-  width: 72px;
-  height: 72px;
+  width: 60px;
+  height: 60px;
 }
 
 .heroTitleIcon img {
